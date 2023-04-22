@@ -71,7 +71,7 @@ static void receive_callback(const struct esp_now_recv_info *info, const uint8_t
 
 static void send_callback(const uint8_t *mac_addr, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_SUCCESS) {
-        ESP_LOGI(TAG, "Send success");
+        // ESP_LOGI(TAG, "Send success");
     } else {
         ESP_LOGE(TAG, "Send failed");
     }
@@ -186,6 +186,7 @@ void espnow_test_perform(uint8_t messages) {
     uint32_t bytes_per_second = (uint32_t)(packets_successful * sizeof(test_packet_t) / avg_time_ms * 1000);
 
     ESP_LOGI(TAG, "=== Summary ===");
+    ESP_LOGI(TAG, "Total time: %luus", total_time);
     ESP_LOGI(TAG, "Packets sent: %lu", packets_sent);
     ESP_LOGI(TAG, "Packets successful: %u", packets_successful);
     ESP_LOGI(TAG, "Packets lost: %lu (%lu%%)", lost_packets, lost_percent);
