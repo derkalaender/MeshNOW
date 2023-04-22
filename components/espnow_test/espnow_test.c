@@ -180,12 +180,15 @@ void espnow_test_perform(uint8_t messages) {
     }
 
     // summary
+    total_time /= 2;  // roundtrip
+
     uint32_t lost_packets = packets_sent - packets_successful;
     uint32_t lost_percent = lost_packets * 100 / packets_sent;
-    double avg_time_ms = (double)total_time / packets_successful / 1000 / 2;  // divide by 2 because of roundtrip
+    double avg_time_ms = (double)total_time / packets_successful / 1000;
     uint32_t bytes_per_second = (uint32_t)(packets_successful * sizeof(test_packet_t) / avg_time_ms * 1000);
 
     ESP_LOGI(TAG, "=== Summary ===");
+    ESP_LOGI(TAG, "Total time: %luus", total_time);
     ESP_LOGI(TAG, "Packets sent: %lu", packets_sent);
     ESP_LOGI(TAG, "Packets successful: %u", packets_successful);
     ESP_LOGI(TAG, "Packets lost: %lu (%lu%%)", lost_packets, lost_percent);
