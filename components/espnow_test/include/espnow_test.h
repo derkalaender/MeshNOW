@@ -2,7 +2,13 @@
 
 #include <stdint.h>
 
-#define ACK_TIMEOUT_MS 1000
+#define ACK_TIMEOUT_MS (500)
+
+typedef struct {
+    uint32_t sent;
+    uint32_t successful;
+    uint32_t time_taken;
+} espnow_test_result_t;
 
 /**
  * @brief Initialize network and espnow for the tests.
