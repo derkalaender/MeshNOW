@@ -71,7 +71,7 @@ static void receive_callback(const struct esp_now_recv_info *info, const uint8_t
 
 static void send_callback(const uint8_t *mac_addr, esp_now_send_status_t status) {
     if (status == ESP_NOW_SEND_SUCCESS) {
-        ESP_LOGI(TAG, "Send success");
+        // ESP_LOGI(TAG, "Send success");
     } else {
         ESP_LOGE(TAG, "Send failed");
     }

@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define ACK_TIMEOUT_MS (20)
+#define ACK_TIMEOUT_MS (30)
 
 typedef struct {
     uint32_t sent;
