@@ -1,9 +1,13 @@
 # Build output
 /build
+/cmake-*
 
 # sdkconfig
-/sdkconfig
-/sdkconfig.old
+sdkconfig
+sdkconfig.old
 
 # VS Code Settings
 .vscode
+
+# IntelliJ
+.idea

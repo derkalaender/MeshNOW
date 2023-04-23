@@ -1,12 +1,14 @@
-#include "driver/gpio.h"
-#include "esp_log.h"
+#include <driver/gpio.h>
+#include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 #include "espnow_test.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "meshnow.h"
 
 static const char *TAG = "main";
 
-void perform_range_test(void) {
+void perform_range_test() {
     espnow_test_init();
 
     // setup button on gpio27 using internal pullup
@@ -26,4 +28,6 @@ void perform_range_test(void) {
     }
 }
 
-void app_main(void) { perform_range_test(); }
+extern "C" void app_main(void) {
+    MeshNOW();
+}
