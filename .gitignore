@@ -1,5 +1,9 @@
 # Build output
 /build
 
+# sdkconfig
+/sdkconfig
+/sdkconfig.old
+
 # VS Code Settings
 .vscode
