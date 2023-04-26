@@ -7,6 +7,7 @@
 
 #include "espnow_test.h"
 #include "meshnow.hpp"
+#include "networking.hpp"
 
 static const char *TAG = "main";
 
@@ -35,4 +36,10 @@ static std::unique_ptr<MeshNOW::App> meshnow;
 extern "C" void app_main(void) {
     meshnow = std::make_unique<MeshNOW::App>(MeshNOW::Config{.root = true});
     meshnow->start();
+
+    auto target = MeshNOW::BROADCAST_MAC_ADDR;
+    std::string s{"Creative test message"};
+    std::vector<uint8_t> data{s.begin(), s.end()};
+    auto buffer = MeshNOW::Packet::DataLwIP(target, 30, true, 1500, data).serialize();
+    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
 }

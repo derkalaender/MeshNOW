@@ -22,7 +22,8 @@ enum class State {
     CONNECTED,
 };
 
-// TODO maybe singleton? Special copy constructor handling and stuff?
+// TODO maybe singleton? Special copy constructor handling and stuff? -> YES, move semantics to guarantee only ever 1
+// instance
 /**
  * Main entrypoint for MeshNOW.
  */

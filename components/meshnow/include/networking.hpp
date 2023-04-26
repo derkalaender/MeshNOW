@@ -76,17 +76,17 @@ class Common {
     const Type type;
 };
 
-class StillAlive : Common {};
+class StillAlive : public Common {};
 
-class AnyoneThere : Common {};
+class AnyoneThere : public Common {};
 
-class IAmHere : Common {};
+class IAmHere : public Common {};
 
-class PlsConnect : Common {};
+class PlsConnect : public Common {};
 
-class Welcome : Common {};
+class Welcome : public Common {};
 
-class Directed : Common {
+class Directed : public Common {
    public:
     Directed(const Packet::Type type, const MAC_ADDR& target, const uint16_t seq_num)
         : Common(type), target{target}, seq_num{seq_num} {
@@ -99,18 +99,18 @@ class Directed : Common {
     const uint16_t seq_num;
 };
 
-class DataAck : Directed {
+class DataAck : public Directed {
    public:
     DataAck(const MAC_ADDR& target, uint16_t seq_num) : Directed(Type::DATA_ACK, target, seq_num) {}
 };
 
-class DataNack : Directed {
+class DataNack : public Directed {
    public:
     DataNack(const MAC_ADDR& target, uint16_t seq_num) : Directed(Type::DATA_ACK, target, seq_num) {}
 };
 
-class DataCommon : Directed {
-   public:
+class DataCommon : public Directed {
+   protected:
     DataCommon(Packet::Type type, const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
                std::vector<uint8_t>& data)
         : Directed(type, target, seq_num), first{first}, len_or_frag_num{len_or_frag_num}, data{data} {
@@ -127,6 +127,7 @@ class DataCommon : Directed {
         }
     }
 
+   public:
     [[nodiscard]] std::vector<uint8_t> serialize() const override;
 
     bool first;
@@ -134,13 +135,13 @@ class DataCommon : Directed {
     const std::vector<uint8_t>& data;
 };
 
-class DataLwIP : DataCommon {
+class DataLwIP : public DataCommon {
    public:
-    DataLwIP(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num, std::vector<uint8_t>& data)
+    DataLwIP(MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num, std::vector<uint8_t>& data)
         : DataCommon(Type::DATA_LWIP, target, seq_num, first, len_or_frag_num, data) {}
 };
 
-class DataCustom : DataCommon {
+class DataCustom : public DataCommon {
    public:
     DataCustom(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
                std::vector<uint8_t>& data)

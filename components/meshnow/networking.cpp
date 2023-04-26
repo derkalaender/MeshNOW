@@ -59,6 +59,8 @@ std::vector<uint8_t> Packet::DataCommon::serialize() const {
     // construct new sequence number + (length or fragment number)
     // and replace the sequence number currently at the end
 
+    packet.resize(packet.size() - 2);
+
     if (first) {
         struct __attribute__((packed)) seq_len {
             uint16_t seq : 13;
@@ -66,7 +68,7 @@ std::vector<uint8_t> Packet::DataCommon::serialize() const {
         };
         seq_len seq_len{seq_num, len_or_frag_num};
         auto seq_len_begin = reinterpret_cast<uint8_t*>(&seq_len);
-        packet.insert(packet.end() - 1, seq_len_begin, seq_len_begin + sizeof(seq_len));
+        packet.insert(packet.end(), seq_len_begin, seq_len_begin + sizeof(seq_len));
     } else {
         struct __attribute__((packed)) seq_frag_num {
             uint16_t seq : 13;
@@ -74,7 +76,7 @@ std::vector<uint8_t> Packet::DataCommon::serialize() const {
         };
         seq_frag_num seq_frag_num{seq_num, static_cast<uint8_t>(len_or_frag_num)};
         auto seq_frag_num_begin = reinterpret_cast<uint8_t*>(&seq_frag_num);
-        packet.insert(packet.end() - 1, seq_frag_num_begin, seq_frag_num_begin + sizeof(seq_frag_num));
+        packet.insert(packet.end(), seq_frag_num_begin, seq_frag_num_begin + sizeof(seq_frag_num));
     }
     packet.insert(packet.end(), data.begin(), data.end());
     return packet;
