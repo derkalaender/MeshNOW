@@ -1,2 +1,3 @@
-# MeshNOW
+# App
+
 Sensor Mesh Networks using ESP-NOW technology

@@ -4,7 +4,7 @@
 #include <freertos/task.h>
 
 #include "espnow_test.h"
-#include "meshnow.h"
+#include "meshnow.hpp"
 
 static const char *TAG = "main";
 
@@ -29,5 +29,6 @@ void perform_range_test() {
 }
 
 extern "C" void app_main(void) {
-    MeshNOW();
+    auto meshnow = MeshNOW::App(MeshNOW::Config{.root = true});
+    meshnow.stop();
 }
