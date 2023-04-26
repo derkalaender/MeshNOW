@@ -109,9 +109,15 @@ App::App(const Config config) : config{config} {
 }
 
 App::~App() {
+    if (state != State::STOPPED) {
+        ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
+        stop();
+    }
+
     std::scoped_lock lock{mtx};
 
     ESP_LOGI(TAG, "Deinitializing MeshNOW");
+
     try {
         espnow_deinit();
         wifi_deinit();

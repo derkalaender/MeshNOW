@@ -3,6 +3,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include <memory>
+
 #include "espnow_test.h"
 #include "meshnow.hpp"
 
@@ -28,7 +30,9 @@ void perform_range_test() {
     }
 }
 
+static std::unique_ptr<MeshNOW::App> meshnow;
+
 extern "C" void app_main(void) {
-    auto meshnow = MeshNOW::App(MeshNOW::Config{.root = true});
-    meshnow.stop();
+    meshnow = std::make_unique<MeshNOW::App>(MeshNOW::Config{.root = true});
+    meshnow->start();
 }
