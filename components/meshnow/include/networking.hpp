@@ -50,6 +50,11 @@ enum class Type : uint8_t {
     PLS_CONNECT,   ///< Sent by a node to request a connection to another specific node
     WELCOME,       ///< Sent by a node to accept a connection request
 
+    // EVENT
+    NODE_CONNECTED,     ///< Sent by a parent when a new child connects, bubbles up
+    NODE_DISCONNECTED,  ///< Sent by a parent when a child disconnects, bubbles up
+    MESH_UNREACHABLE,   ///< Sent by a node to its children when it loses connection to its parent, propagates down
+
     // DATA
     DATA_ACK,     ///< Sent by the target node to acknowledge a complete datagram
     DATA_NACK,    ///< Sent by any immediate parent of the current hop to indicate the inability to
@@ -76,15 +81,53 @@ class Common {
     const Type type;
 };
 
-class StillAlive : public Common {};
+class StillAlive : public Common {
+   public:
+    StillAlive() : Common(Type::STILL_ALIVE) {}
+};
 
-class AnyoneThere : public Common {};
+class AnyoneThere : public Common {
+   public:
+    AnyoneThere() : Common(Type::ANYONE_THERE) {}
+};
 
-class IAmHere : public Common {};
+class IAmHere : public Common {
+   public:
+    IAmHere() : Common(Type::I_AM_HERE) {}
+};
 
-class PlsConnect : public Common {};
+class PlsConnect : public Common {
+   public:
+    PlsConnect() : Common(Type::PLS_CONNECT) {}
+};
 
-class Welcome : public Common {};
+class Welcome : public Common {
+   public:
+    Welcome() : Common(Type::WELCOME) {}
+};
+
+class NodeConnected : public Common {
+   public:
+    NodeConnected(const MAC_ADDR& node) : Common(Type::NODE_CONNECTED), node{node} {}
+
+    [[nodiscard]] std::vector<uint8_t> serialize() const;
+
+    const MAC_ADDR& node;
+};
+
+class NodeDisconnected : public Common {
+   public:
+    NodeDisconnected(const MAC_ADDR& node) : Common(Type::NODE_DISCONNECTED), node{node} {}
+
+    [[nodiscard]] std::vector<uint8_t> serialize() const;
+
+    const MAC_ADDR& node;
+};
+
+class MeshUnreachable : public Common {
+   public:
+    MeshUnreachable() : Common(Type::MESH_UNREACHABLE) {}
+};
 
 class Directed : public Common {
    public:

@@ -45,6 +45,18 @@ std::vector<uint8_t> Packet::Common::serialize() const {
     return packet;
 }
 
+std::vector<uint8_t> Packet::NodeConnected::serialize() const {
+    auto packet = Common::serialize();
+    packet.insert(packet.end(), node.begin(), node.end());
+    return packet;
+}
+
+std::vector<uint8_t> Packet::NodeDisconnected::serialize() const {
+    auto packet = Common::serialize();
+    packet.insert(packet.end(), node.begin(), node.end());
+    return packet;
+}
+
 std::vector<uint8_t> Packet::Directed::serialize() const {
     auto packet = Common::serialize();
     packet.insert(packet.end(), target.begin(), target.end());
