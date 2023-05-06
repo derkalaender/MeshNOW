@@ -96,7 +96,7 @@ static void espnow_deinit() {
     ESP_LOGI(TAG, "ESP-NOW deinitialized");
 }
 
-using namespace MeshNOW;
+namespace meshnow {
 
 App::App(const Config config) : config{config} {
     std::scoped_lock lock{mtx};
@@ -130,6 +130,7 @@ App::~App() {
     // TODO deinit nvs?
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
 }
+
 void App::start() {
     std::scoped_lock lock{mtx};
 
@@ -149,6 +150,7 @@ void App::start() {
 
     ESP_LOGI(TAG, "Liftoff! 🚀");
 }
+
 void App::stop() {
     std::scoped_lock lock{mtx};
 
@@ -168,3 +170,5 @@ void App::stop() {
 
     ESP_LOGI(TAG, "Mesh stopped! 🛑");
 }
+
+}  // namespace meshnow

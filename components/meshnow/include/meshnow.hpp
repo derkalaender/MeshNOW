@@ -5,7 +5,7 @@
 
 #include "networking.hpp"
 
-namespace MeshNOW {
+namespace meshnow {
 struct Config {
     /**
      * Whether this node is the root node.
@@ -25,7 +25,7 @@ enum class State {
 // TODO maybe singleton? Special copy constructor handling and stuff? -> YES, move semantics to guarantee only ever 1
 // instance
 /**
- * Main entrypoint for MeshNOW.
+ * Main entrypoint for meshnow.
  */
 class App {
    public:
@@ -74,4 +74,4 @@ class App {
     Networking networking;
 };
 
-}  // namespace MeshNOW
+}  // namespace meshnow

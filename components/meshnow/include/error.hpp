@@ -33,7 +33,7 @@ inline void CHECK_THROW(const esp_err_t error) {
     }
 }
 
-namespace MeshNOW {
+namespace meshnow {
 class NotStartedException : public ESPException {
    public:
     NotStartedException() : ESPException{ESP_ERR_INVALID_STATE} {};
@@ -48,4 +48,4 @@ class PayloadTooLargeException : public ESPException {
    public:
     PayloadTooLargeException() : ESPException{ESP_ERR_INVALID_ARG} {};
 };
-}  // namespace MeshNOW
+}  // namespace meshnow
