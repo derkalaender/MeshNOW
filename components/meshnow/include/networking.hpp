@@ -1,11 +1,16 @@
 #pragma once
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include "constants.hpp"
+#include "queue.hpp"
 
 namespace meshnow {
 
@@ -22,6 +27,30 @@ namespace meshnow {
  */
 class Networking {
    public:
+    Networking() { receive_thread = std::thread(&Networking::ReceiveWorker, this); }
+
+    Networking(const Networking&) = delete;
+    Networking& operator=(const Networking&) = delete;
+
+    /**
+     * Send callback for ESP-NOW.
+     */
+    void on_send(const uint8_t* mac_addr, esp_now_send_status_t status);
+
+    /**
+     * Receive callback for ESP-NOW.
+     */
+    void on_receive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
+
+    // TODO private
+   public:
+    struct RecvData {
+        MAC_ADDR src_addr;
+        MAC_ADDR dest_addr;
+        uint8_t rssi;
+        std::vector<uint8_t>* data;
+    };
+
     /**
      * Broadcasts a raw payload to all nearby devices, no matter if connected/part of the mesh or not.
      * @param payload data to send
@@ -38,6 +67,15 @@ class Networking {
      * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
      */
     static void raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& payload);
+
+    /**
+     * Handles the receive receive_queue.
+     */
+    [[noreturn]] void ReceiveWorker();
+
+    std::thread receive_thread;
+
+    util::Queue<RecvData> receive_queue{RECEIVE_QUEUE_SIZE};
 };
 
 namespace packet {

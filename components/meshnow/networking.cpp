@@ -39,6 +39,40 @@ void Networking::raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& 
     CHECK_THROW(esp_now_send(mac_addr.data(), payload.data(), payload.size()));
 }
 
+void Networking::on_send(const uint8_t* mac_addr, esp_now_send_status_t status) {
+    // TODO
+    ESP_LOGI(TAG, "Send status: %d", status);
+}
+
+void Networking::on_receive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) {
+    ESP_LOGI(TAG, "Received data");
+    // TODO error checking and timeout
+
+    RecvData recv_data{};
+    // copy everything because the pointers are only valid during this function call
+    std::copy(esp_now_info->src_addr, esp_now_info->src_addr + MAC_ADDR_LEN, recv_data.src_addr.begin());
+    std::copy(esp_now_info->des_addr, esp_now_info->des_addr + MAC_ADDR_LEN, recv_data.dest_addr.begin());
+    recv_data.rssi = esp_now_info->rx_ctrl->rssi;
+    recv_data.data = new std::vector<uint8_t>(data, data + data_len);
+    receive_queue.push_back(recv_data, portMAX_DELAY);
+}
+
+[[noreturn]] void Networking::ReceiveWorker() {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        auto recv_data = receive_queue.pop(portMAX_DELAY);
+        if (!recv_data) continue;
+
+        ESP_LOGI(TAG, "Received data from " MAC_FORMAT, MAC_FORMAT_ARGS(recv_data->src_addr));
+        ESP_LOGI(TAG, "SIZE: %d", recv_data->data->size());
+        ESP_LOG_BUFFER_HEXDUMP(TAG, recv_data->data->data(), recv_data->data->size(), ESP_LOG_INFO);
+
+        // we need to free the payload vector at the end
+        delete recv_data->data;
+    }
+}
+
 namespace packet {
 
 std::vector<uint8_t> Common::serialize() const {

@@ -14,10 +14,12 @@ static const char *TAG = CREATE_TAG("🦌");
 
 static std::mutex mtx;
 
+namespace meshnow {
+
 /**
  * Initializes NVS.
  */
-static void nvs_init() {
+void App::nvs_init() {
     ESP_LOGI(TAG, "Initializing NVS");
 
     // initialize nvs
@@ -34,7 +36,7 @@ static void nvs_init() {
 /**
  * Initializes WiFi.
  */
-static void wifi_init() {
+void App::wifi_init() {
     ESP_LOGI(TAG, "Initializing WiFi");
 
     // initialize the tcp stack (not needed atm)
@@ -63,7 +65,7 @@ static void wifi_init() {
 /**
  * Deinitializes WiFi.
  */
-static void wifi_deinit() {
+void App::wifi_deinit() {
     ESP_LOGI(TAG, "Deinitializing WiFi");
 
     CHECK_THROW(esp_wifi_stop());
@@ -72,13 +74,21 @@ static void wifi_deinit() {
     ESP_LOGI(TAG, "WiFi deinitialized");
 }
 
+// this is a dirty hack because esp-now callbacks are C-style...
+static meshnow::Networking *networking_callback_ptr;
+
 /**
  * Initializes ESP-NOW.
  */
-static void espnow_init() {
+void App::espnow_init() {
     ESP_LOGI(TAG, "Initializing ESP-NOW");
 
     CHECK_THROW(esp_now_init());
+    networking_callback_ptr = &networking;
+    CHECK_THROW(esp_now_register_send_cb(
+        [](auto mac_addr, auto status) { networking_callback_ptr->on_send(mac_addr, status); }));
+    CHECK_THROW(esp_now_register_recv_cb(
+        [](auto info, auto data, auto len) { networking_callback_ptr->on_receive(info, data, len); }));
 
     ESP_LOGI(TAG, "ESP-NOW initialized");
 }
@@ -86,17 +96,17 @@ static void espnow_init() {
 /**
  * Deinitializes ESP-NOW.
  */
-static void espnow_deinit() {
+void App::espnow_deinit() {
     ESP_LOGI(TAG, "Deinitializing ESP-NOW");
 
     CHECK_THROW(esp_now_unregister_recv_cb());
     CHECK_THROW(esp_now_unregister_send_cb());
     CHECK_THROW(esp_now_deinit());
 
+    networking_callback_ptr = nullptr;
+
     ESP_LOGI(TAG, "ESP-NOW deinitialized");
 }
-
-namespace meshnow {
 
 App::App(const Config config) : config{config} {
     std::scoped_lock lock{mtx};
@@ -106,6 +116,10 @@ App::App(const Config config) : config{config} {
     wifi_init();
     espnow_init();
     ESP_LOGI(TAG, "MeshNOW initialized. You can start the mesh now 🦌");
+
+    Networking::RecvData data{.data = new std::vector<uint8_t>{1, 2, 3, 4, 5}};
+
+    networking.receive_queue.push_back(data, portMAX_DELAY);
 }
 
 App::~App() {

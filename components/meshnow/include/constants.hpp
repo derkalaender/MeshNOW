@@ -12,6 +12,7 @@
     (mac_addr)[0], (mac_addr)[1], (mac_addr)[2], (mac_addr)[3], (mac_addr)[4], (mac_addr)[5]
 
 namespace meshnow {
+
 const int MAC_ADDR_LEN{ESP_NOW_ETH_ALEN};
 using MAC_ADDR = std::array<uint8_t, MAC_ADDR_LEN>;
 const MAC_ADDR BROADCAST_MAC_ADDR{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -25,4 +26,6 @@ const int DATA_HEADER_FIRST_SIZE{3 + 1 + 6 + 3};  // magic + type + target mac +
 const int MAX_DATA_FIRST_SIZE{MAX_RAW_PACKET_SIZE - DATA_HEADER_FIRST_SIZE};
 const int DATA_HEADER_NEXT_SIZE{DATA_HEADER_FIRST_SIZE - 1};  // only two bytes for seq&frag
 const int MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - DATA_HEADER_NEXT_SIZE};
+
+const int RECEIVE_QUEUE_SIZE{10};
 }  // namespace meshnow

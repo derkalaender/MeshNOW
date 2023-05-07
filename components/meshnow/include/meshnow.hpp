@@ -40,6 +40,9 @@ class App {
      */
     explicit App(Config config);
 
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
+
     /**
      * Deinitializes the App library.
      *
@@ -69,6 +72,14 @@ class App {
     void stop();
 
    private:
+    static void nvs_init();
+
+    static void wifi_init();
+    static void wifi_deinit();
+
+    void espnow_init();
+    static void espnow_deinit();
+
     const Config config;
     State state{State::STOPPED};
     Networking networking;
