@@ -30,17 +30,24 @@ class Queue {
         return *this;
     }
 
-    bool push_back(T& item, TickType_t ticksToWait) {
-        return xQueueSendToBack(queue.get(), static_cast<const void*>(&item), ticksToWait);
+    bool push_back(T&& item, TickType_t ticksToWait) {
+        // TODO alignment
+        uint8_t buffer[sizeof(T)];
+        new (buffer) T{std::move(item)};
+        return xQueueSendToBack(queue.get(), static_cast<const void*>(buffer), ticksToWait);
     }
 
-    bool push_front(const T& item, TickType_t ticksToWait) {
-        return xQueueSendToFront(queue.get(), static_cast<const void*>(&item), ticksToWait);
+    bool push_front(T&& item, TickType_t ticksToWait) {
+        // TODO alignment
+        uint8_t buffer[sizeof(T)];
+        new (buffer) T{std::move(item)};
+        return xQueueSendToFront(queue.get(), static_cast<const void*>(buffer), ticksToWait);
     }
     std::optional<T> pop(TickType_t ticksToWait) {
-        T item;
-        if (xQueueReceive(queue.get(), static_cast<void*>(&item), ticksToWait)) {
-            return item;
+        // TODO alignment
+        uint8_t buffer[sizeof(T)];
+        if (xQueueReceive(queue.get(), static_cast<void*>(buffer), ticksToWait)) {
+            return *reinterpret_cast<T*>(buffer);
         } else {
             return std::nullopt;
         }

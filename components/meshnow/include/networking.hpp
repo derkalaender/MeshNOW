@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "esp_log.h"
 #include "queue.hpp"
 
 namespace meshnow {
@@ -48,7 +49,7 @@ class Networking {
         MAC_ADDR src_addr;
         MAC_ADDR dest_addr;
         uint8_t rssi;
-        std::vector<uint8_t>* data;
+        std::vector<uint8_t> data;
     };
 
     /**

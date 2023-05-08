@@ -53,8 +53,8 @@ void Networking::on_receive(const esp_now_recv_info_t* esp_now_info, const uint8
     std::copy(esp_now_info->src_addr, esp_now_info->src_addr + MAC_ADDR_LEN, recv_data.src_addr.begin());
     std::copy(esp_now_info->des_addr, esp_now_info->des_addr + MAC_ADDR_LEN, recv_data.dest_addr.begin());
     recv_data.rssi = esp_now_info->rx_ctrl->rssi;
-    recv_data.data = new std::vector<uint8_t>(data, data + data_len);
-    receive_queue.push_back(recv_data, portMAX_DELAY);
+    recv_data.data = std::vector<uint8_t>(data, data + data_len);
+    receive_queue.push_back(std::move(recv_data), portMAX_DELAY);
 }
 
 [[noreturn]] void Networking::ReceiveWorker() {
@@ -65,11 +65,8 @@ void Networking::on_receive(const esp_now_recv_info_t* esp_now_info, const uint8
         if (!recv_data) continue;
 
         ESP_LOGI(TAG, "Received data from " MAC_FORMAT, MAC_FORMAT_ARGS(recv_data->src_addr));
-        ESP_LOGI(TAG, "SIZE: %d", recv_data->data->size());
-        ESP_LOG_BUFFER_HEXDUMP(TAG, recv_data->data->data(), recv_data->data->size(), ESP_LOG_INFO);
-
-        // we need to free the payload vector at the end
-        delete recv_data->data;
+        ESP_LOGI(TAG, "SIZE: %d", recv_data->data.size());
+        ESP_LOG_BUFFER_HEXDUMP(TAG, recv_data->data.data(), recv_data->data.size(), ESP_LOG_INFO);
     }
 }
 

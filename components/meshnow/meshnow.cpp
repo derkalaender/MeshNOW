@@ -117,7 +117,8 @@ App::App(const Config config) : config{config} {
     espnow_init();
     ESP_LOGI(TAG, "MeshNOW initialized. You can start the mesh now 🦌");
 
-    Networking::RecvData data{.data = new std::vector<uint8_t>{1, 2, 3, 4, 5}};
+    Networking::RecvData data;
+    data.data = std::vector<uint8_t>{1, 2, 3, 4, 5};
 
     networking.receive_queue.push_back(data, portMAX_DELAY);
 }
