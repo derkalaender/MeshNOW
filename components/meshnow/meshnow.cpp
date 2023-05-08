@@ -120,7 +120,7 @@ App::App(const Config config) : config{config} {
     Networking::RecvData data;
     data.data = std::vector<uint8_t>{1, 2, 3, 4, 5};
 
-    networking.receive_queue.push_back(data, portMAX_DELAY);
+    networking.receive_queue.push_back(std::move(data), portMAX_DELAY);
 }
 
 App::~App() {

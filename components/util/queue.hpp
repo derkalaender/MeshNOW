@@ -31,21 +31,18 @@ class Queue {
     }
 
     bool push_back(T&& item, TickType_t ticksToWait) {
-        // TODO alignment
-        uint8_t buffer[sizeof(T)];
+        alignas(T) uint8_t buffer[sizeof(T)];
         new (buffer) T{std::move(item)};
         return xQueueSendToBack(queue.get(), static_cast<const void*>(buffer), ticksToWait);
     }
 
     bool push_front(T&& item, TickType_t ticksToWait) {
-        // TODO alignment
-        uint8_t buffer[sizeof(T)];
+        alignas(T) uint8_t buffer[sizeof(T)];
         new (buffer) T{std::move(item)};
         return xQueueSendToFront(queue.get(), static_cast<const void*>(buffer), ticksToWait);
     }
     std::optional<T> pop(TickType_t ticksToWait) {
-        // TODO alignment
-        uint8_t buffer[sizeof(T)];
+        alignas(T) uint8_t buffer[sizeof(T)];
         if (xQueueReceive(queue.get(), static_cast<void*>(buffer), ticksToWait)) {
             return *reinterpret_cast<T*>(buffer);
         } else {
