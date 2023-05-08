@@ -105,124 +105,146 @@ enum class Type : uint8_t {
     DATA_CUSTOM,  ///< Custom data
 };
 
-class Common {
-   public:
+/**
+ * Actual payload of a packet.
+ * Polymorphism is sick.
+ */
+struct BasePayload {
+    virtual ~BasePayload() = default;
+
+    /**
+     * Serializes the payload into a byte array.
+     */
+    virtual void serialize(std::vector<uint8_t>& buffer) const = 0;
+
+    /**
+     * Size of the payload in bytes.
+     */
+    virtual size_t serializedSize() const = 0;
+
+    /**
+     * Type of the payload.
+     */
+    virtual Type type() const = 0;
+};
+
+/**
+ * A MeshNOW packet.
+ * Consists of a header (magic bytes and payload type) and a payload.
+ */
+struct Packet {
     // Constant magic bytes to identify meshnow packets
     constexpr static std::array<uint8_t, 3> MAGIC{0x55, 0x77, 0x55};
 
+    explicit Packet(BasePayload& payload) : payload_{payload} {}
+
     /**
      * Serializes the packet into a byte array.
-     * @return
      */
-    virtual std::vector<uint8_t> serialize() const;
-
-    // Type of the packet
-    const Type type;
-
-   protected:
-    explicit Common(const packet::Type type) : type{type} {};
-
-    // Used for performance reasons to avoid reallocation when serializing
-    virtual size_t serialized_size() const { return sizeof(MAGIC) + sizeof(type); }
-};
-
-class StillAlive : public Common {
-   public:
-    StillAlive() : Common(Type::STILL_ALIVE) {}
-};
-
-class AnyoneThere : public Common {
-   public:
-    AnyoneThere() : Common(Type::ANYONE_THERE) {}
-};
-
-class IAmHere : public Common {
-   public:
-    IAmHere() : Common(Type::I_AM_HERE) {}
-};
-
-class PlsConnect : public Common {
-   public:
-    PlsConnect() : Common(Type::PLS_CONNECT) {}
-};
-
-class Welcome : public Common {
-   public:
-    Welcome() : Common(Type::WELCOME) {}
-};
-
-class NodeConnected : public Common {
-   public:
-    explicit NodeConnected(const MAC_ADDR& node) : Common(Type::NODE_CONNECTED), node{node} {}
-
-    std::vector<uint8_t> serialize() const override;
-
-    const MAC_ADDR& node;
+    std::vector<uint8_t> serialize() const;
 
    private:
-    size_t serialized_size() const override { return Common::serialized_size() + sizeof(node); }
+    // Payload data
+    const BasePayload& payload_;
 };
 
-class NodeDisconnected : public Common {
-   public:
-    explicit NodeDisconnected(const MAC_ADDR& node) : Common(Type::NODE_DISCONNECTED), node{node} {}
+/**
+ * Payloads that don't contain any data.
+ */
+struct DumbPayload : BasePayload {
+    explicit DumbPayload(Type type) : type_{type} {}
 
-    std::vector<uint8_t> serialize() const override;
+    void serialize(std::vector<uint8_t>& buffer) const override {}
 
-    const MAC_ADDR& node;
+    size_t serializedSize() const override { return 0; }
 
-   private:
-    size_t serialized_size() const override { return Common::serialized_size() + sizeof(node); }
+    Type type() const override { return type_; }
+
+    const Type type_;
 };
 
-class MeshUnreachable : public Common {
-   public:
-    MeshUnreachable() : Common(Type::MESH_UNREACHABLE) {}
+struct StillAlivePayload : DumbPayload {
+    StillAlivePayload() : DumbPayload(Type::STILL_ALIVE) {}
 };
 
-class MeshReachable : public Common {
-   public:
-    MeshReachable() : Common(Type::MESH_REACHABLE) {}
+struct AnyoneTherePayload : DumbPayload {
+    AnyoneTherePayload() : DumbPayload(Type::ANYONE_THERE) {}
 };
 
-class Directed : public Common {
-   public:
-    const MAC_ADDR& target;
-    const uint16_t seq_num;
-
-   protected:
-    Directed(const packet::Type type, const MAC_ADDR& target, const uint16_t seq_num)
-        : Common(type), target{target}, seq_num{seq_num} {
-        assert(seq_num <= MAX_SEQ_NUM);
-    }
-
-    std::vector<uint8_t> serialize() const override;
-
-    size_t serialized_size() const override { return Common::serialized_size() + sizeof(target) + sizeof(seq_num); }
+struct IAmHerePayload : DumbPayload {
+    IAmHerePayload() : DumbPayload(Type::I_AM_HERE) {}
 };
 
-class DataAck : public Directed {
-   public:
-    DataAck(const MAC_ADDR& target, uint16_t seq_num) : Directed(Type::DATA_ACK, target, seq_num) {}
+struct PlsConnectPayload : DumbPayload {
+    PlsConnectPayload() : DumbPayload(Type::PLS_CONNECT) {}
 };
 
-class DataNack : public Directed {
-   public:
-    DataNack(const MAC_ADDR& target, uint16_t seq_num) : Directed(Type::DATA_NACK, target, seq_num) {}
+struct WelcomePayload : DumbPayload {
+    WelcomePayload() : DumbPayload(Type::WELCOME) {}
 };
 
-class DataCommon : public Directed {
-   public:
-    std::vector<uint8_t> serialize() const override;
+struct NodeConnectedPayload : BasePayload {
+    explicit NodeConnectedPayload(const MAC_ADDR& connected_to) : connected_to_{connected_to} {}
 
-    bool first;
-    const uint16_t len_or_frag_num;
-    const std::vector<uint8_t>& data;
+    void serialize(std::vector<uint8_t>& buffer) const override;
 
-   protected:
-    DataCommon(packet::Type type, const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
-               std::vector<uint8_t>& data)
-        : Directed(type, target, seq_num), first{first}, len_or_frag_num{len_or_frag_num}, data{data} {
+    size_t serializedSize() const override;
+
+    Type type() const override { return Type::NODE_CONNECTED; }
+
+    const MAC_ADDR& connected_to_;
+};
+
+struct NodeDisconnectedPayload : BasePayload {
+    explicit NodeDisconnectedPayload(const MAC_ADDR& disconnected_from) : disconnected_from_{disconnected_from} {}
+
+    void serialize(std::vector<uint8_t>& buffer) const override;
+
+    size_t serializedSize() const override;
+
+    Type type() const override { return Type::NODE_DISCONNECTED; }
+
+    const MAC_ADDR& disconnected_from_;
+};
+
+struct MeshUnreachablePayload : DumbPayload {
+    MeshUnreachablePayload() : DumbPayload(Type::MESH_UNREACHABLE) {}
+};
+
+struct MeshReachablePayload : DumbPayload {
+    MeshReachablePayload() : DumbPayload(Type::MESH_REACHABLE) {}
+};
+
+struct DataAckPayload : BasePayload {
+    explicit DataAckPayload(const MAC_ADDR& target, uint16_t seq_num) : target_{target}, seq_num_{seq_num} {}
+
+    void serialize(std::vector<uint8_t>& buffer) const override;
+
+    size_t serializedSize() const override;
+
+    Type type() const override { return Type::DATA_ACK; }
+
+    const MAC_ADDR& target_;
+    const uint16_t seq_num_;
+};
+
+struct DataNackPayload : BasePayload {
+    explicit DataNackPayload(const MAC_ADDR& target, uint16_t seq_num) : target_{target}, seq_num_{seq_num} {}
+
+    void serialize(std::vector<uint8_t>& buffer) const override;
+
+    size_t serializedSize() const override;
+
+    Type type() const override { return Type::DATA_NACK; }
+
+    const MAC_ADDR& target_;
+    const uint16_t seq_num_;
+};
+
+struct DataBasePayload : BasePayload {
+    explicit DataBasePayload(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
+                             const std::vector<uint8_t>& data)
+        : target_{target}, seq_num_{seq_num}, first_{first}, len_or_frag_num_{len_or_frag_num}, data_{data} {
         if (first) {
             assert(len_or_frag_num >= 1 && len_or_frag_num <= MAX_DATA_TOTAL_SIZE);
         } else {
@@ -236,22 +258,31 @@ class DataCommon : public Directed {
         }
     }
 
-    size_t serialized_size() const override {
-        return Directed::serialized_size() + sizeof(len_or_frag_num) + data.size();
-    }
+    void serialize(std::vector<uint8_t>& buffer) const override;
+
+    size_t serializedSize() const override;
+
+    const MAC_ADDR& target_;
+    const uint16_t seq_num_;
+    const bool first_;
+    const uint16_t len_or_frag_num_;
+    const std::vector<uint8_t>& data_;
 };
 
-class DataLwIP : public DataCommon {
-   public:
-    DataLwIP(MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num, std::vector<uint8_t>& data)
-        : DataCommon(Type::DATA_LWIP, target, seq_num, first, len_or_frag_num, data) {}
+struct DataLwIPPayload : DataBasePayload {
+    explicit DataLwIPPayload(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
+                             const std::vector<uint8_t>& data)
+        : DataBasePayload(target, seq_num, first, len_or_frag_num, data) {}
+
+    Type type() const override { return Type::DATA_LWIP; }
 };
 
-class DataCustom : public DataCommon {
-   public:
-    DataCustom(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
-               std::vector<uint8_t>& data)
-        : DataCommon(Type::DATA_CUSTOM, target, seq_num, first, len_or_frag_num, data) {}
+struct DataCustomPayload : DataBasePayload {
+    explicit DataCustomPayload(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
+                               const std::vector<uint8_t>& data)
+        : DataBasePayload(target, seq_num, first, len_or_frag_num, data) {}
+
+    Type type() const override { return Type::DATA_CUSTOM; }
 };
 
 }  // namespace packet

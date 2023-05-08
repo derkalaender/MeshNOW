@@ -9,6 +9,7 @@ namespace util {
 
 /**
  * Wraps a FreeRTOS thread-safe queue.
+ * Lord forgive me for what I have done...
  */
 template <typename T>
 class Queue {
