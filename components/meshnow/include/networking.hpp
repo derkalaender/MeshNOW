@@ -107,6 +107,8 @@ enum class Type : uint8_t {
 
     DATA_CUSTOM_FIRST,  ///< Custom data
     DATA_CUSTOM_NEXT,
+
+    MAX,  ///< Number of packet types. Meta, should not actually be used
 };
 
 /**
@@ -146,6 +148,11 @@ struct Packet {
      * Serializes the packet into a byte buffer.
      */
     std::vector<uint8_t> serialize() const;
+
+    /**
+     * Deserializes the packet payload from a byte buffer.
+     */
+    static std::unique_ptr<BasePayload> deserialize(const std::vector<uint8_t>& buffer);
 
    private:
     // Payload data
@@ -271,7 +278,7 @@ struct DataNextPayload : BasePayload {
     explicit DataNextPayload(const MAC_ADDR& target, uint16_t seq_num, uint8_t frag_num, const bool custom,
                              const std::vector<uint8_t>& data)
         : target_{target}, seq_num_{seq_num}, frag_num_{frag_num}, custom_{custom}, data_{data} {
-        assert(frag_num >= 1 && frag_num <= MAX_FRAG_NUM);
+        assert(frag_num >= 1 && frag_num < MAX_FRAG_NUM);
         assert(!data.empty());
         assert(data.size() <= MAX_DATA_NEXT_SIZE);
     }

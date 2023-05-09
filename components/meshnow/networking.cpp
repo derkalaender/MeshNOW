@@ -72,6 +72,20 @@ void Networking::on_receive(const esp_now_recv_info_t* esp_now_info, const uint8
 
 namespace packet {
 
+// Helper structs for data serialization to not waste bytes //
+
+struct __attribute__((packed)) seq_len {
+    uint16_t seq : 13;
+    uint16_t len : 11;
+};
+
+struct __attribute__((packed)) seq_frag {
+    uint16_t seq : 13;
+    uint8_t frag_num : 3;
+};
+
+// Packet (de)serialization //
+
 std::vector<uint8_t> Packet::serialize() const {
     std::vector<uint8_t> buffer;
     buffer.reserve(payload_.serializedSize() + sizeof(MAGIC) + sizeof(Type));
@@ -79,6 +93,132 @@ std::vector<uint8_t> Packet::serialize() const {
     buffer.push_back(static_cast<uint8_t>(payload_.type()));
     payload_.serialize(buffer);
     return buffer;
+}
+
+std::unique_ptr<BasePayload> Packet::deserialize(const std::vector<uint8_t>& buffer) {
+    // sanity checks
+
+    // check minimum packet size
+    if (buffer.size() < sizeof(MAGIC) + sizeof(Type)) {
+        return nullptr;
+    }
+
+    // iterator for easy traversal
+    auto it = buffer.begin();
+
+    // check magic
+    if (!std::equal(it, it + sizeof(MAGIC), MAGIC.begin())) {
+        return nullptr;
+    }
+
+    it += sizeof(MAGIC);
+
+    // check type
+    Type type = static_cast<Type>(*it);
+    if (type >= Type::MAX) {
+        return nullptr;
+    }
+
+    it += sizeof(Type);
+
+    size_t payload_size{buffer.size() - sizeof(MAGIC) - sizeof(Type)};
+
+    // deserialize
+    // TODO use less copying. maybe iterator?
+    switch (type) {
+        case Type::STILL_ALIVE:
+            if (payload_size != 0) break;
+            return std::make_unique<StillAlivePayload>();
+        case Type::ANYONE_THERE:
+            if (payload_size != 0) break;
+            return std::make_unique<AnyoneTherePayload>();
+        case Type::I_AM_HERE:
+            if (payload_size != 0) break;
+            return std::make_unique<IAmHerePayload>();
+        case Type::PLS_CONNECT:
+            if (payload_size != 0) break;
+            return std::make_unique<PlsConnectPayload>();
+        case Type::WELCOME:
+            if (payload_size != 0) break;
+            return std::make_unique<WelcomePayload>();
+        case Type::NODE_CONNECTED: {
+            if (payload_size != sizeof(MAC_ADDR)) break;
+            MAC_ADDR addr;
+            std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
+            return std::make_unique<NodeConnectedPayload>(addr);
+        }
+        case Type::NODE_DISCONNECTED: {
+            if (payload_size != sizeof(MAC_ADDR)) break;
+            MAC_ADDR addr;
+            std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
+            return std::make_unique<NodeDisconnectedPayload>(addr);
+        }
+        case Type::MESH_UNREACHABLE:
+            if (payload_size != 0) break;
+            return std::make_unique<MeshUnreachablePayload>();
+        case Type::MESH_REACHABLE:
+            if (payload_size != 0) break;
+            return std::make_unique<MeshReachablePayload>();
+        case Type::DATA_ACK: {
+            // mac, seq num
+            if (payload_size != sizeof(MAC_ADDR) + sizeof(uint16_t)) break;
+            MAC_ADDR addr;
+            std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
+            it += sizeof(MAC_ADDR);
+            uint16_t seq_num = *reinterpret_cast<uint16_t*>(*it);
+            return std::make_unique<DataAckPayload>(addr, seq_num);
+        }
+        case Type::DATA_NACK: {
+            // mac, seq num
+            if (payload_size != sizeof(MAC_ADDR) + sizeof(uint16_t)) break;
+            MAC_ADDR addr;
+            std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
+            it += sizeof(MAC_ADDR);
+            uint16_t seq_num = *reinterpret_cast<uint16_t*>(*it);
+            return std::make_unique<DataNackPayload>(addr, seq_num);
+        }
+        case Type::DATA_LWIP_FIRST:
+        case Type::DATA_CUSTOM_FIRST: {
+            // mac, seq num + len + min data size
+            if (payload_size < sizeof(MAC_ADDR) + sizeof(seq_len) + 1) break;
+            MAC_ADDR addr;
+            std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
+            it += sizeof(MAC_ADDR);
+            seq_len sl = *reinterpret_cast<seq_len*>(*it);
+            uint16_t seq_num = sl.seq;
+            uint16_t len = sl.len;
+            // sanity checks because packet could be malicious
+            if (!(len >= 1 && len < MAX_DATA_TOTAL_SIZE)) break;
+            // TODO check seq_num
+
+            it += sizeof(seq_len);
+            std::vector<uint8_t> data{it, buffer.end()};
+            return std::make_unique<DataFirstPayload>(addr, seq_num, len, type == Type::DATA_CUSTOM_FIRST, data);
+        }
+        case Type::DATA_LWIP_NEXT:
+        case Type::DATA_CUSTOM_NEXT: {
+            // mac, seq num + frag num + min data size
+            if (payload_size < sizeof(MAC_ADDR) + sizeof(seq_frag) + 1) break;
+            MAC_ADDR addr;
+            std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
+            it += sizeof(MAC_ADDR);
+            seq_frag sf = *reinterpret_cast<seq_frag*>(*it);
+            uint16_t seq_num = sf.seq;
+            uint8_t frag_num = sf.frag_num;
+            // sanity checks because packet could be malicious
+            if (!(frag_num >= 1 && frag_num < MAX_FRAG_NUM)) break;
+            // TODO check seq_num
+            it += sizeof(seq_frag);
+            std::vector<uint8_t> data{it, buffer.end()};
+            return std::make_unique<DataFirstPayload>(addr, seq_num, frag_num, type == Type::DATA_CUSTOM_FIRST, data);
+        }
+        case Type::MAX:
+            // ignore
+            break;
+    }
+
+    // null per default. could also use optional to be more explicit but who cares
+    return nullptr;
 }
 
 void NodeConnectedPayload::serialize(std::vector<uint8_t>& buffer) const {
@@ -101,22 +241,12 @@ void DataAckPayload::serialize(std::vector<uint8_t>& buffer) const {
 
 size_t DataAckPayload::serializedSize() const { return sizeof(target_) + sizeof(seq_num_); }
 
-struct __attribute__((packed)) seq_len {
-    uint16_t seq : 13;
-    uint16_t len : 11;
-};
-
-struct __attribute__((packed)) seq_frag_num {
-    uint16_t seq : 13;
-    uint8_t frag_num : 3;
-};
-
 void DataFirstPayload::serialize(std::vector<uint8_t>& buffer) const {
     buffer.insert(buffer.end(), target_.begin(), target_.end());
 
-    seq_len seq_len{seq_num_, len_};
-    auto seq_len_ptr = reinterpret_cast<uint8_t*>(&seq_len);
-    buffer.insert(buffer.end(), seq_len_ptr, seq_len_ptr + sizeof(seq_len));
+    seq_len sl{seq_num_, len_};
+    auto sl_ptr = reinterpret_cast<uint8_t*>(&sl);
+    buffer.insert(buffer.end(), sl_ptr, sl_ptr + sizeof(sl));
 
     // append user payload
     buffer.insert(buffer.end(), data_.begin(), data_.end());
@@ -127,15 +257,15 @@ size_t DataFirstPayload::serializedSize() const { return data_.size() + sizeof(t
 void DataNextPayload::serialize(std::vector<uint8_t>& buffer) const {
     buffer.insert(buffer.end(), target_.begin(), target_.end());
 
-    seq_frag_num seq_frag_num{seq_num_, frag_num_};
-    auto seq_frag_num_ptr = reinterpret_cast<uint8_t*>(&seq_frag_num);
-    buffer.insert(buffer.end(), seq_frag_num_ptr, seq_frag_num_ptr + sizeof(seq_frag_num));
+    seq_frag sf{seq_num_, frag_num_};
+    auto sf_ptr = reinterpret_cast<uint8_t*>(&sf);
+    buffer.insert(buffer.end(), sf_ptr, sf_ptr + sizeof(sf));
 
     // append user payload
     buffer.insert(buffer.end(), data_.begin(), data_.end());
 }
 
-size_t DataNextPayload::serializedSize() const { return data_.size() + sizeof(target_) + sizeof(seq_frag_num); }
+size_t DataNextPayload::serializedSize() const { return data_.size() + sizeof(target_) + sizeof(seq_frag); }
 
 }  // namespace packet
 }  // namespace meshnow
