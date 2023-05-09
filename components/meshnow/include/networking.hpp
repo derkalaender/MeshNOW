@@ -98,11 +98,15 @@ enum class Type : uint8_t {
     MESH_REACHABLE,     ///< Sent by a node to its children when it regains connection to its parent, propagates down
 
     // DATA
-    DATA_ACK,     ///< Sent by the target node to acknowledge a complete datagram
-    DATA_NACK,    ///< Sent by any immediate parent of the current hop to indicate the inability to
-                  ///< accept/forward the datagram (e.g. out of memory)
-    DATA_LWIP,    ///< TCP/IP data
-    DATA_CUSTOM,  ///< Custom data
+    DATA_ACK,   ///< Sent by the target node to acknowledge a complete datagram
+    DATA_NACK,  ///< Sent by any immediate parent of the current hop to indicate the inability to accept/forward the
+                ///< datagram (e.g. out of memory)
+
+    DATA_LWIP_FIRST,  ///< TCP/IP data
+    DATA_LWIP_NEXT,
+
+    DATA_CUSTOM_FIRST,  ///< Custom data
+    DATA_CUSTOM_NEXT,
 };
 
 /**
@@ -139,7 +143,7 @@ struct Packet {
     explicit Packet(BasePayload& payload) : payload_{payload} {}
 
     /**
-     * Serializes the packet into a byte array.
+     * Serializes the packet into a byte buffer.
      */
     std::vector<uint8_t> serialize() const;
 
@@ -241,48 +245,48 @@ struct DataNackPayload : BasePayload {
     const uint16_t seq_num_;
 };
 
-struct DataBasePayload : BasePayload {
-    explicit DataBasePayload(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
-                             const std::vector<uint8_t>& data)
-        : target_{target}, seq_num_{seq_num}, first_{first}, len_or_frag_num_{len_or_frag_num}, data_{data} {
-        if (first) {
-            assert(len_or_frag_num >= 1 && len_or_frag_num <= MAX_DATA_TOTAL_SIZE);
-        } else {
-            assert(len_or_frag_num >= 1 && len_or_frag_num <= MAX_FRAG_NUM);
-        }
+struct DataFirstPayload : BasePayload {
+    explicit DataFirstPayload(const MAC_ADDR& target, uint16_t seq_num, uint16_t len, const bool custom,
+                              const std::vector<uint8_t>& data)
+        : target_{target}, seq_num_{seq_num}, len_{len}, custom_{custom}, data_{data} {
+        assert(len >= 1 && len <= MAX_DATA_TOTAL_SIZE);
         assert(!data.empty());
-        if (first) {
-            assert(data.size() <= MAX_DATA_FIRST_SIZE);
-        } else {
-            assert(data.size() <= MAX_DATA_NEXT_SIZE);
-        }
+        assert(data.size() <= MAX_DATA_FIRST_SIZE);
     }
 
     void serialize(std::vector<uint8_t>& buffer) const override;
 
     size_t serializedSize() const override;
 
+    Type type() const override { return custom_ ? Type::DATA_CUSTOM_FIRST : Type::DATA_LWIP_FIRST; }
+
     const MAC_ADDR& target_;
     const uint16_t seq_num_;
-    const bool first_;
-    const uint16_t len_or_frag_num_;
+    const uint16_t len_;
+    const bool custom_;
     const std::vector<uint8_t>& data_;
 };
 
-struct DataLwIPPayload : DataBasePayload {
-    explicit DataLwIPPayload(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
+struct DataNextPayload : BasePayload {
+    explicit DataNextPayload(const MAC_ADDR& target, uint16_t seq_num, uint8_t frag_num, const bool custom,
                              const std::vector<uint8_t>& data)
-        : DataBasePayload(target, seq_num, first, len_or_frag_num, data) {}
+        : target_{target}, seq_num_{seq_num}, frag_num_{frag_num}, custom_{custom}, data_{data} {
+        assert(frag_num >= 1 && frag_num <= MAX_FRAG_NUM);
+        assert(!data.empty());
+        assert(data.size() <= MAX_DATA_NEXT_SIZE);
+    }
 
-    Type type() const override { return Type::DATA_LWIP; }
-};
+    void serialize(std::vector<uint8_t>& buffer) const override;
 
-struct DataCustomPayload : DataBasePayload {
-    explicit DataCustomPayload(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
-                               const std::vector<uint8_t>& data)
-        : DataBasePayload(target, seq_num, first, len_or_frag_num, data) {}
+    size_t serializedSize() const override;
 
-    Type type() const override { return Type::DATA_CUSTOM; }
+    Type type() const override { return custom_ ? Type::DATA_CUSTOM_NEXT : Type::DATA_LWIP_NEXT; }
+
+    const MAC_ADDR& target_;
+    const uint16_t seq_num_;
+    const uint8_t frag_num_;
+    const bool custom_;
+    const std::vector<uint8_t>& data_;
 };
 
 }  // namespace packet

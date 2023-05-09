@@ -50,8 +50,8 @@ void Networking::on_receive(const esp_now_recv_info_t* esp_now_info, const uint8
 
     RecvData recv_data{};
     // copy everything because the pointers are only valid during this function call
-    std::copy(esp_now_info->src_addr, esp_now_info->src_addr + MAC_ADDR_LEN, recv_data.src_addr.begin());
-    std::copy(esp_now_info->des_addr, esp_now_info->des_addr + MAC_ADDR_LEN, recv_data.dest_addr.begin());
+    std::copy(esp_now_info->src_addr, esp_now_info->src_addr + sizeof(MAC_ADDR), recv_data.src_addr.begin());
+    std::copy(esp_now_info->des_addr, esp_now_info->des_addr + sizeof(MAC_ADDR), recv_data.dest_addr.begin());
     recv_data.rssi = esp_now_info->rx_ctrl->rssi;
     recv_data.data = std::vector<uint8_t>(data, data + data_len);
     receive_queue.push_back(std::move(recv_data), portMAX_DELAY);
@@ -111,31 +111,31 @@ struct __attribute__((packed)) seq_frag_num {
     uint8_t frag_num : 3;
 };
 
-void DataBasePayload::serialize(std::vector<uint8_t>& buffer) const {
+void DataFirstPayload::serialize(std::vector<uint8_t>& buffer) const {
     buffer.insert(buffer.end(), target_.begin(), target_.end());
 
-    // sequence number + (length or fragment number) will be encoded
-    // tightly packed to save space
-
-    // this will occupy one byte less if it's not the first fragment
-
-    if (first_) {
-        seq_len seq_len{seq_num_, len_or_frag_num_};
-        auto seq_len_ptr = reinterpret_cast<uint8_t*>(&seq_len);
-        buffer.insert(buffer.end(), seq_len_ptr, seq_len_ptr + sizeof(seq_len));
-    } else {
-        seq_frag_num seq_frag_num{seq_num_, static_cast<uint8_t>(len_or_frag_num_)};
-        auto seq_frag_num_ptr = reinterpret_cast<uint8_t*>(&seq_frag_num);
-        buffer.insert(buffer.end(), seq_frag_num_ptr, seq_frag_num_ptr + sizeof(seq_frag_num));
-    }
+    seq_len seq_len{seq_num_, len_};
+    auto seq_len_ptr = reinterpret_cast<uint8_t*>(&seq_len);
+    buffer.insert(buffer.end(), seq_len_ptr, seq_len_ptr + sizeof(seq_len));
 
     // append user payload
     buffer.insert(buffer.end(), data_.begin(), data_.end());
 }
 
-size_t DataBasePayload::serializedSize() const {
-    return data_.size() + (first_ ? sizeof(seq_len) : sizeof(seq_frag_num));
+size_t DataFirstPayload::serializedSize() const { return data_.size() + sizeof(target_) + sizeof(seq_len); }
+
+void DataNextPayload::serialize(std::vector<uint8_t>& buffer) const {
+    buffer.insert(buffer.end(), target_.begin(), target_.end());
+
+    seq_frag_num seq_frag_num{seq_num_, frag_num_};
+    auto seq_frag_num_ptr = reinterpret_cast<uint8_t*>(&seq_frag_num);
+    buffer.insert(buffer.end(), seq_frag_num_ptr, seq_frag_num_ptr + sizeof(seq_frag_num));
+
+    // append user payload
+    buffer.insert(buffer.end(), data_.begin(), data_.end());
 }
+
+size_t DataNextPayload::serializedSize() const { return data_.size() + sizeof(target_) + sizeof(seq_frag_num); }
 
 }  // namespace packet
 }  // namespace meshnow
