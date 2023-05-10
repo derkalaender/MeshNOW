@@ -241,6 +241,14 @@ void DataAckPayload::serialize(std::vector<uint8_t>& buffer) const {
 
 size_t DataAckPayload::serializedSize() const { return sizeof(target_) + sizeof(seq_num_); }
 
+void DataNackPayload::serialize(std::vector<uint8_t>& buffer) const {
+    buffer.insert(buffer.end(), target_.begin(), target_.end());
+    auto seq_num_begin = reinterpret_cast<const uint8_t*>(&seq_num_);
+    buffer.insert(buffer.end(), seq_num_begin, seq_num_begin + sizeof(seq_num_));
+}
+
+size_t DataNackPayload::serializedSize() const { return sizeof(target_) + sizeof(seq_num_); }
+
 void DataFirstPayload::serialize(std::vector<uint8_t>& buffer) const {
     buffer.insert(buffer.end(), target_.begin(), target_.end());
 

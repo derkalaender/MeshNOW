@@ -142,7 +142,7 @@ struct Packet {
     // Constant magic bytes to identify meshnow packets
     constexpr static std::array<uint8_t, 3> MAGIC{0x55, 0x77, 0x55};
 
-    explicit Packet(BasePayload& payload) : payload_{payload} {}
+    explicit Packet(const BasePayload& payload) : payload_{payload} {}
 
     /**
      * Serializes the packet into a byte buffer.
