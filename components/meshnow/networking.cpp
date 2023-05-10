@@ -165,7 +165,7 @@ std::unique_ptr<BasePayload> Packet::deserialize(const std::vector<uint8_t>& buf
             MAC_ADDR addr;
             std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
             it += sizeof(MAC_ADDR);
-            uint16_t seq_num = *reinterpret_cast<uint16_t*>(*it);
+            uint16_t seq_num = *reinterpret_cast<const uint16_t*>(&*it);
             return std::make_unique<DataAckPayload>(addr, seq_num);
         }
         case Type::DATA_NACK: {
@@ -174,7 +174,7 @@ std::unique_ptr<BasePayload> Packet::deserialize(const std::vector<uint8_t>& buf
             MAC_ADDR addr;
             std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
             it += sizeof(MAC_ADDR);
-            uint16_t seq_num = *reinterpret_cast<uint16_t*>(*it);
+            uint16_t seq_num = *reinterpret_cast<const uint16_t*>(&*it);
             return std::make_unique<DataNackPayload>(addr, seq_num);
         }
         case Type::DATA_LWIP_FIRST:
@@ -184,11 +184,11 @@ std::unique_ptr<BasePayload> Packet::deserialize(const std::vector<uint8_t>& buf
             MAC_ADDR addr;
             std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
             it += sizeof(MAC_ADDR);
-            seq_len sl = *reinterpret_cast<seq_len*>(*it);
+            seq_len sl = *reinterpret_cast<const seq_len*>(&*it);
             uint16_t seq_num = sl.seq;
             uint16_t len = sl.len;
             // sanity checks because packet could be malicious
-            if (!(len >= 1 && len < MAX_DATA_TOTAL_SIZE)) break;
+            if (!(len >= 1 && len <= MAX_DATA_TOTAL_SIZE)) break;
             // TODO check seq_num
 
             it += sizeof(seq_len);
@@ -202,15 +202,16 @@ std::unique_ptr<BasePayload> Packet::deserialize(const std::vector<uint8_t>& buf
             MAC_ADDR addr;
             std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
             it += sizeof(MAC_ADDR);
-            seq_frag sf = *reinterpret_cast<seq_frag*>(*it);
+            seq_frag sf = *reinterpret_cast<const seq_frag*>(&*it);
             uint16_t seq_num = sf.seq;
             uint8_t frag_num = sf.frag_num;
             // sanity checks because packet could be malicious
             if (!(frag_num >= 1 && frag_num < MAX_FRAG_NUM)) break;
             // TODO check seq_num
+
             it += sizeof(seq_frag);
             std::vector<uint8_t> data{it, buffer.end()};
-            return std::make_unique<DataFirstPayload>(addr, seq_num, frag_num, type == Type::DATA_CUSTOM_FIRST, data);
+            return std::make_unique<DataNextPayload>(addr, seq_num, frag_num, type == Type::DATA_CUSTOM_NEXT, data);
         }
         case Type::MAX:
             // ignore

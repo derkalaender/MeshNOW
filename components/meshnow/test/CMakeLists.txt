@@ -1,1 +1,1 @@
-idf_component_register(SRCS "test_packets.cpp" INCLUDE_DIRS "." REQUIRES "cmock unity meshnow")
+idf_component_register(SRCS "test_packets.cpp" INCLUDE_DIRS "." REQUIRES unity meshnow)

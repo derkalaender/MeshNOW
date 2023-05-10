@@ -5,8 +5,6 @@
 #include <array>
 #include <cstdint>
 
-#include "networking.hpp"
-
 #define MAC_FORMAT "%02X:%02X:%02X:%02X:%02X:%02X"
 #define MAC_FORMAT_ARGS(mac_addr) \
     (mac_addr)[0], (mac_addr)[1], (mac_addr)[2], (mac_addr)[3], (mac_addr)[4], (mac_addr)[5]
