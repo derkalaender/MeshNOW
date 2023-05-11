@@ -195,7 +195,7 @@ struct WelcomePayload : DumbPayload {
 };
 
 struct NodeConnectedPayload : BasePayload {
-    explicit NodeConnectedPayload(const MAC_ADDR& connected_to) : connected_to_{connected_to} {}
+    explicit NodeConnectedPayload(MAC_ADDR connected_to) : connected_to_{connected_to} {}
 
     void serialize(std::vector<uint8_t>& buffer) const override;
 
@@ -203,11 +203,11 @@ struct NodeConnectedPayload : BasePayload {
 
     Type type() const override { return Type::NODE_CONNECTED; }
 
-    const MAC_ADDR& connected_to_;
+    const MAC_ADDR connected_to_;
 };
 
 struct NodeDisconnectedPayload : BasePayload {
-    explicit NodeDisconnectedPayload(const MAC_ADDR& disconnected_from) : disconnected_from_{disconnected_from} {}
+    explicit NodeDisconnectedPayload(MAC_ADDR disconnected_from) : disconnected_from_{disconnected_from} {}
 
     void serialize(std::vector<uint8_t>& buffer) const override;
 
@@ -215,7 +215,7 @@ struct NodeDisconnectedPayload : BasePayload {
 
     Type type() const override { return Type::NODE_DISCONNECTED; }
 
-    const MAC_ADDR& disconnected_from_;
+    const MAC_ADDR disconnected_from_;
 };
 
 struct MeshUnreachablePayload : DumbPayload {
@@ -227,7 +227,7 @@ struct MeshReachablePayload : DumbPayload {
 };
 
 struct DataAckPayload : BasePayload {
-    explicit DataAckPayload(const MAC_ADDR& target, uint16_t seq_num) : target_{target}, seq_num_{seq_num} {}
+    explicit DataAckPayload(const MAC_ADDR target, uint16_t seq_num) : target_{target}, seq_num_{seq_num} {}
 
     void serialize(std::vector<uint8_t>& buffer) const override;
 
@@ -235,12 +235,12 @@ struct DataAckPayload : BasePayload {
 
     Type type() const override { return Type::DATA_ACK; }
 
-    const MAC_ADDR& target_;
+    const MAC_ADDR target_;
     const uint16_t seq_num_;
 };
 
 struct DataNackPayload : BasePayload {
-    explicit DataNackPayload(const MAC_ADDR& target, uint16_t seq_num) : target_{target}, seq_num_{seq_num} {}
+    explicit DataNackPayload(const MAC_ADDR target, uint16_t seq_num) : target_{target}, seq_num_{seq_num} {}
 
     void serialize(std::vector<uint8_t>& buffer) const override;
 
@@ -248,13 +248,13 @@ struct DataNackPayload : BasePayload {
 
     Type type() const override { return Type::DATA_NACK; }
 
-    const MAC_ADDR& target_;
+    const MAC_ADDR target_;
     const uint16_t seq_num_;
 };
 
 struct DataFirstPayload : BasePayload {
-    explicit DataFirstPayload(const MAC_ADDR& target, uint16_t seq_num, uint16_t len, const bool custom,
-                              const std::vector<uint8_t>& data)
+    explicit DataFirstPayload(const MAC_ADDR target, uint16_t seq_num, uint16_t len, const bool custom,
+                              const std::vector<uint8_t> data)
         : target_{target}, seq_num_{seq_num}, len_{len}, custom_{custom}, data_{data} {
         assert(len >= 1 && len <= MAX_DATA_TOTAL_SIZE);
         assert(!data.empty());
@@ -267,16 +267,16 @@ struct DataFirstPayload : BasePayload {
 
     Type type() const override { return custom_ ? Type::DATA_CUSTOM_FIRST : Type::DATA_LWIP_FIRST; }
 
-    const MAC_ADDR& target_;
+    const MAC_ADDR target_;
     const uint16_t seq_num_;
     const uint16_t len_;
     const bool custom_;
-    const std::vector<uint8_t>& data_;
+    const std::vector<uint8_t> data_;
 };
 
 struct DataNextPayload : BasePayload {
-    explicit DataNextPayload(const MAC_ADDR& target, uint16_t seq_num, uint8_t frag_num, const bool custom,
-                             const std::vector<uint8_t>& data)
+    explicit DataNextPayload(const MAC_ADDR target, uint16_t seq_num, uint8_t frag_num, const bool custom,
+                             const std::vector<uint8_t> data)
         : target_{target}, seq_num_{seq_num}, frag_num_{frag_num}, custom_{custom}, data_{data} {
         assert(frag_num >= 1 && frag_num < MAX_FRAG_NUM);
         assert(!data.empty());
@@ -289,11 +289,11 @@ struct DataNextPayload : BasePayload {
 
     Type type() const override { return custom_ ? Type::DATA_CUSTOM_NEXT : Type::DATA_LWIP_NEXT; }
 
-    const MAC_ADDR& target_;
+    const MAC_ADDR target_;
     const uint16_t seq_num_;
     const uint8_t frag_num_;
     const bool custom_;
-    const std::vector<uint8_t>& data_;
+    const std::vector<uint8_t> data_;
 };
 
 }  // namespace packet

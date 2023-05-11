@@ -198,7 +198,10 @@ std::unique_ptr<BasePayload> Packet::deserialize(const std::vector<uint8_t>& buf
         case Type::DATA_LWIP_NEXT:
         case Type::DATA_CUSTOM_NEXT: {
             // mac, seq num + frag num + min data size
-            if (payload_size < sizeof(MAC_ADDR) + sizeof(seq_frag) + 1) break;
+            if (payload_size < sizeof(MAC_ADDR) + sizeof(seq_frag) + 1) {
+                ESP_LOGE(TAG, "Payload size %d too small for next data packet", payload_size);
+                break;
+            }
             MAC_ADDR addr;
             std::copy(it, it + sizeof(MAC_ADDR), addr.begin());
             it += sizeof(MAC_ADDR);

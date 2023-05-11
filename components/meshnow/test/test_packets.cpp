@@ -43,18 +43,20 @@ TEST_CASE("node_connected", "[serialization matches]") {
     meshnow::MAC_ADDR mac_addr{1, 2, 3, 4, 5, 6};
 
     meshnow::packet::NodeConnectedPayload payload{mac_addr};
-    auto compare = basic_check(payload);
 
-    // TODO
+    auto compare = static_cast<meshnow::packet::NodeConnectedPayload&>(*basic_check(payload));
+
+    TEST_ASSERT(compare.connected_to_ == mac_addr);
 }
 
 TEST_CASE("node_disconnected", "[serialization matches]") {
     meshnow::MAC_ADDR mac_addr{1, 2, 3, 4, 5, 6};
 
-    meshnow::packet::NodeDisconnectedPayload payload{mac_addr};
-    auto compare = basic_check(payload);
+    meshnow::packet::NodeConnectedPayload payload{mac_addr};
 
-    // TODO
+    auto compare = static_cast<meshnow::packet::NodeDisconnectedPayload&>(*basic_check(payload));
+
+    TEST_ASSERT(compare.disconnected_from_ == mac_addr);
 }
 
 TEST_CASE("data_ack", "[serialization matches]") {
@@ -62,9 +64,10 @@ TEST_CASE("data_ack", "[serialization matches]") {
     uint16_t seq_num = 1234;
 
     meshnow::packet::DataAckPayload payload{mac_addr, seq_num};
-    auto compare = basic_check(payload);
+    auto compare = static_cast<meshnow::packet::DataAckPayload&>(*basic_check(payload));
 
-    // TODO
+    TEST_ASSERT(compare.target_ == mac_addr);
+    TEST_ASSERT(compare.seq_num_ == seq_num);
 }
 
 TEST_CASE("data_nack", "[serialization matches]") {
@@ -72,9 +75,10 @@ TEST_CASE("data_nack", "[serialization matches]") {
     uint16_t seq_num = 1234;
 
     meshnow::packet::DataNackPayload payload{mac_addr, seq_num};
-    auto compare = basic_check(payload);
+    auto compare = static_cast<meshnow::packet::DataNackPayload&>(*basic_check(payload));
 
-    // TODO
+    TEST_ASSERT(compare.target_ == mac_addr);
+    TEST_ASSERT(compare.seq_num_ == seq_num);
 }
 
 TEST_CASE("data_first", "[serialization matches]") {
@@ -84,15 +88,19 @@ TEST_CASE("data_first", "[serialization matches]") {
     do {
         meshnow::MAC_ADDR mac_addr{1, 2, 3, 4, 5, 6};
         uint16_t seq_num = 1234;
-        uint16_t payload_size = meshnow::MAX_DATA_FIRST_SIZE;
+        uint16_t len = meshnow::MAX_DATA_TOTAL_SIZE;
         // data vector consists of increasing numbers
-        std::vector<uint8_t> data(payload_size);
+        std::vector<uint8_t> data(meshnow::MAX_DATA_FIRST_SIZE);
         std::iota(data.begin(), data.end(), 0);
 
-        meshnow::packet::DataFirstPayload payload{mac_addr, seq_num, meshnow::MAX_DATA_TOTAL_SIZE, custom, data};
-        auto compare = basic_check(payload);
+        meshnow::packet::DataFirstPayload payload{mac_addr, seq_num, len, custom, data};
+        auto compare = static_cast<meshnow::packet::DataFirstPayload&>(*basic_check(payload));
 
-        // TODO
+        TEST_ASSERT(compare.target_ == mac_addr);
+        TEST_ASSERT(compare.seq_num_ == seq_num);
+        TEST_ASSERT(compare.len_ == len);
+        TEST_ASSERT(compare.custom_ == custom);
+        TEST_ASSERT(compare.data_ == data);
 
         custom = !custom;
     } while (custom);
@@ -111,9 +119,13 @@ TEST_CASE("data_next", "[serialization matches]") {
         std::iota(data.begin(), data.end(), 0);
 
         meshnow::packet::DataNextPayload payload{mac_addr, seq_num, frag_num, custom, data};
-        auto compare = basic_check(payload);
+        auto compare = static_cast<meshnow::packet::DataNextPayload&>(*basic_check(payload));
 
-        // TODO
+        TEST_ASSERT(compare.target_ == mac_addr);
+        TEST_ASSERT(compare.seq_num_ == seq_num);
+        TEST_ASSERT(compare.frag_num_ == frag_num);
+        TEST_ASSERT(compare.custom_ == custom);
+        TEST_ASSERT(compare.data_ == data);
 
         custom = !custom;
     } while (custom);
