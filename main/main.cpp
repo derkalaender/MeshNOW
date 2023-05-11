@@ -40,7 +40,7 @@ extern "C" void app_main(void) {
     auto target = meshnow::BROADCAST_MAC_ADDR;
     std::string s{"Creative test message"};
     std::vector<uint8_t> data{s.begin(), s.end()};
-    auto payload = meshnow::packet::DataFirstPayload(target, 30, 1500, false, data);
-    auto buffer = meshnow::packet::Packet(payload).serialize();
+    auto payload = meshnow::packets::DataFirstPayload(target, 30, 1500, false, data);
+    auto buffer = meshnow::packets::Packet(payload).serialize();
     ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
 }
