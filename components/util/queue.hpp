@@ -42,10 +42,11 @@ class Queue {
         new (buffer) T{std::move(item)};
         return xQueueSendToFront(queue.get(), static_cast<const void*>(buffer), ticksToWait);
     }
+
     std::optional<T> pop(TickType_t ticksToWait) {
         alignas(T) uint8_t buffer[sizeof(T)];
         if (xQueueReceive(queue.get(), static_cast<void*>(buffer), ticksToWait)) {
-            return *reinterpret_cast<T*>(buffer);
+            return std::move(*reinterpret_cast<T*>(buffer));
         } else {
             return std::nullopt;
         }

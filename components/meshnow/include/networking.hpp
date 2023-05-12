@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "packets.hpp"
 #include "queue.hpp"
+#include "waitbits.hpp"
 
 namespace meshnow {
 
@@ -35,7 +36,7 @@ struct ReceiveMeta {
  */
 class Networking {
    public:
-    Networking() { receive_thread = std::thread(&Networking::ReceiveWorker, this); }
+    Networking() : send_waitbits_{}, send_queue_{10}, send_thread_{&Networking::SendWorker, this} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
@@ -78,28 +79,42 @@ class Networking {
 
    private:
     /**
-     * Broadcasts a raw payload to all nearby devices, no matter if connected/part of the mesh or not.
-     * @param payload data to send
-     *
-     * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
-     */
-    static void raw_broadcast(const std::vector<uint8_t>& payload);
-
-    /**
-     * Sends a raw payload to a specific device (ESP-NOW wrapper).
+     * Sends raw data to the specific device (ESP-NOW wrapper).
      * @param mac_addr the MAC address of the device to send to
-     * @param payload data to send
+     * @param data data to send
      *
      * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
      */
-    static void raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& payload);
+    static void raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
 
     /**
-     * Handles the receive receive_queue.
+     * Add payload to queue for SendWorker to send.
+     *
+     * @note Blocks if send queue is full.
+     *
+     * @param dest_addr MAC address of the immediate node to send the payload to
+     * @param payload payload to send
      */
-    [[noreturn]] void ReceiveWorker();
+    void enqueue_payload(const MAC_ADDR& dest_addr, std::unique_ptr<meshnow::packets::BasePayload> payload);
 
-    std::thread receive_thread;
+    /**
+     * Handles the send queue. Sends packets one by one, ensuring they were received by the next node.
+     */
+    [[noreturn]] void SendWorker();
+
+    /**
+     * Communicates a successful/failed payload from the send callback to the SendWorker.
+     */
+    util::WaitBits send_waitbits_;
+
+    // TODO dont use pair?
+    // TODO make priority queue because we want events and stuff first
+    util::Queue<std::pair<meshnow::MAC_ADDR, std::unique_ptr<meshnow::packets::BasePayload>>> send_queue_;
+
+    /**
+     * Thread the SendWorker runs on.
+     */
+    std::thread send_thread_;
 };
 
 }  // namespace meshnow
