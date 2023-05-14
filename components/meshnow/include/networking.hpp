@@ -95,6 +95,12 @@ class ConnectionInitiator {
      */
     void foundParent(const MAC_ADDR& mac_addr, uint8_t rssi);
 
+    /**
+     * Reject a possible parent.
+     * @param mac_addr the MAC address of the parent
+     */
+    void reject(MAC_ADDR mac_addr);
+
    private:
     struct ParentInfo {
         MAC_ADDR mac_addr;
@@ -104,6 +110,8 @@ class ConnectionInitiator {
     [[noreturn]] void run();
 
     void tryConnect();
+
+    void awaitVerdict();
 
     Networking& networking_;
 
@@ -161,7 +169,7 @@ class Networking {
 
     void handlePlsConnect(const ReceiveMeta& meta);
 
-    void handleWelcome(const ReceiveMeta& meta);
+    void handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload);
 
     void handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload);
 

@@ -91,14 +91,22 @@ void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
     // nodes
     // TODO add child information
     ESP_LOGI(TAG, "Sending welcome");
-    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::WelcomePayload>());
+    // TODO check can accept
+    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::VerdictPayload>(true));
     // TODO send node connected event to parent
 }
 
-void meshnow::Networking::handleWelcome(const ReceiveMeta& meta) {
-    // TODO synchronization
-    // TODO add parent information
-    ESP_LOGI(TAG, "Got welcome!");
+void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload) {
+    if (payload.accept_connection_) {
+        ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
+        // we are safely connected and can stop searching for new parents now
+        conn_initiator_.stopConnecting();
+    } else {
+        ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
+        // remove the possible parent and try connecting to other ones again
+        conn_initiator_.reject(meta.src_addr);
+        conn_initiator_.readyToConnect();
+    }
 }
 
 void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload) {}

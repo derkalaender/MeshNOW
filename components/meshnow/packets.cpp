@@ -72,9 +72,11 @@ std::unique_ptr<meshnow::packets::BasePayload> meshnow::packets::Packet::deseria
         case meshnow::packets::Type::PLS_CONNECT:
             if (payload_size != 0) break;
             return std::make_unique<meshnow::packets::PlsConnectPayload>();
-        case Type::WELCOME:
-            if (payload_size != 0) break;
-            return std::make_unique<WelcomePayload>();
+        case Type::VERDICT: {
+            if (payload_size != sizeof(bool)) break;
+            bool accept_connection = *it;
+            return std::make_unique<VerdictPayload>(accept_connection);
+        }
         case meshnow::packets::Type::NODE_CONNECTED: {
             if (payload_size != sizeof(meshnow::MAC_ADDR)) break;
             meshnow::MAC_ADDR addr;
@@ -157,6 +159,12 @@ std::unique_ptr<meshnow::packets::BasePayload> meshnow::packets::Packet::deseria
     return nullptr;
 }
 
+void meshnow::packets::VerdictPayload::serialize(std::vector<uint8_t>& buffer) const {
+    buffer.push_back(accept_connection_);
+}
+
+size_t meshnow::packets::VerdictPayload::serializedSize() const { return sizeof(accept_connection_); }
+
 void meshnow::packets::NodeConnectedPayload::serialize(std::vector<uint8_t>& buffer) const {
     buffer.insert(buffer.end(), connected_to_.begin(), connected_to_.end());
 }
@@ -236,8 +244,8 @@ void meshnow::packets::PlsConnectPayload::handle(meshnow::Networking& networking
     networking.handlePlsConnect(meta);
 }
 
-void meshnow::packets::WelcomePayload::handle(meshnow::Networking& networking, const meshnow::ReceiveMeta& meta) const {
-    networking.handleWelcome(meta);
+void meshnow::packets::VerdictPayload::handle(meshnow::Networking& networking, const meshnow::ReceiveMeta& meta) const {
+    networking.handleVerdict(meta);
 }
 
 void meshnow::packets::NodeConnectedPayload::handle(meshnow::Networking& networking,

@@ -7,6 +7,7 @@
 static const char* TAG = CREATE_TAG("ConnectionInitiator");
 
 static const auto READY_BIT = BIT0;
+static const auto AWAIT_VERDICT_BIT = BIT1;
 
 // Frequency at which to send connection beacon (ms)
 static const auto CONNECTION_FREQ_MS = 500;
@@ -28,9 +29,15 @@ meshnow::ConnectionInitiator::ConnectionInitiator(Networking& networking)
 void meshnow::ConnectionInitiator::readyToConnect() { waitbits_.setBits(READY_BIT); }
 
 void meshnow::ConnectionInitiator::stopConnecting() {
+    ESP_LOGI(TAG, "Stopping connection attempts");
     std::lock_guard lock{mtx_};
     parent_infos_.clear();
     waitbits_.clearBits(READY_BIT);
+}
+
+void meshnow::ConnectionInitiator::awaitVerdict() {
+    ESP_LOGI(TAG, "Awaiting connection verdict");
+    waitbits_.setBits(AWAIT_VERDICT_BIT);
 }
 
 [[noreturn]] void meshnow::ConnectionInitiator::run() {
@@ -81,8 +88,8 @@ void meshnow::ConnectionInitiator::tryConnect() {
              best_parent->rssi);
     // send pls connect payload
     networking_.send_worker_.enqueuePayload(best_parent->mac_addr, std::make_unique<packets::PlsConnectPayload>());
-    // stop trying to connect
-    stopConnecting();
+    // wait for verdict
+    awaitVerdict();
 }
 
 void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, uint8_t rssi) {
@@ -114,5 +121,17 @@ void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr
             // add new parent
             parent_infos_.push_back({mac_addr, rssi});
         }
+    }
+}
+
+void meshnow::ConnectionInitiator::reject(meshnow::MAC_ADDR mac_addr) {
+    std::lock_guard lock{mtx_};
+
+    // remove parent from list
+    auto it = std::find_if(parent_infos_.begin(), parent_infos_.end(),
+                           [&mac_addr](const auto& parent_info) { return parent_info.mac_addr == mac_addr; });
+    if (it != parent_infos_.end()) {
+        ESP_LOGI(TAG, "Removing parent " MAC_FORMAT " from list", MAC_FORMAT_ARGS(mac_addr));
+        parent_infos_.erase(it);
     }
 }

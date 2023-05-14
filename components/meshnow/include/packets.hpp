@@ -22,8 +22,7 @@ enum class Type : uint8_t {
     ANYONE_THERE,  ///< Sent by a node trying to connect to the mesh
     I_AM_HERE,     ///< Sent by nodes already in the mesh in reply to AnyoneThere
     PLS_CONNECT,   ///< Sent by a node to request a connection to another specific node
-    WELCOME,       ///< Sent by a node to accept a connection request
-    // TODO add a "no thanks" packet
+    VERDICT,       ///< Sent by a node to accept/decline a connection request
 
     // EVENT
     NODE_CONNECTED,     ///< Sent by a parent when a new child connects, bubbles up
@@ -137,10 +136,18 @@ struct PlsConnectPayload : DumbPayload {
     void handle(meshnow::Networking& networking, const ReceiveMeta& meta) const override;
 };
 
-struct WelcomePayload : DumbPayload {
-    WelcomePayload() : DumbPayload(Type::WELCOME) {}
+struct VerdictPayload : BasePayload {
+    explicit VerdictPayload(bool accept_connection) : accept_connection_{accept_connection} {}
+
+    void serialize(std::vector<uint8_t>& buffer) const override;
+
+    size_t serializedSize() const override;
+
+    Type type() const override { return Type::VERDICT; }
 
     void handle(meshnow::Networking& networking, const ReceiveMeta& meta) const override;
+
+    const bool accept_connection_;
 };
 
 struct NodeConnectedPayload : BasePayload {
