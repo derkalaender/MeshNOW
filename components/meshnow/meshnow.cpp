@@ -19,7 +19,7 @@ namespace meshnow {
 /**
  * Initializes NVS.
  */
-void App::nvs_init() {
+void App::initNVS() {
     ESP_LOGI(TAG, "Initializing NVS");
 
     // initialize nvs
@@ -36,7 +36,7 @@ void App::nvs_init() {
 /**
  * Initializes WiFi.
  */
-void App::wifi_init() {
+void App::initWifi() {
     ESP_LOGI(TAG, "Initializing WiFi");
 
     // initialize the tcp stack (not needed atm)
@@ -65,7 +65,7 @@ void App::wifi_init() {
 /**
  * Deinitializes WiFi.
  */
-void App::wifi_deinit() {
+void App::deinitWifi() {
     ESP_LOGI(TAG, "Deinitializing WiFi");
 
     CHECK_THROW(esp_wifi_stop());
@@ -80,15 +80,15 @@ static meshnow::Networking *networking_callback_ptr;
 /**
  * Initializes ESP-NOW.
  */
-void App::espnow_init() {
+void App::initEspnow() {
     ESP_LOGI(TAG, "Initializing ESP-NOW");
 
     CHECK_THROW(esp_now_init());
-    networking_callback_ptr = &networking;
+    networking_callback_ptr = &networking_;
     CHECK_THROW(esp_now_register_send_cb(
-        [](auto mac_addr, auto status) { networking_callback_ptr->on_send(mac_addr, status); }));
+        [](auto mac_addr, auto status) { networking_callback_ptr->onSend(mac_addr, status); }));
     CHECK_THROW(esp_now_register_recv_cb(
-        [](auto info, auto data, auto len) { networking_callback_ptr->on_receive(info, data, len); }));
+        [](auto info, auto data, auto len) { networking_callback_ptr->onReceive(info, data, len); }));
 
     ESP_LOGI(TAG, "ESP-NOW initialized");
 }
@@ -96,7 +96,7 @@ void App::espnow_init() {
 /**
  * Deinitializes ESP-NOW.
  */
-void App::espnow_deinit() {
+void App::deinitEspnow() {
     ESP_LOGI(TAG, "Deinitializing ESP-NOW");
 
     CHECK_THROW(esp_now_unregister_recv_cb());
@@ -108,18 +108,18 @@ void App::espnow_deinit() {
     ESP_LOGI(TAG, "ESP-NOW deinitialized");
 }
 
-App::App(const Config config) : config{config} {
+App::App(const Config config) : config_{config}, state_{State::STOPPED}, networking_{state_} {
     std::scoped_lock lock{mtx};
 
     ESP_LOGI(TAG, "Initializing MeshNOW");
-    nvs_init();
-    wifi_init();
-    espnow_init();
+    initNVS();
+    initWifi();
+    initEspnow();
     ESP_LOGI(TAG, "MeshNOW initialized. You can start the mesh now 🦌");
 }
 
 App::~App() {
-    if (state != State::STOPPED) {
+    if (state_ != State::STOPPED) {
         ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
         stop();
     }
@@ -129,8 +129,8 @@ App::~App() {
     ESP_LOGI(TAG, "Deinitializing MeshNOW");
 
     try {
-        espnow_deinit();
-        wifi_deinit();
+        deinitEspnow();
+        deinitWifi();
     } catch (const std::exception &e) {
         ESP_LOGE(TAG, "Error while deinitializing MeshNOW: %s", e.what());
         ESP_LOGE(TAG, "This should never happen. Terminating....");
@@ -144,13 +144,13 @@ App::~App() {
 void App::start() {
     std::scoped_lock lock{mtx};
 
-    if (state != State::STOPPED) {
+    if (state_ != State::STOPPED) {
         ESP_LOGE(TAG, "MeshNOW is already running");
         throw AlreadyStartedException();
     }
-    state = State::STARTED;
+    state_ = State::STARTED;
 
-    if (config.root) {
+    if (config_.root) {
         ESP_LOGI(TAG, "Starting MeshNOW as root...");
         // TODO start root
     } else {
@@ -164,13 +164,13 @@ void App::start() {
 void App::stop() {
     std::scoped_lock lock{mtx};
 
-    if (state != State::STARTED) {
+    if (state_ != State::STARTED) {
         ESP_LOGE(TAG, "MeshNOW is not running");
         throw NotStartedException();
     }
-    state = State::STOPPED;
+    state_ = State::STOPPED;
 
-    if (config.root) {
+    if (config_.root) {
         ESP_LOGI(TAG, "Stopping MeshNOW as root...");
         // TODO stop root
     } else {

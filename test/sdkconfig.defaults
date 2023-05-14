@@ -1,2 +1,6 @@
 # need to disable watch dog because test menu is blocking
 CONFIG_ESP_TASK_WDT_INIT=n
+
+# unity
+CONFIG_UNITY_ENABLE_COLOR=y
+CONFIG_UNITY_ENABLE_BACKTRACE_ON_FAIL=y

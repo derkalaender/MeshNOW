@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "packets.hpp"
 #include "queue.hpp"
+#include "state.hpp"
 #include "waitbits.hpp"
 
 namespace meshnow {
@@ -21,6 +22,81 @@ struct ReceiveMeta {
     MAC_ADDR src_addr;
     MAC_ADDR dest_addr;
     uint8_t rssi;
+};
+
+/**
+ * Thread that handles sending payloads by queueing them and working them off one by one.
+ */
+class SendWorker {
+   public:
+    explicit SendWorker(Networking& networking)
+        // TODO extract max_items to constants.hpp
+        : networking_{networking}, waitbits_{}, send_queue_{10}, thread_{&SendWorker::run, this} {}
+
+    /**
+     * Add payload to the send queue.
+     *
+     * @note Blocks if send queue is full.
+     *
+     * @param dest_addr MAC address of the immediate node to send the payload to
+     * @param payload payload to send
+     */
+    void enqueuePayload(const MAC_ADDR& dest_addr, std::unique_ptr<meshnow::packets::BasePayload> payload);
+
+    /**
+     * Notify the SendWorker that the previous payload was sent.
+     */
+    void sendFinished(bool successful);
+
+   private:
+    struct SendQueueItem {
+        MAC_ADDR dest_addr;
+        std::unique_ptr<meshnow::packets::BasePayload> payload;
+    };
+
+    [[noreturn]] void run();
+
+    // TODO unused
+    Networking& networking_;
+
+    /**
+     * Communicates a successful/failed payload from the send callback to the thread.
+     */
+    util::WaitBits waitbits_;
+
+    // TODO make priority queue because we want events and stuff first
+    util::Queue<SendQueueItem> send_queue_;
+
+    std::thread thread_;
+};
+
+/**
+ * Whenever disconnected from a parent, this thread tries to connect to the best parent by continuously sending connect
+ * requests.
+ */
+class ConnectionInitiator {
+   public:
+    explicit ConnectionInitiator(Networking& networking)
+        : networking_{networking}, waitbits_{}, thread_{&ConnectionInitiator::run, this} {}
+
+    /**
+     * Notify the ConnectionInitiator that the node is ready to connect to a parent.
+     */
+    void readyToConnect();
+
+    /**
+     * Notify the ConnectionInitiator that it should stop trying to connect to a parent.
+     */
+    void stopConnecting();
+
+   private:
+    [[noreturn]] void run();
+
+    Networking& networking_;
+
+    util::WaitBits waitbits_;
+
+    std::thread thread_;
 };
 
 /**
@@ -36,7 +112,7 @@ struct ReceiveMeta {
  */
 class Networking {
    public:
-    Networking() : send_waitbits_{}, send_queue_{10}, send_thread_{&Networking::SendWorker, this} {}
+    explicit Networking(State& state) : state_{state}, send_worker_{*this}, conn_initiator{*this} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
@@ -44,12 +120,12 @@ class Networking {
     /**
      * Send callback for ESP-NOW.
      */
-    void on_send(const uint8_t* mac_addr, esp_now_send_status_t status);
+    void onSend(const uint8_t* mac_addr, esp_now_send_status_t status);
 
     /**
      * Receive callback for ESP-NOW.
      */
-    void on_receive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
+    void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
 
     void handleStillAlive(const ReceiveMeta& meta);
 
@@ -85,36 +161,19 @@ class Networking {
      *
      * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
      */
-    static void raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
+    static void rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
 
     /**
-     * Add payload to queue for SendWorker to send.
-     *
-     * @note Blocks if send queue is full.
-     *
-     * @param dest_addr MAC address of the immediate node to send the payload to
-     * @param payload payload to send
+     * Reference to the current state of the node. Used to know if we are connected or not, etc.
      */
-    void enqueue_payload(const MAC_ADDR& dest_addr, std::unique_ptr<meshnow::packets::BasePayload> payload);
+    State& state_;
 
-    /**
-     * Handles the send queue. Sends packets one by one, ensuring they were received by the next node.
-     */
-    [[noreturn]] void SendWorker();
+    SendWorker send_worker_;
 
-    /**
-     * Communicates a successful/failed payload from the send callback to the SendWorker.
-     */
-    util::WaitBits send_waitbits_;
+    ConnectionInitiator conn_initiator;
 
-    // TODO dont use pair?
-    // TODO make priority queue because we want events and stuff first
-    util::Queue<std::pair<meshnow::MAC_ADDR, std::unique_ptr<meshnow::packets::BasePayload>>> send_queue_;
-
-    /**
-     * Thread the SendWorker runs on.
-     */
-    std::thread send_thread_;
+    friend SendWorker;
+    friend ConnectionInitiator;
 };
 
 }  // namespace meshnow

@@ -13,11 +13,9 @@
 
 static const char* TAG = CREATE_TAG("Networking");
 
-static const auto SEND_SUCCESS_BIT = BIT0;
-static const auto SEND_FAILED_BIT = BIT1;
-
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
+    ESP_LOGI(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     if (esp_now_is_peer_exist(mac_addr.data())) {
         return;
     }
@@ -29,58 +27,26 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-void meshnow::Networking::raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {
+void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {
     if (data.size() > MAX_RAW_PACKET_SIZE) {
         ESP_LOGE(TAG, "Payload size %d exceeds maximum data size %d", data.size(), MAX_RAW_PACKET_SIZE);
         throw PayloadTooLargeException();
     }
 
+    // TODO delete unused peers first
     add_peer(mac_addr);
     ESP_LOGI(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
 }
 
-void meshnow::Networking::enqueue_payload(const meshnow::MAC_ADDR& dest_addr,
-                                          std::unique_ptr<meshnow::packets::BasePayload> payload) {
-    // TODO use custom delay, don't wait forever (risk of deadlock)
-    send_queue_.push_back({dest_addr, std::move(payload)}, portMAX_DELAY);
-}
-
-[[noreturn]] void meshnow::Networking::SendWorker() {
-    while (true) {
-        // wait forever for the next item in the queue
-        auto optional = send_queue_.pop(portMAX_DELAY);
-        if (!optional) {
-            ESP_LOGE(TAG, "Failed to pop from send queue");
-            continue;
-        }
-        auto& [mac_addr, payload] = *optional;
-        meshnow::packets::Packet packet{*payload};
-        raw_send(mac_addr, packet.serialize());
-
-        // wait for callback
-        // TODO use custom delay, don't wait forever (risk of deadlock)
-        auto bits = send_waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, portMAX_DELAY);
-        if (bits & SEND_SUCCESS_BIT) {
-            ESP_LOGI(TAG, "Send successful");
-        } else {
-            ESP_LOGE(TAG, "Send failed");
-        }
-    }
-}
-
-void meshnow::Networking::on_send(const uint8_t* mac_addr, esp_now_send_status_t status) {
+void meshnow::Networking::onSend(const uint8_t* mac_addr, esp_now_send_status_t status) {
     // TODO
     ESP_LOGI(TAG, "Send status: %d", status);
-    // simply set the wait bits so that the send worker can send the next payload
-    if (status == ESP_NOW_SEND_SUCCESS) {
-        send_waitbits_.setBits(SEND_SUCCESS_BIT);
-    } else {
-        send_waitbits_.setBits(SEND_FAILED_BIT);
-    }
+    // notify send worker
+    send_worker_.sendFinished(status == ESP_NOW_SEND_SUCCESS);
 }
 
-void meshnow::Networking::on_receive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) {
+void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) {
     ESP_LOGI(TAG, "Received data");
     // TODO error checking and timeout
 
@@ -101,22 +67,35 @@ void meshnow::Networking::on_receive(const esp_now_recv_info_t* esp_now_info, co
     payload->handle(*this, meta);
 }
 
-// TODO
-[[noreturn]] void meshnow::Networking::ReceiveWorker() {
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
-}
-
 void meshnow::Networking::handleStillAlive(const ReceiveMeta& meta) {}
 
-void meshnow::Networking::handleAnyoneThere(const ReceiveMeta& meta) {}
+void meshnow::Networking::handleAnyoneThere(const ReceiveMeta& meta) {
+    // TODO check if already connected or cannot accept any more children
+    ESP_LOGI(TAG, "Sending I am here");
+    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::IAmHerePayload>());
+}
 
-void meshnow::Networking::handleIAmHere(const ReceiveMeta& meta) {}
+void meshnow::Networking::handleIAmHere(const ReceiveMeta& meta) {
+    // TODO collect multiple responses and select the best one based on RSSI
+    // TODO synchronization with current state
+    ESP_LOGI(TAG, "Sending pls connect");
+    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::PlsConnectPayload>());
+}
 
-void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {}
+void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
+    // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
+    // nodes
+    // TODO add child information
+    ESP_LOGI(TAG, "Sending welcome");
+    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::WelcomePayload>());
+    // TODO send node connected event to parent
+}
 
-void meshnow::Networking::handleWelcome(const ReceiveMeta& meta) {}
+void meshnow::Networking::handleWelcome(const ReceiveMeta& meta) {
+    // TODO synchronization
+    // TODO add parent information
+    ESP_LOGI(TAG, "Got welcome!");
+}
 
 void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload) {}
 
