@@ -76,8 +76,7 @@ class SendWorker {
  */
 class ConnectionInitiator {
    public:
-    explicit ConnectionInitiator(Networking& networking)
-        : networking_{networking}, waitbits_{}, thread_{&ConnectionInitiator::run, this} {}
+    explicit ConnectionInitiator(Networking& networking);
 
     /**
      * Notify the ConnectionInitiator that the node is ready to connect to a parent.
@@ -89,14 +88,35 @@ class ConnectionInitiator {
      */
     void stopConnecting();
 
+    /**
+     * Notify the ConnectionInitiator that a possible parent was found.
+     * @param mac_addr the MAC address of the parent
+     * @param rssi rssi of the parent
+     */
+    void foundParent(const MAC_ADDR& mac_addr, uint8_t rssi);
+
    private:
+    struct ParentInfo {
+        MAC_ADDR mac_addr;
+        uint8_t rssi;
+    };
+
     [[noreturn]] void run();
+
+    void tryConnect();
 
     Networking& networking_;
 
     util::WaitBits waitbits_;
 
     std::thread thread_;
+
+    std::mutex mtx_;
+
+    // TODO place magic constant in internal.hpp
+    std::vector<ParentInfo> parent_infos_;
+
+    TickType_t first_parent_found_time_;
 };
 
 /**
@@ -112,10 +132,16 @@ class ConnectionInitiator {
  */
 class Networking {
    public:
-    explicit Networking(State& state) : state_{state}, send_worker_{*this}, conn_initiator{*this} {}
+    explicit Networking(State& state) : state_{state}, send_worker_{*this}, conn_initiator_{*this} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
+
+    /**
+     * Start the networking stack.
+     * TODO get is_root from state
+     */
+    void start(bool is_root);
 
     /**
      * Send callback for ESP-NOW.
@@ -170,7 +196,7 @@ class Networking {
 
     SendWorker send_worker_;
 
-    ConnectionInitiator conn_initiator;
+    ConnectionInitiator conn_initiator_;
 
     friend SendWorker;
     friend ConnectionInitiator;

@@ -33,9 +33,9 @@ void meshnow::SendWorker::sendFinished(bool successful) {
         // TODO use custom delay, don't wait forever (risk of deadlock)
         auto bits = waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, portMAX_DELAY);
         if (bits & SEND_SUCCESS_BIT) {
-            ESP_LOGI(TAG, "Send successful");
+            ESP_LOGD(TAG, "Send successful");
         } else {
-            ESP_LOGE(TAG, "Send failed");
+            ESP_LOGD(TAG, "Send failed");
         }
     }
 }

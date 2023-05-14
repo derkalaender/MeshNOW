@@ -158,6 +158,8 @@ void App::start() {
         // TODO start node
     }
 
+    networking_.start(config_.root);
+
     ESP_LOGI(TAG, "Liftoff! 🚀");
 }
 

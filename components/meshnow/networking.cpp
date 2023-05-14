@@ -15,7 +15,7 @@ static const char* TAG = CREATE_TAG("Networking");
 
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
-    ESP_LOGI(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    ESP_LOGV(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     if (esp_now_is_peer_exist(mac_addr.data())) {
         return;
     }
@@ -27,6 +27,13 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
+void meshnow::Networking::start(bool is_root) {
+    if (!is_root) {
+        ESP_LOGI(TAG, "Starting ConnectionInitiator");
+        conn_initiator_.readyToConnect();
+    }
+}
+
 void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {
     if (data.size() > MAX_RAW_PACKET_SIZE) {
         ESP_LOGE(TAG, "Payload size %d exceeds maximum data size %d", data.size(), MAX_RAW_PACKET_SIZE);
@@ -35,19 +42,19 @@ void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<ui
 
     // TODO delete unused peers first
     add_peer(mac_addr);
-    ESP_LOGI(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    ESP_LOGV(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
 }
 
 void meshnow::Networking::onSend(const uint8_t* mac_addr, esp_now_send_status_t status) {
     // TODO
-    ESP_LOGI(TAG, "Send status: %d", status);
+    ESP_LOGD(TAG, "Send status: %d", status);
     // notify send worker
     send_worker_.sendFinished(status == ESP_NOW_SEND_SUCCESS);
 }
 
 void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) {
-    ESP_LOGI(TAG, "Received data");
+    ESP_LOGV(TAG, "Received data");
     // TODO error checking and timeout
 
     ReceiveMeta meta{};
@@ -76,10 +83,7 @@ void meshnow::Networking::handleAnyoneThere(const ReceiveMeta& meta) {
 }
 
 void meshnow::Networking::handleIAmHere(const ReceiveMeta& meta) {
-    // TODO collect multiple responses and select the best one based on RSSI
-    // TODO synchronization with current state
-    ESP_LOGI(TAG, "Sending pls connect");
-    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::PlsConnectPayload>());
+    conn_initiator_.foundParent(meta.src_addr, meta.rssi);
 }
 
 void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {

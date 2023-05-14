@@ -11,9 +11,27 @@ static const auto READY_BIT = BIT0;
 // Frequency at which to send connection beacon (ms)
 static const auto CONNECTION_FREQ_MS = 500;
 
+// Min time to wait for potential other parents after the first parent was found (ms)
+static const auto FIRST_PARENT_WAIT_MS = 5000;
+
+static const auto MAX_PARENTS_TO_CONSIDER = 5;
+
+meshnow::ConnectionInitiator::ConnectionInitiator(Networking& networking)
+    : networking_{networking},
+      waitbits_{},
+      thread_{&ConnectionInitiator::run, this},
+      parent_infos_{},
+      first_parent_found_time_{0} {
+    parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
+}
+
 void meshnow::ConnectionInitiator::readyToConnect() { waitbits_.setBits(READY_BIT); }
 
-void meshnow::ConnectionInitiator::stopConnecting() { waitbits_.clearBits(READY_BIT); }
+void meshnow::ConnectionInitiator::stopConnecting() {
+    std::lock_guard lock{mtx_};
+    parent_infos_.clear();
+    waitbits_.clearBits(READY_BIT);
+}
 
 [[noreturn]] void meshnow::ConnectionInitiator::run() {
     while (true) {
@@ -33,5 +51,68 @@ void meshnow::ConnectionInitiator::stopConnecting() { waitbits_.clearBits(READY_
 
         // wait for the next cycle
         vTaskDelayUntil(&last_tick, pdMS_TO_TICKS(CONNECTION_FREQ_MS));
+
+        tryConnect();
+    }
+}
+
+void meshnow::ConnectionInitiator::tryConnect() {
+    std::lock_guard lock{mtx_};
+
+    // check if we found any parents
+    if (parent_infos_.empty()) {
+        ESP_LOGI(TAG, "No parents found, not trying to connect");
+        return;
+    }
+
+    // check if we still wait for other potential parents
+    auto now = xTaskGetTickCount();
+    if (now - first_parent_found_time_ < pdMS_TO_TICKS(FIRST_PARENT_WAIT_MS)) {
+        ESP_LOGI(TAG, "Still waiting for other potential parents, not trying to connect");
+        return;
+    }
+
+    // find the best parent
+    auto best_parent = std::max_element(parent_infos_.begin(), parent_infos_.end(),
+                                        [](const auto& a, const auto& b) { return a.rssi < b.rssi; });
+
+    // connect to the best parent
+    ESP_LOGI(TAG, "Connecting to best parent " MAC_FORMAT " with rssi %d", MAC_FORMAT_ARGS(best_parent->mac_addr),
+             best_parent->rssi);
+    // send pls connect payload
+    networking_.send_worker_.enqueuePayload(best_parent->mac_addr, std::make_unique<packets::PlsConnectPayload>());
+    // stop trying to connect
+    stopConnecting();
+}
+
+void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, uint8_t rssi) {
+    std::lock_guard lock{mtx_};
+
+    if (parent_infos_.empty()) {
+        first_parent_found_time_ = xTaskGetTickCount();
+    }
+
+    // check if we already know this parent
+    auto it = std::find_if(parent_infos_.begin(), parent_infos_.end(),
+                           [&mac_addr](const auto& parent_info) { return parent_info.mac_addr == mac_addr; });
+    if (it != parent_infos_.end()) {
+        ESP_LOGI(TAG, "Updating parent " MAC_FORMAT " with rssi %d->%d", MAC_FORMAT_ARGS(mac_addr), it->rssi, rssi);
+
+        // update rssi
+        it->rssi = rssi;
+        return;
+    } else {
+        ESP_LOGI(TAG, "Found new parent " MAC_FORMAT " with rssi %d", MAC_FORMAT_ARGS(mac_addr), rssi);
+
+        if (parent_infos_.size() == MAX_PARENTS_TO_CONSIDER) {
+            // replace worst parent
+            auto worst_parent = std::min_element(parent_infos_.begin(), parent_infos_.end(),
+                                                 [](const auto& a, const auto& b) { return a.rssi < b.rssi; });
+            worst_parent->mac_addr = mac_addr;
+            worst_parent->rssi = rssi;
+        } else {
+            // add new parent
+            parent_infos_.push_back({mac_addr, rssi});
+        }
     }
 }

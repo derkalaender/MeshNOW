@@ -23,6 +23,7 @@ enum class Type : uint8_t {
     I_AM_HERE,     ///< Sent by nodes already in the mesh in reply to AnyoneThere
     PLS_CONNECT,   ///< Sent by a node to request a connection to another specific node
     WELCOME,       ///< Sent by a node to accept a connection request
+    // TODO add a "no thanks" packet
 
     // EVENT
     NODE_CONNECTED,     ///< Sent by a parent when a new child connects, bubbles up
