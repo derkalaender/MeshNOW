@@ -245,7 +245,7 @@ void meshnow::packets::PlsConnectPayload::handle(meshnow::Networking& networking
 }
 
 void meshnow::packets::VerdictPayload::handle(meshnow::Networking& networking, const meshnow::ReceiveMeta& meta) const {
-    networking.handleVerdict(meta);
+    networking.handleVerdict(meta, *this);
 }
 
 void meshnow::packets::NodeConnectedPayload::handle(meshnow::Networking& networking,

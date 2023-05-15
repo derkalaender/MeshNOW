@@ -108,18 +108,18 @@ void App::deinitEspnow() {
     ESP_LOGI(TAG, "ESP-NOW deinitialized");
 }
 
-App::App(const Config config) : config_{config}, state_{State::STOPPED}, networking_{state_} {
+App::App(const Config config) : config_{config}, state_{config_.root}, networking_{state_} {
     std::scoped_lock lock{mtx};
 
     ESP_LOGI(TAG, "Initializing MeshNOW");
     initNVS();
     initWifi();
     initEspnow();
-    ESP_LOGI(TAG, "MeshNOW initialized. You can start the mesh now 🦌");
+    ESP_LOGI(TAG, "MeshNOW initialized. You can started the mesh now 🦌");
 }
 
 App::~App() {
-    if (state_ != State::STOPPED) {
+    if (state_.isStarted()) {
         ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
         stop();
     }
@@ -144,21 +144,24 @@ App::~App() {
 void App::start() {
     std::scoped_lock lock{mtx};
 
-    if (state_ != State::STOPPED) {
+    if (state_.isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is already running");
         throw AlreadyStartedException();
     }
-    state_ = State::STARTED;
+    state_.setStarted();
 
     if (config_.root) {
         ESP_LOGI(TAG, "Starting MeshNOW as root...");
         // TODO start root
+        // we are connected and can reach the root because we *are* the root
+        state_.setConnected();
+        state_.setRootReachable();
     } else {
         ESP_LOGI(TAG, "Starting MeshNOW as node...");
         // TODO start node
     }
 
-    networking_.start(config_.root);
+    networking_.start();
 
     ESP_LOGI(TAG, "Liftoff! 🚀");
 }
@@ -166,11 +169,11 @@ void App::start() {
 void App::stop() {
     std::scoped_lock lock{mtx};
 
-    if (state_ != State::STARTED) {
+    if (!state_.isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is not running");
         throw NotStartedException();
     }
-    state_ = State::STOPPED;
+    state_.setStopped();
 
     if (config_.root) {
         ESP_LOGI(TAG, "Stopping MeshNOW as root...");

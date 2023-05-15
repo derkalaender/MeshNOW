@@ -140,16 +140,15 @@ class ConnectionInitiator {
  */
 class Networking {
    public:
-    explicit Networking(State& state) : state_{state}, send_worker_{*this}, conn_initiator_{*this} {}
+    explicit Networking(NodeState& state) : state_{state}, send_worker_{*this}, conn_initiator_{*this} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
 
     /**
      * Start the networking stack.
-     * TODO get is_root from state
      */
-    void start(bool is_root);
+    void start();
 
     /**
      * Send callback for ESP-NOW.
@@ -200,7 +199,7 @@ class Networking {
     /**
      * Reference to the current state of the node. Used to know if we are connected or not, etc.
      */
-    State& state_;
+    NodeState& state_;
 
     SendWorker send_worker_;
 

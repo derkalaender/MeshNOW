@@ -47,10 +47,10 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "Starting as %s!", is_root ? "root" : "node");
     MeshNOW->start();
 
-    auto target = meshnow::BROADCAST_MAC_ADDR;
-    std::string s{"Creative test message"};
-    std::vector<uint8_t> data{s.begin(), s.end()};
-    auto payload = meshnow::packets::DataFirstPayload(target, 30, 1500, false, data);
-    auto buffer = meshnow::packets::Packet(payload).serialize();
-    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
+    //    auto target = meshnow::BROADCAST_MAC_ADDR;
+    //    std::string s{"Creative test message"};
+    //    std::vector<uint8_t> data{s.begin(), s.end()};
+    //    auto payload = meshnow::packets::DataFirstPayload(target, 30, 1500, false, data);
+    //    auto buffer = meshnow::packets::Packet(payload).serialize();
+    //    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
 }

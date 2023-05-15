@@ -27,8 +27,8 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-void meshnow::Networking::start(bool is_root) {
-    if (!is_root) {
+void meshnow::Networking::start() {
+    if (!state_.isRoot()) {
         ESP_LOGI(TAG, "Starting ConnectionInitiator");
         conn_initiator_.readyToConnect();
     }
@@ -77,16 +77,27 @@ void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, con
 void meshnow::Networking::handleStillAlive(const ReceiveMeta& meta) {}
 
 void meshnow::Networking::handleAnyoneThere(const ReceiveMeta& meta) {
-    // TODO check if already connected or cannot accept any more children
+    // TODO check if cannot accept any more children
+
+    // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
+    if (!state_.isRootReachable()) return;
+
     ESP_LOGI(TAG, "Sending I am here");
     send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::IAmHerePayload>());
 }
 
 void meshnow::Networking::handleIAmHere(const ReceiveMeta& meta) {
+    // ignore when already connected (this packet came in late, we already chose a parent)
+    if (state_.isConnected()) return;
     conn_initiator_.foundParent(meta.src_addr, meta.rssi);
 }
 
 void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
+    // only accept if we can reach the root
+    // this should have been handled by not sending the handleAnyoneThere packet, but race conditions and delays are a
+    // thing
+    if (!state_.isRootReachable()) return;
+
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes
     // TODO add child information
@@ -97,10 +108,16 @@ void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
 }
 
 void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload) {
+    // ignore if root or already connected (should actually never happen)
+    if (state_.isRoot() || state_.isConnected()) return;
+
     if (payload.accept_connection_) {
         ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // we are safely connected and can stop searching for new parents now
         conn_initiator_.stopConnecting();
+        state_.setConnected();
+        // we assume we can reach the root because the parent only answers if it itself can reach the root
+        state_.setRootReachable();
     } else {
         ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // remove the possible parent and try connecting to other ones again

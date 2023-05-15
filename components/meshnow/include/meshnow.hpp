@@ -76,7 +76,7 @@ class App {
     static void deinitEspnow();
 
     const Config config_;
-    State state_;
+    NodeState state_;
     Networking networking_;
 };
 
