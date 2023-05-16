@@ -131,6 +131,8 @@ void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::
         state_.setRootReachable();
         // set the root MAC
         routing_info_.setRoot(payload.root_mac_);
+        // set parent MAC
+        routing_info_.setParent(meta.src_addr);
     } else {
         ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // remove the possible parent and try connecting to other ones again

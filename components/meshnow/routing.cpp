@@ -29,7 +29,7 @@ void meshnow::routing::RoutingInfo::addToRoutingTable(const meshnow::MAC_ADDR& c
     }
 }
 
-void meshnow::routing::RoutingInfo::updateRssi(const meshnow::MAC_ADDR& mac_addr, uint8_t rssi) {
+void meshnow::routing::RoutingInfo::updateRssi(const meshnow::MAC_ADDR& mac_addr, int8_t rssi) {
     if (parent_node_ && parent_node_->mac_addr == mac_addr) {
         parent_node_->rssi = rssi;
     } else {

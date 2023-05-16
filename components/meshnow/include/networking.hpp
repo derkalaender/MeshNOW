@@ -22,7 +22,7 @@ namespace meshnow {
 struct ReceiveMeta {
     MAC_ADDR src_addr;
     MAC_ADDR dest_addr;
-    uint8_t rssi;
+    int8_t rssi;
 };
 
 /**
@@ -94,7 +94,7 @@ class ConnectionInitiator {
      * @param mac_addr the MAC address of the parent
      * @param rssi rssi of the parent
      */
-    void foundParent(const MAC_ADDR& mac_addr, uint8_t rssi);
+    void foundParent(const MAC_ADDR& mac_addr, int8_t rssi);
 
     /**
      * Reject a possible parent.
@@ -105,7 +105,7 @@ class ConnectionInitiator {
    private:
     struct ParentInfo {
         MAC_ADDR mac_addr;
-        uint8_t rssi;
+        int8_t rssi;
     };
 
     [[noreturn]] void run();

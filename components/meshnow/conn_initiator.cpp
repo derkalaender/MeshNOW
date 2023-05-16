@@ -109,8 +109,8 @@ void meshnow::ConnectionInitiator::tryConnect() {
     awaitVerdict();
 }
 
-void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, uint8_t rssi) {
-    //    std::scoped_lock lock{mtx_};
+void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, int8_t rssi) {
+    std::scoped_lock lock{mtx_};
 
     if (parent_infos_.empty()) {
         first_parent_found_time_ = xTaskGetTickCount();

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -14,7 +13,7 @@ namespace meshnow::routing {
  */
 struct ChildNode {
     meshnow::MAC_ADDR mac_addr;
-    uint8_t rssi;
+    int8_t rssi;
     std::vector<meshnow::MAC_ADDR> routing_table;
 };
 
@@ -23,7 +22,7 @@ struct ChildNode {
  */
 struct ParentNode {
     meshnow::MAC_ADDR mac_addr;
-    uint8_t rssi;
+    int8_t rssi;
 };
 
 class RoutingInfo {
@@ -66,7 +65,7 @@ class RoutingInfo {
      * @param mac_addr MAC address of the node to update
      * @param rssi RSSI of the node
      */
-    void updateRssi(const meshnow::MAC_ADDR& mac_addr, uint8_t rssi);
+    void updateRssi(const meshnow::MAC_ADDR& mac_addr, int8_t rssi);
 
     /**
      * Get the next hop to the given MAC address.
