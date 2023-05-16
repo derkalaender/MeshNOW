@@ -1,6 +1,7 @@
 #include "networking.hpp"
 
 #include <esp_log.h>
+#include <esp_mac.h>
 #include <esp_now.h>
 
 #include <cstdint>
@@ -12,6 +13,12 @@
 #include "packets.hpp"
 
 static const char* TAG = CREATE_TAG("Networking");
+
+meshnow::MAC_ADDR meshnow::Networking::queryThisMac() {
+    meshnow::MAC_ADDR mac;
+    esp_read_mac(mac.data(), ESP_MAC_WIFI_STA);
+    return mac;
+}
 
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
@@ -31,6 +38,9 @@ void meshnow::Networking::start() {
     if (!state_.isRoot()) {
         ESP_LOGI(TAG, "Starting ConnectionInitiator");
         conn_initiator_.readyToConnect();
+    } else {
+        // update the routing info. Add our own MAC as the root MAC
+        routing_info_.setRoot(routing_info_.getThisMac());
     }
 }
 
@@ -103,7 +113,8 @@ void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
     // TODO add child information
     ESP_LOGI(TAG, "Sending welcome");
     // TODO check can accept
-    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::VerdictPayload>(true));
+    send_worker_.enqueuePayload(meta.src_addr,
+                                std::make_unique<packets::VerdictPayload>(true, routing_info_.getRootMac()));
     // TODO send node connected event to parent
 }
 
@@ -118,6 +129,8 @@ void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::
         state_.setConnected();
         // we assume we can reach the root because the parent only answers if it itself can reach the root
         state_.setRootReachable();
+        // set the root MAC
+        routing_info_.setRoot(payload.root_mac_);
     } else {
         ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // remove the possible parent and try connecting to other ones again

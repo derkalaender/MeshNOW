@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "packets.hpp"
 #include "queue.hpp"
+#include "routing.hpp"
 #include "state.hpp"
 #include "waitbits.hpp"
 
@@ -140,10 +141,13 @@ class ConnectionInitiator {
  */
 class Networking {
    public:
-    explicit Networking(NodeState& state) : state_{state}, send_worker_{*this}, conn_initiator_{*this} {}
+    explicit Networking(NodeState& state)
+        : state_{state}, send_worker_{*this}, conn_initiator_{*this}, routing_info_{queryThisMac()} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
+
+    static meshnow::MAC_ADDR queryThisMac();
 
     /**
      * Start the networking stack.
@@ -204,6 +208,8 @@ class Networking {
     SendWorker send_worker_;
 
     ConnectionInitiator conn_initiator_;
+
+    meshnow::routing::RoutingInfo routing_info_;
 
     friend SendWorker;
     friend ConnectionInitiator;

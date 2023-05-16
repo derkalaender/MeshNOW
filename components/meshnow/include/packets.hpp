@@ -137,7 +137,8 @@ struct PlsConnectPayload : DumbPayload {
 };
 
 struct VerdictPayload : BasePayload {
-    explicit VerdictPayload(bool accept_connection) : accept_connection_{accept_connection} {}
+    explicit VerdictPayload(bool accept_connection, MAC_ADDR root_mac)
+        : accept_connection_{accept_connection}, root_mac_{root_mac} {}
 
     void serialize(std::vector<uint8_t>& buffer) const override;
 
@@ -148,6 +149,8 @@ struct VerdictPayload : BasePayload {
     void handle(meshnow::Networking& networking, const ReceiveMeta& meta) const override;
 
     const bool accept_connection_;
+
+    const MAC_ADDR root_mac_;
 };
 
 struct NodeConnectedPayload : BasePayload {

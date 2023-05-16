@@ -75,7 +75,9 @@ std::unique_ptr<meshnow::packets::BasePayload> meshnow::packets::Packet::deseria
         case Type::VERDICT: {
             if (payload_size != sizeof(bool)) break;
             bool accept_connection = *it;
-            return std::make_unique<VerdictPayload>(accept_connection);
+            it += sizeof(bool);
+            meshnow::MAC_ADDR root_mac = *reinterpret_cast<const meshnow::MAC_ADDR*>(&*it);
+            return std::make_unique<VerdictPayload>(accept_connection, root_mac);
         }
         case meshnow::packets::Type::NODE_CONNECTED: {
             if (payload_size != sizeof(meshnow::MAC_ADDR)) break;
