@@ -150,7 +150,7 @@ void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const pac
     // forward to parent, if not root
     if (!state_.isRoot()) {
         send_worker_.enqueuePayload(routing_info_.getParentMac(),
-                                    std::make_unique<packets::NodeConnectedPayload>(meta));
+                                    std::make_unique<packets::NodeConnectedPayload>(payload));
     }
 }
 
