@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "networking.hpp"
+#include "state.hpp"
 
 namespace meshnow {
 struct Config {
@@ -14,12 +15,6 @@ struct Config {
      * @note The root node can establish a connection to a router if configured.
      */
     bool root{false};
-};
-
-enum class State {
-    STOPPED,
-    STARTED,
-    CONNECTED,
 };
 
 // TODO maybe singleton? Special copy constructor handling and stuff? -> YES, move semantics to guarantee only ever 1
@@ -39,6 +34,9 @@ class App {
      * you're doing.
      */
     explicit App(Config config);
+
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
 
     /**
      * Deinitializes the App library.
@@ -69,9 +67,17 @@ class App {
     void stop();
 
    private:
-    const Config config;
-    State state{State::STOPPED};
-    Networking networking;
+    static void initNVS();
+
+    static void initWifi();
+    static void deinitWifi();
+
+    void initEspnow();
+    static void deinitEspnow();
+
+    const Config config_;
+    NodeState state_;
+    Networking networking_;
 };
 
 }  // namespace meshnow

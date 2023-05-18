@@ -1,5 +1,6 @@
 #include <driver/gpio.h>
 #include <esp_log.h>
+#include <esp_mac.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -33,13 +34,23 @@ static const char *TAG = "main";
 
 static std::unique_ptr<meshnow::App> MeshNOW;
 
+static const meshnow::MAC_ADDR root{0x24, 0x6f, 0x28, 0x4a, 0x63, 0x3c};
+
 extern "C" void app_main(void) {
-    MeshNOW = std::make_unique<meshnow::App>(meshnow::Config{.root = true});
+    meshnow::MAC_ADDR my_mac;
+    esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
+
+    bool is_root = my_mac == root;
+
+    MeshNOW = std::make_unique<meshnow::App>(meshnow::Config{.root = is_root});
+    ESP_LOGI(TAG, "MeshNOW initialized");
+    ESP_LOGI(TAG, "Starting as %s!", is_root ? "root" : "node");
     MeshNOW->start();
 
-    auto target = meshnow::BROADCAST_MAC_ADDR;
-    std::string s{"Creative test message"};
-    std::vector<uint8_t> data{s.begin(), s.end()};
-    auto buffer = meshnow::packet::DataLwIP(target, 30, true, 1500, data).serialize();
-    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
+    //    auto target = meshnow::BROADCAST_MAC_ADDR;
+    //    std::string s{"Creative test message"};
+    //    std::vector<uint8_t> data{s.begin(), s.end()};
+    //    auto payload = meshnow::packets::DataFirstPayload(target, 30, 1500, false, data);
+    //    auto buffer = meshnow::packets::Packet(payload).serialize();
+    //    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
 }

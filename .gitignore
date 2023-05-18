@@ -1,6 +1,6 @@
 # Build output
-/build
-/cmake-*
+build
+cmake-*
 
 # sdkconfig
 sdkconfig

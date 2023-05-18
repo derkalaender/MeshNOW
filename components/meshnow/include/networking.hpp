@@ -1,13 +1,132 @@
 #pragma once
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <thread>
 #include <vector>
 
 #include "constants.hpp"
+#include "esp_log.h"
+#include "packets.hpp"
+#include "queue.hpp"
+#include "routing.hpp"
+#include "state.hpp"
+#include "waitbits.hpp"
 
 namespace meshnow {
+
+struct ReceiveMeta {
+    MAC_ADDR src_addr;
+    MAC_ADDR dest_addr;
+    int8_t rssi;
+};
+
+/**
+ * Thread that handles sending payloads by queueing them and working them off one by one.
+ */
+class SendWorker {
+   public:
+    explicit SendWorker(Networking& networking)
+        // TODO extract max_items to constants.hpp
+        : networking_{networking}, waitbits_{}, send_queue_{10}, thread_{&SendWorker::run, this} {}
+
+    /**
+     * Add payload to the send queue.
+     *
+     * @note Blocks if send queue is full.
+     *
+     * @param dest_addr MAC address of the immediate node to send the payload to
+     * @param payload payload to send
+     */
+    void enqueuePayload(const MAC_ADDR& dest_addr, std::unique_ptr<meshnow::packets::BasePayload> payload);
+
+    /**
+     * Notify the SendWorker that the previous payload was sent.
+     */
+    void sendFinished(bool successful);
+
+   private:
+    struct SendQueueItem {
+        MAC_ADDR dest_addr;
+        std::unique_ptr<meshnow::packets::BasePayload> payload;
+    };
+
+    [[noreturn]] void run();
+
+    // TODO unused
+    Networking& networking_;
+
+    /**
+     * Communicates a successful/failed payload from the send callback to the thread.
+     */
+    util::WaitBits waitbits_;
+
+    // TODO make priority queue because we want events and stuff first
+    util::Queue<SendQueueItem> send_queue_;
+
+    std::thread thread_;
+};
+
+/**
+ * Whenever disconnected from a parent, this thread tries to connect to the best parent by continuously sending connect
+ * requests.
+ */
+class ConnectionInitiator {
+   public:
+    explicit ConnectionInitiator(Networking& networking);
+
+    /**
+     * Notify the ConnectionInitiator that the node is ready to connect to a parent.
+     */
+    void readyToConnect();
+
+    /**
+     * Notify the ConnectionInitiator that it should stop trying to connect to a parent.
+     */
+    void stopConnecting();
+
+    /**
+     * Notify the ConnectionInitiator that a possible parent was found.
+     * @param mac_addr the MAC address of the parent
+     * @param rssi rssi of the parent
+     */
+    void foundParent(const MAC_ADDR& mac_addr, int8_t rssi);
+
+    /**
+     * Reject a possible parent.
+     * @param mac_addr the MAC address of the parent
+     */
+    void reject(MAC_ADDR mac_addr);
+
+   private:
+    struct ParentInfo {
+        MAC_ADDR mac_addr;
+        int8_t rssi;
+    };
+
+    [[noreturn]] void run();
+
+    void tryConnect();
+
+    void awaitVerdict();
+
+    Networking& networking_;
+
+    util::WaitBits waitbits_;
+
+    std::thread thread_;
+
+    std::mutex mtx_;
+
+    // TODO place magic constant in internal.hpp
+    std::vector<ParentInfo> parent_infos_;
+
+    TickType_t first_parent_found_time_;
+};
 
 /**
  * Handles networking.
@@ -22,198 +141,78 @@ namespace meshnow {
  */
 class Networking {
    public:
-    /**
-     * Broadcasts a raw payload to all nearby devices, no matter if connected/part of the mesh or not.
-     * @param payload data to send
-     *
-     * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
-     */
-    static void raw_broadcast(const std::vector<uint8_t>& payload);
+    explicit Networking(NodeState& state)
+        : state_{state}, send_worker_{*this}, conn_initiator_{*this}, routing_info_{queryThisMac()} {}
+
+    Networking(const Networking&) = delete;
+    Networking& operator=(const Networking&) = delete;
+
+    static meshnow::MAC_ADDR queryThisMac();
 
     /**
-     * Sends a raw payload to a specific device (ESP-NOW wrapper).
+     * Start the networking stack.
+     */
+    void start();
+
+    /**
+     * Send callback for ESP-NOW.
+     */
+    void onSend(const uint8_t* mac_addr, esp_now_send_status_t status);
+
+    /**
+     * Receive callback for ESP-NOW.
+     */
+    void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
+
+    void handleStillAlive(const ReceiveMeta& meta);
+
+    void handleAnyoneThere(const ReceiveMeta& meta);
+
+    void handleIAmHere(const ReceiveMeta& meta);
+
+    void handlePlsConnect(const ReceiveMeta& meta);
+
+    void handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload);
+
+    void handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload);
+
+    void handleNodeDisconnected(const ReceiveMeta& meta, const packets::NodeDisconnectedPayload& payload);
+
+    void handleMeshUnreachable(const ReceiveMeta& meta);
+
+    void handleMeshReachable(const ReceiveMeta& meta);
+
+    void handleDataAck(const ReceiveMeta& meta, const packets::DataAckPayload& payload);
+
+    void handleDataNack(const ReceiveMeta& meta, const packets::DataNackPayload& payload);
+
+    void handleDataFirst(const ReceiveMeta& meta, const packets::DataFirstPayload& payload);
+
+    void handleDataNext(const ReceiveMeta& meta, const packets::DataNextPayload& payload);
+
+   private:
+    /**
+     * Sends raw data to the specific device (ESP-NOW wrapper).
      * @param mac_addr the MAC address of the device to send to
-     * @param payload data to send
+     * @param data data to send
      *
      * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
      */
-    static void raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& payload);
-};
-
-namespace packet {
-
-enum class Type : uint8_t {
-    // HEALTH
-    STILL_ALIVE,  ///< Periodically sent by all nodes to detect dead nodes
-
-    // HANDSHAKE
-    ANYONE_THERE,  ///< Sent by a node trying to connect to the mesh
-    I_AM_HERE,     ///< Sent by nodes already in the mesh in reply to AnyoneThere
-    PLS_CONNECT,   ///< Sent by a node to request a connection to another specific node
-    WELCOME,       ///< Sent by a node to accept a connection request
-
-    // EVENT
-    NODE_CONNECTED,     ///< Sent by a parent when a new child connects, bubbles up
-    NODE_DISCONNECTED,  ///< Sent by a parent when a child disconnects, bubbles up
-    MESH_UNREACHABLE,   ///< Sent by a node to its children when it loses connection to its parent, propagates down
-    MESH_REACHABLE,     ///< Sent by a node to its children when it regains connection to its parent, propagates down
-
-    // DATA
-    DATA_ACK,     ///< Sent by the target node to acknowledge a complete datagram
-    DATA_NACK,    ///< Sent by any immediate parent of the current hop to indicate the inability to
-                  ///< accept/forward the datagram (e.g. out of memory)
-    DATA_LWIP,    ///< TCP/IP data
-    DATA_CUSTOM,  ///< Custom data
-};
-
-class Common {
-   public:
-    // Constant magic bytes to identify meshnow packets
-    constexpr static std::array<uint8_t, 3> MAGIC{0x55, 0x77, 0x55};
+    static void rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
 
     /**
-     * Serializes the packet into a byte array.
-     * @return
+     * Reference to the current state of the node. Used to know if we are connected or not, etc.
      */
-    virtual std::vector<uint8_t> serialize() const;
+    NodeState& state_;
 
-    // Type of the packet
-    const Type type;
+    SendWorker send_worker_;
 
-   protected:
-    explicit Common(const packet::Type type) : type{type} {};
+    ConnectionInitiator conn_initiator_;
 
-    // Used for performance reasons to avoid reallocation when serializing
-    virtual size_t serialized_size() const { return sizeof(MAGIC) + sizeof(type); }
+    meshnow::routing::RoutingInfo routing_info_;
+
+    friend SendWorker;
+    friend ConnectionInitiator;
 };
 
-class StillAlive : public Common {
-   public:
-    StillAlive() : Common(Type::STILL_ALIVE) {}
-};
-
-class AnyoneThere : public Common {
-   public:
-    AnyoneThere() : Common(Type::ANYONE_THERE) {}
-};
-
-class IAmHere : public Common {
-   public:
-    IAmHere() : Common(Type::I_AM_HERE) {}
-};
-
-class PlsConnect : public Common {
-   public:
-    PlsConnect() : Common(Type::PLS_CONNECT) {}
-};
-
-class Welcome : public Common {
-   public:
-    Welcome() : Common(Type::WELCOME) {}
-};
-
-class NodeConnected : public Common {
-   public:
-    explicit NodeConnected(const MAC_ADDR& node) : Common(Type::NODE_CONNECTED), node{node} {}
-
-    std::vector<uint8_t> serialize() const override;
-
-    const MAC_ADDR& node;
-
-   private:
-    size_t serialized_size() const override { return Common::serialized_size() + sizeof(node); }
-};
-
-class NodeDisconnected : public Common {
-   public:
-    explicit NodeDisconnected(const MAC_ADDR& node) : Common(Type::NODE_DISCONNECTED), node{node} {}
-
-    std::vector<uint8_t> serialize() const override;
-
-    const MAC_ADDR& node;
-
-   private:
-    size_t serialized_size() const override { return Common::serialized_size() + sizeof(node); }
-};
-
-class MeshUnreachable : public Common {
-   public:
-    MeshUnreachable() : Common(Type::MESH_UNREACHABLE) {}
-};
-
-class MeshReachable : public Common {
-   public:
-    MeshReachable() : Common(Type::MESH_REACHABLE) {}
-};
-
-class Directed : public Common {
-   public:
-    const MAC_ADDR& target;
-    const uint16_t seq_num;
-
-   protected:
-    Directed(const packet::Type type, const MAC_ADDR& target, const uint16_t seq_num)
-        : Common(type), target{target}, seq_num{seq_num} {
-        assert(seq_num <= MAX_SEQ_NUM);
-    }
-
-    std::vector<uint8_t> serialize() const override;
-
-    size_t serialized_size() const override { return Common::serialized_size() + sizeof(target) + sizeof(seq_num); }
-};
-
-class DataAck : public Directed {
-   public:
-    DataAck(const MAC_ADDR& target, uint16_t seq_num) : Directed(Type::DATA_ACK, target, seq_num) {}
-};
-
-class DataNack : public Directed {
-   public:
-    DataNack(const MAC_ADDR& target, uint16_t seq_num) : Directed(Type::DATA_NACK, target, seq_num) {}
-};
-
-class DataCommon : public Directed {
-   public:
-    std::vector<uint8_t> serialize() const override;
-
-    bool first;
-    const uint16_t len_or_frag_num;
-    const std::vector<uint8_t>& data;
-
-   protected:
-    DataCommon(packet::Type type, const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
-               std::vector<uint8_t>& data)
-        : Directed(type, target, seq_num), first{first}, len_or_frag_num{len_or_frag_num}, data{data} {
-        if (first) {
-            assert(len_or_frag_num >= 1 && len_or_frag_num <= MAX_DATA_TOTAL_SIZE);
-        } else {
-            assert(len_or_frag_num >= 1 && len_or_frag_num <= MAX_FRAG_NUM);
-        }
-        assert(!data.empty());
-        if (first) {
-            assert(data.size() <= MAX_DATA_FIRST_SIZE);
-        } else {
-            assert(data.size() <= MAX_DATA_NEXT_SIZE);
-        }
-    }
-
-    size_t serialized_size() const override {
-        return Directed::serialized_size() + sizeof(len_or_frag_num) + data.size();
-    }
-};
-
-class DataLwIP : public DataCommon {
-   public:
-    DataLwIP(MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num, std::vector<uint8_t>& data)
-        : DataCommon(Type::DATA_LWIP, target, seq_num, first, len_or_frag_num, data) {}
-};
-
-class DataCustom : public DataCommon {
-   public:
-    DataCustom(const MAC_ADDR& target, uint16_t seq_num, bool first, uint16_t len_or_frag_num,
-               std::vector<uint8_t>& data)
-        : DataCommon(Type::DATA_CUSTOM, target, seq_num, first, len_or_frag_num, data) {}
-};
-
-}  // namespace packet
 }  // namespace meshnow

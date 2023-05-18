@@ -1,6 +1,7 @@
 #include "networking.hpp"
 
 #include <esp_log.h>
+#include <esp_mac.h>
 #include <esp_now.h>
 
 #include <cstdint>
@@ -9,11 +10,19 @@
 #include "constants.hpp"
 #include "error.hpp"
 #include "internal.hpp"
+#include "packets.hpp"
 
 static const char* TAG = CREATE_TAG("Networking");
 
+meshnow::MAC_ADDR meshnow::Networking::queryThisMac() {
+    meshnow::MAC_ADDR mac;
+    esp_read_mac(mac.data(), ESP_MAC_WIFI_STA);
+    return mac;
+}
+
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
+    ESP_LOGV(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     if (esp_now_is_peer_exist(mac_addr.data())) {
         return;
     }
@@ -25,79 +34,137 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-namespace meshnow {
+void meshnow::Networking::start() {
+    if (!state_.isRoot()) {
+        ESP_LOGI(TAG, "Starting ConnectionInitiator");
+        conn_initiator_.readyToConnect();
+    } else {
+        // update the routing info. Add our own MAC as the root MAC
+        routing_info_.setRoot(routing_info_.getThisMac());
+    }
+}
 
-void Networking::raw_broadcast(const std::vector<uint8_t>& payload) { raw_send(BROADCAST_MAC_ADDR, payload); }
-void Networking::raw_send(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& payload) {
-    if (payload.size() > MAX_RAW_PACKET_SIZE) {
-        ESP_LOGE(TAG, "Payload size %d exceeds maximum payload size %d", payload.size(), MAX_RAW_PACKET_SIZE);
+void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {
+    if (data.size() > MAX_RAW_PACKET_SIZE) {
+        ESP_LOGE(TAG, "Payload size %d exceeds maximum data size %d", data.size(), MAX_RAW_PACKET_SIZE);
         throw PayloadTooLargeException();
     }
 
+    // TODO delete unused peers first
     add_peer(mac_addr);
-    ESP_LOGI(TAG, "Sending raw payload to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
-    CHECK_THROW(esp_now_send(mac_addr.data(), payload.data(), payload.size()));
+    ESP_LOGV(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
 }
 
-namespace packet {
-
-std::vector<uint8_t> Common::serialize() const {
-    std::vector<uint8_t> packet;
-    packet.reserve(serialized_size());
-    packet.insert(packet.end(), MAGIC.begin(), MAGIC.end());
-    packet.push_back(static_cast<uint8_t>(type));
-    return packet;
+void meshnow::Networking::onSend(const uint8_t* mac_addr, esp_now_send_status_t status) {
+    // TODO
+    ESP_LOGD(TAG, "Send status: %d", status);
+    // notify send worker
+    send_worker_.sendFinished(status == ESP_NOW_SEND_SUCCESS);
 }
 
-std::vector<uint8_t> NodeConnected::serialize() const {
-    auto packet = Common::serialize();
-    packet.insert(packet.end(), node.begin(), node.end());
-    return packet;
-}
+void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) {
+    ESP_LOGV(TAG, "Received data");
+    // TODO error checking and timeout
 
-std::vector<uint8_t> NodeDisconnected::serialize() const {
-    auto packet = Common::serialize();
-    packet.insert(packet.end(), node.begin(), node.end());
-    return packet;
-}
+    ReceiveMeta meta{};
+    // copy everything because the pointers are only valid during this function call
+    std::copy(esp_now_info->src_addr, esp_now_info->src_addr + sizeof(MAC_ADDR), meta.src_addr.begin());
+    std::copy(esp_now_info->des_addr, esp_now_info->des_addr + sizeof(MAC_ADDR), meta.dest_addr.begin());
+    meta.rssi = esp_now_info->rx_ctrl->rssi;
 
-std::vector<uint8_t> Directed::serialize() const {
-    auto packet = Common::serialize();
-    packet.insert(packet.end(), target.begin(), target.end());
-    auto seq_num_begin = reinterpret_cast<const uint8_t*>(&seq_num);
-    packet.insert(packet.end(), seq_num_begin, seq_num_begin + sizeof(seq_num));
-    return packet;
-}
-
-std::vector<uint8_t> DataCommon::serialize() const {
-    auto packet = Directed::serialize();
-
-    // construct new sequence number + (length or fragment number)
-    // and replace the sequence number currently at the end
-    // -> more compact
-
-    // this will occupy one byte less if it's not the first fragment
-
-    if (first) {
-        struct __attribute__((packed)) seq_len {
-            uint16_t seq : 13;
-            uint16_t len : 11;
-        };
-        seq_len seq_len{seq_num, len_or_frag_num};
-        auto seq_len_ptr = reinterpret_cast<uint8_t*>(&seq_len);
-        packet.insert(packet.end(), seq_len_ptr, seq_len_ptr + sizeof(seq_len));
-    } else {
-        struct __attribute__((packed)) seq_frag_num {
-            uint16_t seq : 13;
-            uint8_t frag_num : 3;
-        };
-        seq_frag_num seq_frag_num{seq_num, static_cast<uint8_t>(len_or_frag_num)};
-        auto seq_frag_num_ptr = reinterpret_cast<uint8_t*>(&seq_frag_num);
-        packet.insert(packet.end(), seq_frag_num_ptr, seq_frag_num_ptr + sizeof(seq_frag_num));
+    auto buffer = std::vector<uint8_t>(data, data + data_len);
+    auto payload = packets::Packet::Packet::deserialize(buffer);
+    if (!payload) {
+        // received invalid payload
+        return;
     }
-    packet.insert(packet.end(), data.begin(), data.end());
-    return packet;
+
+    // this will in turn call one of the handle functions
+    payload->handle(*this, meta);
 }
 
-}  // namespace packet
-}  // namespace meshnow
+void meshnow::Networking::handleStillAlive(const ReceiveMeta& meta) {}
+
+void meshnow::Networking::handleAnyoneThere(const ReceiveMeta& meta) {
+    // TODO check if cannot accept any more children
+
+    // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
+    if (!state_.isRootReachable()) return;
+
+    ESP_LOGI(TAG, "Sending I am here");
+    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::IAmHerePayload>());
+}
+
+void meshnow::Networking::handleIAmHere(const ReceiveMeta& meta) {
+    // ignore when already connected (this packet came in late, we already chose a parent)
+    if (state_.isConnected()) return;
+    conn_initiator_.foundParent(meta.src_addr, meta.rssi);
+}
+
+void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
+    // only accept if we can reach the root
+    // this should have been handled by not sending the handleAnyoneThere packet, but race conditions and delays are a
+    // thing
+    if (!state_.isRootReachable()) return;
+
+    // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
+    // nodes
+    // TODO add child information
+    ESP_LOGI(TAG, "Sending welcome");
+    // TODO check can accept
+    send_worker_.enqueuePayload(meta.src_addr,
+                                std::make_unique<packets::VerdictPayload>(true, routing_info_.getRootMac()));
+
+    // send a node connected event to root
+    send_worker_.enqueuePayload(routing_info_.getParentMac(),
+                                std::make_unique<packets::NodeConnectedPayload>(meta.src_addr));
+}
+
+void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload) {
+    // ignore if root or already connected (should actually never happen)
+    if (state_.isRoot() || state_.isConnected()) return;
+
+    if (payload.accept_connection_) {
+        ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
+        // we are safely connected and can stop searching for new parents now
+        conn_initiator_.stopConnecting();
+        state_.setConnected();
+        // we assume we can reach the root because the parent only answers if it itself can reach the root
+        state_.setRootReachable();
+        // set the root MAC
+        routing_info_.setRoot(payload.root_mac_);
+        // set parent MAC
+        routing_info_.setParent(meta.src_addr);
+    } else {
+        ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
+        // remove the possible parent and try connecting to other ones again
+        conn_initiator_.reject(meta.src_addr);
+        conn_initiator_.readyToConnect();
+    }
+}
+
+void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload) {
+    // add to routing table
+    routing_info_.addToRoutingTable(meta.src_addr, payload.connected_to_);
+    // forward to parent, if not root
+    if (!state_.isRoot()) {
+        send_worker_.enqueuePayload(routing_info_.getParentMac(),
+                                    std::make_unique<packets::NodeConnectedPayload>(meta));
+    }
+}
+
+void meshnow::Networking::handleNodeDisconnected(const ReceiveMeta& meta,
+                                                 const packets::NodeDisconnectedPayload& payload) {}
+
+void meshnow::Networking::handleMeshUnreachable(const ReceiveMeta& meta) {}
+
+void meshnow::Networking::handleMeshReachable(const ReceiveMeta& meta) {}
+
+void meshnow::Networking::handleDataAck(const ReceiveMeta& meta, const packets::DataAckPayload& payload) {}
+
+void meshnow::Networking::handleDataNack(const ReceiveMeta& meta, const packets::DataNackPayload& payload) {}
+
+void meshnow::Networking::handleDataFirst(const ReceiveMeta& meta, const packets::DataFirstPayload& payload) {}
+
+void meshnow::Networking::handleDataNext(const ReceiveMeta& meta, const packets::DataNextPayload& payload) {}
