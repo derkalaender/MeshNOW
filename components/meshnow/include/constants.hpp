@@ -14,6 +14,7 @@ namespace meshnow {
 const int MAC_ADDR_LEN{ESP_NOW_ETH_ALEN};
 using MAC_ADDR = std::array<uint8_t, MAC_ADDR_LEN>;
 const MAC_ADDR BROADCAST_MAC_ADDR{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+const MAC_ADDR ROOT_MAC_ADDR{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 const int MAX_RAW_PACKET_SIZE{ESP_NOW_MAX_DATA_LEN};
 const int MAX_DATA_TOTAL_SIZE{1500};  // MTU of IPv4 by LwIP

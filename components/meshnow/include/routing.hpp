@@ -83,6 +83,12 @@ class RoutingInfo {
     meshnow::MAC_ADDR getRootMac() const { return root_mac_.value(); }
 
     /**
+     * Get the MAC address of the parent node.
+     * @return MAC address of the parent node
+     */
+    meshnow::MAC_ADDR getParentMac() const { return parent_node_->mac_addr; }
+
+    /**
      * Get the MAC address of the current node.
      * @return MAC address of the current node
      */

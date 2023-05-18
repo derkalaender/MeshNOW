@@ -59,7 +59,7 @@ void meshnow::ConnectionInitiator::awaitVerdict() {
 
         auto last_tick = xTaskGetTickCount();
         {
-            //            std::scoped_lock lock{mtx_};
+            std::scoped_lock lock{mtx_};
             // ignore if we should stop connecting
             if (!(waitbits_.getBits() & READY_BIT)) continue;
 

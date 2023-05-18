@@ -115,7 +115,10 @@ void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
     // TODO check can accept
     send_worker_.enqueuePayload(meta.src_addr,
                                 std::make_unique<packets::VerdictPayload>(true, routing_info_.getRootMac()));
-    // TODO send node connected event to parent
+
+    // send a node connected event to root
+    send_worker_.enqueuePayload(routing_info_.getParentMac(),
+                                std::make_unique<packets::NodeConnectedPayload>(meta.src_addr));
 }
 
 void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload) {
@@ -141,7 +144,15 @@ void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::
     }
 }
 
-void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload) {}
+void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload) {
+    // add to routing table
+    routing_info_.addToRoutingTable(meta.src_addr, payload.connected_to_);
+    // forward to parent, if not root
+    if (!state_.isRoot()) {
+        send_worker_.enqueuePayload(routing_info_.getParentMac(),
+                                    std::make_unique<packets::NodeConnectedPayload>(meta));
+    }
+}
 
 void meshnow::Networking::handleNodeDisconnected(const ReceiveMeta& meta,
                                                  const packets::NodeDisconnectedPayload& payload) {}
