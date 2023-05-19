@@ -5,6 +5,7 @@
 #include <esp_now.h>
 
 #include <cstdint>
+#include <variant>
 #include <vector>
 
 #include "constants.hpp"
@@ -73,36 +74,39 @@ void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, con
     std::copy(esp_now_info->des_addr, esp_now_info->des_addr + sizeof(MAC_ADDR), meta.dest_addr.begin());
     meta.rssi = esp_now_info->rx_ctrl->rssi;
 
-    auto buffer = std::vector<uint8_t>(data, data + data_len);
-    auto payload = packets::Packet::Packet::deserialize(buffer);
-    if (!payload) {
+    std::vector<uint8_t> buffer(data, data + data_len);
+    auto packet = meshnow::packets::deserialize(buffer);
+    if (!packet) {
         // received invalid payload
         return;
     }
 
-    // this will in turn call one of the handle functions
-    payload->handle(*this, meta);
+    // add sequence number to meta
+    meta.seq_num = packet->seq_num;
+
+    // call the corresponding handle function
+    std::visit([&meta, this](auto&& p) { handle(meta, p); }, packet->payload);
 }
 
-void meshnow::Networking::handleStillAlive(const ReceiveMeta& meta) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::StillAlive& p) {}
 
-void meshnow::Networking::handleAnyoneThere(const ReceiveMeta& meta) {
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::AnyoneThere& p) {
     // TODO check if cannot accept any more children
 
     // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
     if (!state_.isRootReachable()) return;
 
     ESP_LOGI(TAG, "Sending I am here");
-    send_worker_.enqueuePayload(meta.src_addr, std::make_unique<packets::IAmHerePayload>());
+    send_worker_.enqueuePacket(meta.src_addr, meshnow::packets::Packet{0, meshnow::packets::IAmHere{}});
 }
 
-void meshnow::Networking::handleIAmHere(const ReceiveMeta& meta) {
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::IAmHere& p) {
     // ignore when already connected (this packet came in late, we already chose a parent)
     if (state_.isConnected()) return;
     conn_initiator_.foundParent(meta.src_addr, meta.rssi);
 }
 
-void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::PlsConnect& p) {
     // only accept if we can reach the root
     // this should have been handled by not sending the handleAnyoneThere packet, but race conditions and delays are a
     // thing
@@ -113,19 +117,17 @@ void meshnow::Networking::handlePlsConnect(const ReceiveMeta& meta) {
     // TODO add child information
     ESP_LOGI(TAG, "Sending welcome");
     // TODO check can accept
-    send_worker_.enqueuePayload(meta.src_addr,
-                                std::make_unique<packets::VerdictPayload>(true, routing_info_.getRootMac()));
+    send_worker_.enqueuePacket(meta.src_addr, packets::Packet{0, packets::Verdict{routing_info_.getRootMac(), true}});
 
     // send a node connected event to root
-    send_worker_.enqueuePayload(routing_info_.getParentMac(),
-                                std::make_unique<packets::NodeConnectedPayload>(meta.src_addr));
+    send_worker_.enqueuePacket(routing_info_.getParentMac(), packets::Packet{0, packets::NodeConnected{meta.src_addr}});
 }
 
-void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload) {
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::Verdict& p) {
     // ignore if root or already connected (should actually never happen)
     if (state_.isRoot() || state_.isConnected()) return;
 
-    if (payload.accept_connection_) {
+    if (p.accept) {
         ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // we are safely connected and can stop searching for new parents now
         conn_initiator_.stopConnecting();
@@ -133,7 +135,7 @@ void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::
         // we assume we can reach the root because the parent only answers if it itself can reach the root
         state_.setRootReachable();
         // set the root MAC
-        routing_info_.setRoot(payload.root_mac_);
+        routing_info_.setRoot(p.root_mac);
         // set parent MAC
         routing_info_.setParent(meta.src_addr);
     } else {
@@ -144,27 +146,29 @@ void meshnow::Networking::handleVerdict(const ReceiveMeta& meta, const packets::
     }
 }
 
-void meshnow::Networking::handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload) {
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::NodeConnected& p) {
     // add to routing table
-    routing_info_.addToRoutingTable(meta.src_addr, payload.connected_to_);
+    routing_info_.addToRoutingTable(meta.src_addr, p.child_mac);
     // forward to parent, if not root
     if (!state_.isRoot()) {
-        send_worker_.enqueuePayload(routing_info_.getParentMac(),
-                                    std::make_unique<packets::NodeConnectedPayload>(payload));
+        send_worker_.enqueuePacket(routing_info_.getParentMac(), packets::Packet{0, p});
     }
 }
 
-void meshnow::Networking::handleNodeDisconnected(const ReceiveMeta& meta,
-                                                 const packets::NodeDisconnectedPayload& payload) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::NodeDisconnected& p) {}
 
-void meshnow::Networking::handleMeshUnreachable(const ReceiveMeta& meta) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::MeshUnreachable& p) {}
 
-void meshnow::Networking::handleMeshReachable(const ReceiveMeta& meta) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::MeshReachable& p) {}
 
-void meshnow::Networking::handleDataAck(const ReceiveMeta& meta, const packets::DataAckPayload& payload) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::Ack& p) {}
 
-void meshnow::Networking::handleDataNack(const ReceiveMeta& meta, const packets::DataNackPayload& payload) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::Nack& p) {}
 
-void meshnow::Networking::handleDataFirst(const ReceiveMeta& meta, const packets::DataFirstPayload& payload) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::LwipDataFirst& p) {}
 
-void meshnow::Networking::handleDataNext(const ReceiveMeta& meta, const packets::DataNextPayload& payload) {}
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::CustomDataFirst& p) {}
+
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::LwipDataNext& p) {}
+
+void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::CustomDataNext& p) {}

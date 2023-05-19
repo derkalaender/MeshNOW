@@ -65,8 +65,8 @@ void meshnow::ConnectionInitiator::awaitVerdict() {
 
             // send anyone there beacon
             ESP_LOGI(TAG, "Sending anyone there beacon");
-            networking_.send_worker_.enqueuePayload(meshnow::BROADCAST_MAC_ADDR,
-                                                    std::make_unique<packets::AnyoneTherePayload>());
+            networking_.send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR,
+                                                   meshnow::packets::Packet{0, meshnow::packets::AnyoneThere{}});
         }
 
         // wait for the next cycle
@@ -103,13 +103,14 @@ void meshnow::ConnectionInitiator::tryConnect() {
         ESP_LOGI(TAG, "Connecting to best parent " MAC_FORMAT " with rssi %d", MAC_FORMAT_ARGS(best_parent->mac_addr),
                  best_parent->rssi);
         // send pls connect payload
-        networking_.send_worker_.enqueuePayload(best_parent->mac_addr, std::make_unique<packets::PlsConnectPayload>());
+        networking_.send_worker_.enqueuePacket(best_parent->mac_addr,
+                                               meshnow::packets::Packet{0, meshnow::packets::PlsConnect{}});
     }
     // wait for verdict
     awaitVerdict();
 }
 
-void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, int8_t rssi) {
+void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, int rssi) {
     std::scoped_lock lock{mtx_};
 
     if (parent_infos_.empty()) {
