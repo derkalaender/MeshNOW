@@ -1,28 +1,29 @@
 #pragma once
 
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <queue.hpp>
 #include <thread>
 #include <vector>
+#include <waitbits.hpp>
 
 #include "constants.hpp"
-#include "esp_log.h"
 #include "packets.hpp"
-#include "queue.hpp"
 #include "routing.hpp"
 #include "state.hpp"
-#include "waitbits.hpp"
 
 namespace meshnow {
 
 struct ReceiveMeta {
     MAC_ADDR src_addr;
     MAC_ADDR dest_addr;
-    int8_t rssi;
+    uint16_t seq_num;
+    int rssi;
 };
 
 /**
@@ -35,14 +36,14 @@ class SendWorker {
         : networking_{networking}, waitbits_{}, send_queue_{10}, thread_{&SendWorker::run, this} {}
 
     /**
-     * Add payload to the send queue.
+     * Add packet to the send queue.
      *
      * @note Blocks if send queue is full.
      *
-     * @param dest_addr MAC address of the immediate node to send the payload to
-     * @param payload payload to send
+     * @param dest_addr MAC address of the immediate node to send the packet to
+     * @param packet packet to send
      */
-    void enqueuePayload(const MAC_ADDR& dest_addr, std::unique_ptr<meshnow::packets::BasePayload> payload);
+    void enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet);
 
     /**
      * Notify the SendWorker that the previous payload was sent.
@@ -51,8 +52,8 @@ class SendWorker {
 
    private:
     struct SendQueueItem {
-        MAC_ADDR dest_addr;
-        std::unique_ptr<meshnow::packets::BasePayload> payload;
+        MAC_ADDR dest_addr{};
+        meshnow::packets::Packet packet{};
     };
 
     [[noreturn]] void run();
@@ -94,7 +95,7 @@ class ConnectionInitiator {
      * @param mac_addr the MAC address of the parent
      * @param rssi rssi of the parent
      */
-    void foundParent(const MAC_ADDR& mac_addr, int8_t rssi);
+    void foundParent(const MAC_ADDR& mac_addr, int rssi);
 
     /**
      * Reject a possible parent.
@@ -105,7 +106,7 @@ class ConnectionInitiator {
    private:
     struct ParentInfo {
         MAC_ADDR mac_addr;
-        int8_t rssi;
+        int rssi;
     };
 
     [[noreturn]] void run();
@@ -164,31 +165,35 @@ class Networking {
      */
     void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
 
-    void handleStillAlive(const ReceiveMeta& meta);
+    void handle(const ReceiveMeta& meta, const packets::StillAlive& p);
 
-    void handleAnyoneThere(const ReceiveMeta& meta);
+    void handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
 
-    void handleIAmHere(const ReceiveMeta& meta);
+    void handle(const ReceiveMeta& meta, const packets::IAmHere& p);
 
-    void handlePlsConnect(const ReceiveMeta& meta);
+    void handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
 
-    void handleVerdict(const ReceiveMeta& meta, const packets::VerdictPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::Verdict& p);
 
-    void handleNodeConnected(const ReceiveMeta& meta, const packets::NodeConnectedPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::NodeConnected& p);
 
-    void handleNodeDisconnected(const ReceiveMeta& meta, const packets::NodeDisconnectedPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::NodeDisconnected& p);
 
-    void handleMeshUnreachable(const ReceiveMeta& meta);
+    void handle(const ReceiveMeta& meta, const packets::MeshUnreachable& p);
 
-    void handleMeshReachable(const ReceiveMeta& meta);
+    void handle(const ReceiveMeta& meta, const packets::MeshReachable& p);
 
-    void handleDataAck(const ReceiveMeta& meta, const packets::DataAckPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::Ack& p);
 
-    void handleDataNack(const ReceiveMeta& meta, const packets::DataNackPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::Nack& p);
 
-    void handleDataFirst(const ReceiveMeta& meta, const packets::DataFirstPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::LwipDataFirst& p);
 
-    void handleDataNext(const ReceiveMeta& meta, const packets::DataNextPayload& payload);
+    void handle(const ReceiveMeta& meta, const packets::CustomDataFirst& p);
+
+    void handle(const ReceiveMeta& meta, const packets::LwipDataNext& p);
+
+    void handle(const ReceiveMeta& meta, const packets::CustomDataNext& p);
 
    private:
     /**

@@ -6,10 +6,9 @@ static const char* TAG = CREATE_TAG("SendWorker");
 static const auto SEND_SUCCESS_BIT = BIT0;
 static const auto SEND_FAILED_BIT = BIT1;
 
-void meshnow::SendWorker::enqueuePayload(const meshnow::MAC_ADDR& dest_addr,
-                                         std::unique_ptr<meshnow::packets::BasePayload> payload) {
+void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet) {
     // TODO use custom delay, don't wait forever (risk of deadlock)
-    send_queue_.push_back({dest_addr, std::move(payload)}, portMAX_DELAY);
+    send_queue_.push_back({dest_addr, std::move(packet)}, portMAX_DELAY);
 }
 
 void meshnow::SendWorker::sendFinished(bool successful) {
@@ -25,9 +24,8 @@ void meshnow::SendWorker::sendFinished(bool successful) {
             ESP_LOGE(TAG, "Failed to pop from send queue");
             continue;
         }
-        auto& [mac_addr, payload] = *optional;
-        meshnow::packets::Packet packet{*payload};
-        meshnow::Networking::rawSend(mac_addr, packet.serialize());
+        auto& [mac_addr, packet] = *optional;
+        meshnow::Networking::rawSend(mac_addr, meshnow::packets::serialize(packet));
 
         // wait for callback
         // TODO use custom delay, don't wait forever (risk of deadlock)
