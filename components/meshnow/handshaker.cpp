@@ -8,11 +8,12 @@
 
 #include "internal.hpp"
 #include "networking.hpp"
+#include "send_worker.hpp"
 
 static const char* TAG = CREATE_TAG("Handshaker");
 
-static const auto READY_BIT = BIT0;
-static const auto AWAIT_VERDICT_BIT = BIT1;
+static const auto CONNECT_SUCCESS_BIT = BIT0;
+static const auto CONNECT_FAIL_BIT = BIT1;
 
 // Frequency at which to send connection beacon (ms)
 static const auto CONNECTION_FREQ_MS = 500;
@@ -22,94 +23,91 @@ static const auto FIRST_PARENT_WAIT_MS = 5000;
 
 static const auto MAX_PARENTS_TO_CONSIDER = 5;
 
-meshnow::Handshaker::Handshaker(Networking& networking) : networking_{networking}, thread_{&Handshaker::run, this} {
+meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routing::RoutingInfo& routing_info)
+    : send_worker_{send_worker}, state_{state}, routing_info_{routing_info}, thread_{&Handshaker::run, this} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
 }
 
-void meshnow::Handshaker::readyToConnect() {
-    std::scoped_lock lock{mtx_};
-    ESP_LOGI(TAG, "Ready to connect to a parent");
-    waitbits_.setBits(READY_BIT);
-}
-
-void meshnow::Handshaker::stopConnecting() {
-    std::scoped_lock lock{mtx_};
-    ESP_LOGI(TAG, "Stopping connection attempts");
-    parent_infos_.clear();
-    waitbits_.clearBits(READY_BIT);
-}
-
-void meshnow::Handshaker::awaitVerdict() {
-    std::scoped_lock lock{mtx_};
-    ESP_LOGI(TAG, "Awaiting connection verdict");
-    waitbits_.setBits(AWAIT_VERDICT_BIT);
-}
-
 [[noreturn]] void meshnow::Handshaker::run() {
-    while (true) {
-        // wait to be allowed to initiate a connection
-        auto bits = waitbits_.waitFor(READY_BIT, false, true, portMAX_DELAY);
-        if (!(bits & READY_BIT)) {
-            ESP_LOGE(TAG, "Failed to wait for ready bit");
-            continue;
-        }
-
-        auto last_tick = xTaskGetTickCount();
-        {
-            std::scoped_lock lock{mtx_};
-            // ignore if we should stop connecting
-            if (!(waitbits_.getBits() & READY_BIT)) continue;
-
-            // send anyone there beacon
-            ESP_LOGI(TAG, "Sending anyone there beacon");
-            networking_.send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR,
-                                                   meshnow::packets::Packet{0, meshnow::packets::AnyoneThere{}});
-        }
-
-        // wait for the next cycle
-        vTaskDelayUntil(&last_tick, pdMS_TO_TICKS(CONNECTION_FREQ_MS));
-
-        tryConnect();
-    }
-}
-
-void meshnow::Handshaker::tryConnect() {
+    // at start, we want to look for connections
     {
-        std::scoped_lock lock{mtx_};
-        // ignore if we should stop connecting
-        if (!(waitbits_.getBits() & READY_BIT)) return;
-
-        // check if we found any parents
-        if (parent_infos_.empty()) {
-            ESP_LOGI(TAG, "No parents found, not trying to connect");
-            return;
-        }
-
-        // check if we still wait for other potential parents
-        auto now = xTaskGetTickCount();
-        if (now - first_parent_found_time_ < pdMS_TO_TICKS(FIRST_PARENT_WAIT_MS)) {
-            ESP_LOGI(TAG, "Still waiting for other potential parents, not trying to connect");
-            return;
-        }
-
-        // find the best parent
-        auto best_parent = std::max_element(parent_infos_.begin(), parent_infos_.end(),
-                                            [](const auto& a, const auto& b) { return a.rssi < b.rssi; });
-
-        // connect to the best parent
-        ESP_LOGI(TAG, "Connecting to best parent " MAC_FORMAT " with rssi %d", MAC_FORMAT_ARGS(best_parent->mac_addr),
-                 best_parent->rssi);
-        // send pls connect payload
-        networking_.send_worker_.enqueuePacket(best_parent->mac_addr,
-                                               meshnow::packets::Packet{0, meshnow::packets::PlsConnect{}});
+        std::scoped_lock lock{sync_.mtx};
+        sync_.waitbits.setBits(CONNECT_SUCCESS_BIT);
     }
-    // wait for verdict
-    awaitVerdict();
+
+    while (true) {
+        // wait to be allowed to initiate a connection and acquire state_lock during a whole cycle
+        auto state_lock = state_.waitForState(NodeState::StateEnum::STARTED);
+
+        std::unique_lock sync_lock{sync_.mtx};
+        if (sync_.searching) {
+            sendBeacon();
+            sync_lock.unlock();
+            // wait for next cycle
+            vTaskDelay(pdMS_TO_TICKS(CONNECTION_FREQ_MS));
+
+            // try connecting if there's suitable parent and if so we want to stop searching and instead wait for the
+            // connection reply in the next cycle
+            sync_lock.lock();
+            sync_.searching = tryConnect();
+        } else {
+            sync_lock.unlock();
+            // TODO magic constant 50
+            // wait for connection reply
+            auto bits = sync_.waitbits.waitFor(CONNECT_SUCCESS_BIT | CONNECT_FAIL_BIT, true, false, pdMS_TO_TICKS(50));
+            sync_lock.lock();
+            if (bits & CONNECT_SUCCESS_BIT) {
+                // reset the searching flag
+                sync_.searching = true;
+                // clear found parents
+                parent_infos_.clear();
+                // we assume we can reach the root because the parent only answers if it itself can reach the root
+                state_.setState(NodeState::StateEnum::ROOT_REACHABLE);
+            } else {
+                ESP_LOGI(TAG, "Connection failed, trying to connect to next best parent");
+                // simply try to connect to the next best parent
+                sync_.searching = tryConnect();
+            }
+        }
+    }
 }
 
-void meshnow::Handshaker::foundParent(const meshnow::MAC_ADDR& mac_addr, int rssi) {
-    std::scoped_lock lock{mtx_};
+void meshnow::Handshaker::sendBeacon() {
+    ESP_LOGI(TAG, "Sending anyone there beacon");
+    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR,
+                               meshnow::packets::Packet{0, meshnow::packets::AnyoneThere{}});
+}
 
+bool meshnow::Handshaker::tryConnect() {
+    // check if we found any parents
+    if (parent_infos_.empty()) {
+        ESP_LOGI(TAG, "No parents found, not trying to connect");
+        return false;
+    }
+
+    // check if we still wait for other potential parents
+    auto now = xTaskGetTickCount();
+    if (now - first_parent_found_time_ < pdMS_TO_TICKS(FIRST_PARENT_WAIT_MS)) {
+        ESP_LOGI(TAG, "Still waiting for other potential parents, not trying to connect");
+        return false;
+    }
+
+    // find the best parent
+    auto best_parent = std::max_element(parent_infos_.begin(), parent_infos_.end(),
+                                        [](const auto& a, const auto& b) { return a.rssi < b.rssi; });
+
+    // connect to the best parent
+    ESP_LOGI(TAG, "Connecting to best parent " MAC_FORMAT " with rssi %d", MAC_FORMAT_ARGS(best_parent->mac_addr),
+             best_parent->rssi);
+    // send pls connect payload
+    send_worker_.enqueuePacket(best_parent->mac_addr, meshnow::packets::Packet{0, meshnow::packets::PlsConnect{}});
+    // remove it from the list
+    parent_infos_.erase(best_parent);
+    // TODO check if plsconnect actually arrived
+    return true;
+}
+
+void meshnow::Handshaker::addPotentialParent(const meshnow::MAC_ADDR& mac_addr, int rssi) {
     if (parent_infos_.empty()) {
         first_parent_found_time_ = xTaskGetTickCount();
     }
@@ -140,8 +138,6 @@ void meshnow::Handshaker::foundParent(const meshnow::MAC_ADDR& mac_addr, int rss
 }
 
 void meshnow::Handshaker::reject(meshnow::MAC_ADDR mac_addr) {
-    std::scoped_lock lock{mtx_};
-
     // remove parent from list
     auto it = std::find_if(parent_infos_.begin(), parent_infos_.end(),
                            [&mac_addr](const auto& parent_info) { return parent_info.mac_addr == mac_addr; });
@@ -149,4 +145,66 @@ void meshnow::Handshaker::reject(meshnow::MAC_ADDR mac_addr) {
         ESP_LOGI(TAG, "Removing parent " MAC_FORMAT " from list", MAC_FORMAT_ARGS(mac_addr));
         parent_infos_.erase(it);
     }
+}
+
+bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::AnyoneThere&) {
+    // TODO check if cannot accept any more children
+
+    // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
+    if (state_.getState() != NodeState::StateEnum::ROOT_REACHABLE) return true;
+
+    ESP_LOGI(TAG, "Sending I am here");
+    send_worker_.enqueuePacket(meta.src_addr, meshnow::packets::Packet{0, meshnow::packets::IAmHere{}});
+    return true;
+}
+
+bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::IAmHere&) {
+    std::scoped_lock lock{sync_.mtx};
+    // ignore when already connected (this packet came in late, we already chose a parent)
+    if (state_.getState() == NodeState::StateEnum::CONNECTED) return true;
+    addPotentialParent(meta.src_addr, meta.rssi);
+    return true;
+}
+
+bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::PlsConnect&) {
+    // only accept if we can reach the root
+    // this should have been handled by not sending the handleAnyoneThere packet, but race conditions and delays are a
+    // thing
+    if (state_.getState() != NodeState::StateEnum::ROOT_REACHABLE) return true;
+
+    // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
+    // nodes
+    // TODO add child information
+    ESP_LOGI(TAG, "Sending welcome");
+    // TODO check can accept
+    send_worker_.enqueuePacket(meta.src_addr, packets::Packet{0, packets::Verdict{routing_info_.getRootMac(), true}});
+
+    // send a node connected event to root
+    send_worker_.enqueuePacket(routing_info_.getParentMac(), packets::Packet{0, packets::NodeConnected{meta.src_addr}});
+    return true;
+}
+
+bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Verdict& p) {
+    std::scoped_lock lock{sync_.mtx};
+    // ignore if root or already connected (should actually never happen)
+    if (state_.isRoot() || state_.getState() == NodeState::StateEnum::CONNECTED ||
+        state_.getState() == NodeState::StateEnum::ROOT_REACHABLE)
+        return true;
+
+    if (p.accept) {
+        ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
+        // set the root MAC
+        routing_info_.setRoot(p.root_mac);
+        // set parent MAC
+        routing_info_.setParent(meta.src_addr);
+
+        sync_.waitbits.setBits(CONNECT_SUCCESS_BIT);
+    } else {
+        ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
+        // remove the possible parent and try connecting to other ones again
+        reject(meta.src_addr);
+
+        sync_.waitbits.setBits(CONNECT_FAIL_BIT);
+    }
+    return true;
 }

@@ -2,44 +2,52 @@
 
 #include <thread>
 #include <vector>
-#include <waitbits.hpp>
+#include <mutex>
+#include <condition_variable>
 
 #include "constants.hpp"
+#include "packet_handler.hpp"
+#include "receive_meta.hpp"
+#include "send_worker.hpp"
+#include "state.hpp"
+#include "routing.hpp"
 
 namespace meshnow {
-
-class Networking;
 
 /**
  * Whenever disconnected from a parent, this thread tries to connect to the best parent by continuously sending connect
  * requests.
  */
-class Handshaker {
+class Handshaker : public PacketHandlerTrait<Handshaker> {
    public:
-    explicit Handshaker(Networking& networking);
+    explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::RoutingInfo& routing_info);
 
     /**
-     * Notify the Handshaker that the node is ready to connect to a parent.
+     * If this node can reach the root (i.e., is not part of island) and other conditions are met, it will reply with IAmHere.
      */
-    void readyToConnect();
+    bool handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
 
     /**
-     * Notify the Handshaker that it should stop trying to connect to a parent.
+     * Adds the node as a potential parent.
      */
-    void stopConnecting();
+    bool handle(const ReceiveMeta& meta, const packets::IAmHere& p);
+
+    /**
+     * If this node can accept any more children will reply with an accepting verdict, otherwise reject the connecting node.
+     */
+    bool handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
+
+    /**
+     * If accepted by the parent, this node will save it as its parent and send out events. Otherwise, will try the next best parent.
+     */
+    bool handle(const ReceiveMeta& meta, const packets::Verdict& p);
 
     /**
      * Notify the Handshaker that a possible parent was found.
      * @param mac_addr the MAC address of the parent
      * @param rssi rssi of the parent
      */
-    void foundParent(const MAC_ADDR& mac_addr, int rssi);
-
-    /**
-     * Reject a possible parent.
-     * @param mac_addr the MAC address of the parent
-     */
-    void reject(MAC_ADDR mac_addr);
+    void addPotentialParent(const meshnow::MAC_ADDR& mac_addr, int rssi);
 
    private:
     struct ParentInfo {
@@ -49,17 +57,29 @@ class Handshaker {
 
     [[noreturn]] void run();
 
-    void tryConnect();
+    void sendBeacon();
 
-    void awaitVerdict();
+    bool tryConnect();
 
-    Networking& networking_;
+    /**
+     * Reject a possible parent.
+     * @param mac_addr the MAC address of the parent
+     */
+    void reject(MAC_ADDR mac_addr);
 
-    util::WaitBits waitbits_{};
+    SendWorker& send_worker_;
+
+    NodeState& state_;
+
+    routing::RoutingInfo& routing_info_;
 
     std::thread thread_;
 
-    std::mutex mtx_{};
+    struct {
+        bool searching{true};
+        util::WaitBits waitbits{};
+        std::mutex mtx{};
+    } sync_;
 
     // TODO place magic constant in internal.hpp
     std::vector<ParentInfo> parent_infos_{};

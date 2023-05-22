@@ -132,7 +132,7 @@ meshnow::Buffer meshnow::packets::serialize(const meshnow::packets::Packet& pack
     out.currentWritePos(written_header_size);
     // write payload
     auto written_size =
-        std::visit([&out](auto&& p) { return bitsery::quickSerialization(std::move(out), p); }, packet.payload);
+        std::visit([&out](auto& p) { return bitsery::quickSerialization(std::move(out), p); }, packet.payload);
 
     // shrink and return buffer
     // written size includes the header size already
@@ -240,5 +240,5 @@ std::optional<meshnow::packets::Packet> meshnow::packets::deserialize(const mesh
 
 meshnow::packets::Type meshnow::packets::getType(const meshnow::packets::Payload& payload) {
     // return the static constexpr type of the payload
-    return std::visit([](auto&& p) { return p.type; }, payload);
+    return std::visit([](auto& p) { return p.type; }, payload);
 }

@@ -35,13 +35,12 @@ namespace meshnow {
  */
 class Networking {
    public:
-    explicit Networking(NodeState& state)
-        : state_{state}, send_worker_{*this}, handshaker_{*this}, routing_info_{queryThisMac()} {}
+    static MAC_ADDR queryThisMac();
+
+    explicit Networking(NodeState& state);
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
-
-    static MAC_ADDR queryThisMac();
 
     /**
      * Start the networking stack.
@@ -58,35 +57,7 @@ class Networking {
      */
     void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
 
-    void handle(const ReceiveMeta& meta, const packets::StillAlive& p);
-
-    void handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
-
-    void handle(const ReceiveMeta& meta, const packets::IAmHere& p);
-
-    void handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
-
-    void handle(const ReceiveMeta& meta, const packets::Verdict& p);
-
     void handle(const ReceiveMeta& meta, const packets::NodeConnected& p);
-
-    void handle(const ReceiveMeta& meta, const packets::NodeDisconnected& p);
-
-    void handle(const ReceiveMeta& meta, const packets::MeshUnreachable& p);
-
-    void handle(const ReceiveMeta& meta, const packets::MeshReachable& p);
-
-    void handle(const ReceiveMeta& meta, const packets::Ack& p);
-
-    void handle(const ReceiveMeta& meta, const packets::Nack& p);
-
-    void handle(const ReceiveMeta& meta, const packets::LwipDataFirst& p);
-
-    void handle(const ReceiveMeta& meta, const packets::CustomDataFirst& p);
-
-    void handle(const ReceiveMeta& meta, const packets::LwipDataNext& p);
-
-    void handle(const ReceiveMeta& meta, const packets::CustomDataNext& p);
 
    private:
     /**
@@ -105,12 +76,11 @@ class Networking {
 
     SendWorker send_worker_;
 
-    Handshaker handshaker_;
-
     routing::RoutingInfo routing_info_;
 
+    std::vector<std::unique_ptr<PacketHandler>> packet_handlers_{};
+
     friend SendWorker;
-    friend Handshaker;
 };
 
 }  // namespace meshnow
