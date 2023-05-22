@@ -12,14 +12,10 @@
 
 static const char *TAG = CREATE_TAG("🦌");
 
-static std::mutex mtx;
-
-namespace meshnow {
-
 /**
  * Initializes NVS.
  */
-void App::initNVS() {
+void meshnow::App::initNVS() {
     ESP_LOGI(TAG, "Initializing NVS");
 
     // initialize nvs
@@ -36,7 +32,7 @@ void App::initNVS() {
 /**
  * Initializes WiFi.
  */
-void App::initWifi() {
+void meshnow::App::initWifi() {
     ESP_LOGI(TAG, "Initializing WiFi");
 
     // initialize the tcp stack (not needed atm)
@@ -65,7 +61,7 @@ void App::initWifi() {
 /**
  * Deinitializes WiFi.
  */
-void App::deinitWifi() {
+void meshnow::App::deinitWifi() {
     ESP_LOGI(TAG, "Deinitializing WiFi");
 
     CHECK_THROW(esp_wifi_stop());
@@ -80,7 +76,7 @@ static meshnow::Networking *networking_callback_ptr;
 /**
  * Initializes ESP-NOW.
  */
-void App::initEspnow() {
+void meshnow::App::initEspnow() {
     ESP_LOGI(TAG, "Initializing ESP-NOW");
 
     CHECK_THROW(esp_now_init());
@@ -96,7 +92,7 @@ void App::initEspnow() {
 /**
  * Deinitializes ESP-NOW.
  */
-void App::deinitEspnow() {
+void meshnow::App::deinitEspnow() {
     ESP_LOGI(TAG, "Deinitializing ESP-NOW");
 
     CHECK_THROW(esp_now_unregister_recv_cb());
@@ -108,7 +104,7 @@ void App::deinitEspnow() {
     ESP_LOGI(TAG, "ESP-NOW deinitialized");
 }
 
-App::App(const Config config) : config_{config}, state_{config_.root}, networking_{state_} {
+meshnow::App::App(const Config config) : config_{config}, state_{config_.root}, networking_{state_} {
     std::scoped_lock lock{mtx};
 
     ESP_LOGI(TAG, "Initializing MeshNOW");
@@ -118,7 +114,7 @@ App::App(const Config config) : config_{config}, state_{config_.root}, networkin
     ESP_LOGI(TAG, "MeshNOW initialized. You can started the mesh now 🦌");
 }
 
-App::~App() {
+meshnow::App::~App() {
     if (state_.isStarted()) {
         ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
         stop();
@@ -141,7 +137,7 @@ App::~App() {
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
 }
 
-void App::start() {
+void meshnow::App::start() {
     std::scoped_lock lock{mtx};
 
     if (state_.isStarted()) {
@@ -166,7 +162,7 @@ void App::start() {
     ESP_LOGI(TAG, "Liftoff! 🚀");
 }
 
-void App::stop() {
+void meshnow::App::stop() {
     std::scoped_lock lock{mtx};
 
     if (!state_.isStarted()) {
@@ -185,5 +181,3 @@ void App::stop() {
 
     ESP_LOGI(TAG, "Mesh stopped! 🛑");
 }
-
-}  // namespace meshnow

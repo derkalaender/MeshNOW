@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 #define MAC_FORMAT "%02X:%02X:%02X:%02X:%02X:%02X"
 #define MAC_FORMAT_ARGS(mac_addr) \

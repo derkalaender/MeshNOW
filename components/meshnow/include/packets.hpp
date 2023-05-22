@@ -7,12 +7,6 @@
 
 #include "constants.hpp"
 
-// Forward declaration because of circular dependency
-namespace meshnow {
-class Networking;
-struct ReceiveMeta;
-}  // namespace meshnow
-
 namespace meshnow::packets {
 
 enum class Type : uint8_t {

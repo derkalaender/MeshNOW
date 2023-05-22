@@ -1,8 +1,6 @@
 #include "routing.hpp"
 
-#include <cstdint>
 #include <optional>
-#include <vector>
 
 #include "constants.hpp"
 

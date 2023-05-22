@@ -4,6 +4,7 @@
 #include <freertos/queue.h>
 
 #include <memory>
+#include <optional>
 
 namespace util {
 

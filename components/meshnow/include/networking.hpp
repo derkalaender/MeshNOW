@@ -13,121 +13,14 @@
 #include <waitbits.hpp>
 
 #include "constants.hpp"
+#include "handshaker.hpp"
 #include "packets.hpp"
+#include "receive_meta.hpp"
 #include "routing.hpp"
+#include "send_worker.hpp"
 #include "state.hpp"
 
 namespace meshnow {
-
-struct ReceiveMeta {
-    MAC_ADDR src_addr;
-    MAC_ADDR dest_addr;
-    uint16_t seq_num;
-    int rssi;
-};
-
-/**
- * Thread that handles sending payloads by queueing them and working them off one by one.
- */
-class SendWorker {
-   public:
-    explicit SendWorker(Networking& networking)
-        // TODO extract max_items to constants.hpp
-        : networking_{networking}, waitbits_{}, send_queue_{10}, thread_{&SendWorker::run, this} {}
-
-    /**
-     * Add packet to the send queue.
-     *
-     * @note Blocks if send queue is full.
-     *
-     * @param dest_addr MAC address of the immediate node to send the packet to
-     * @param packet packet to send
-     */
-    void enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet);
-
-    /**
-     * Notify the SendWorker that the previous payload was sent.
-     */
-    void sendFinished(bool successful);
-
-   private:
-    struct SendQueueItem {
-        MAC_ADDR dest_addr{};
-        meshnow::packets::Packet packet{};
-    };
-
-    [[noreturn]] void run();
-
-    // TODO unused
-    Networking& networking_;
-
-    /**
-     * Communicates a successful/failed payload from the send callback to the thread.
-     */
-    util::WaitBits waitbits_;
-
-    // TODO make priority queue because we want events and stuff first
-    util::Queue<SendQueueItem> send_queue_;
-
-    std::thread thread_;
-};
-
-/**
- * Whenever disconnected from a parent, this thread tries to connect to the best parent by continuously sending connect
- * requests.
- */
-class ConnectionInitiator {
-   public:
-    explicit ConnectionInitiator(Networking& networking);
-
-    /**
-     * Notify the ConnectionInitiator that the node is ready to connect to a parent.
-     */
-    void readyToConnect();
-
-    /**
-     * Notify the ConnectionInitiator that it should stop trying to connect to a parent.
-     */
-    void stopConnecting();
-
-    /**
-     * Notify the ConnectionInitiator that a possible parent was found.
-     * @param mac_addr the MAC address of the parent
-     * @param rssi rssi of the parent
-     */
-    void foundParent(const MAC_ADDR& mac_addr, int rssi);
-
-    /**
-     * Reject a possible parent.
-     * @param mac_addr the MAC address of the parent
-     */
-    void reject(MAC_ADDR mac_addr);
-
-   private:
-    struct ParentInfo {
-        MAC_ADDR mac_addr;
-        int rssi;
-    };
-
-    [[noreturn]] void run();
-
-    void tryConnect();
-
-    void awaitVerdict();
-
-    Networking& networking_;
-
-    util::WaitBits waitbits_;
-
-    std::thread thread_;
-
-    std::mutex mtx_;
-
-    // TODO place magic constant in internal.hpp
-    std::vector<ParentInfo> parent_infos_;
-
-    TickType_t first_parent_found_time_;
-};
 
 /**
  * Handles networking.
@@ -143,12 +36,12 @@ class ConnectionInitiator {
 class Networking {
    public:
     explicit Networking(NodeState& state)
-        : state_{state}, send_worker_{*this}, conn_initiator_{*this}, routing_info_{queryThisMac()} {}
+        : state_{state}, send_worker_{*this}, handshaker_{*this}, routing_info_{queryThisMac()} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
 
-    static meshnow::MAC_ADDR queryThisMac();
+    static MAC_ADDR queryThisMac();
 
     /**
      * Start the networking stack.
@@ -212,12 +105,12 @@ class Networking {
 
     SendWorker send_worker_;
 
-    ConnectionInitiator conn_initiator_;
+    Handshaker handshaker_;
 
-    meshnow::routing::RoutingInfo routing_info_;
+    routing::RoutingInfo routing_info_;
 
     friend SendWorker;
-    friend ConnectionInitiator;
+    friend Handshaker;
 };
 
 }  // namespace meshnow

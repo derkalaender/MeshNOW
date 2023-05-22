@@ -12,6 +12,7 @@
 #include "error.hpp"
 #include "internal.hpp"
 #include "packets.hpp"
+#include "receive_meta.hpp"
 
 static const char* TAG = CREATE_TAG("Networking");
 
@@ -37,8 +38,8 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
 
 void meshnow::Networking::start() {
     if (!state_.isRoot()) {
-        ESP_LOGI(TAG, "Starting ConnectionInitiator");
-        conn_initiator_.readyToConnect();
+        ESP_LOGI(TAG, "Starting Handshaker");
+        handshaker_.readyToConnect();
     } else {
         // update the routing info. Add our own MAC as the root MAC
         routing_info_.setRoot(routing_info_.getThisMac());
@@ -103,7 +104,7 @@ void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::AnyoneT
 void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::IAmHere& p) {
     // ignore when already connected (this packet came in late, we already chose a parent)
     if (state_.isConnected()) return;
-    conn_initiator_.foundParent(meta.src_addr, meta.rssi);
+    handshaker_.foundParent(meta.src_addr, meta.rssi);
 }
 
 void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::PlsConnect& p) {
@@ -130,7 +131,7 @@ void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::Verdict
     if (p.accept) {
         ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // we are safely connected and can stop searching for new parents now
-        conn_initiator_.stopConnecting();
+        handshaker_.stopConnecting();
         state_.setConnected();
         // we assume we can reach the root because the parent only answers if it itself can reach the root
         state_.setRootReachable();
@@ -141,8 +142,8 @@ void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::Verdict
     } else {
         ESP_LOGI(TAG, "Got rejected by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // remove the possible parent and try connecting to other ones again
-        conn_initiator_.reject(meta.src_addr);
-        conn_initiator_.readyToConnect();
+        handshaker_.reject(meta.src_addr);
+        handshaker_.readyToConnect();
     }
 }
 

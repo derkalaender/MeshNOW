@@ -1,3 +1,5 @@
+#include "handshaker.hpp"
+
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -7,7 +9,7 @@
 #include "internal.hpp"
 #include "networking.hpp"
 
-static const char* TAG = CREATE_TAG("ConnectionInitiator");
+static const char* TAG = CREATE_TAG("Handshaker");
 
 static const auto READY_BIT = BIT0;
 static const auto AWAIT_VERDICT_BIT = BIT1;
@@ -20,35 +22,30 @@ static const auto FIRST_PARENT_WAIT_MS = 5000;
 
 static const auto MAX_PARENTS_TO_CONSIDER = 5;
 
-meshnow::ConnectionInitiator::ConnectionInitiator(Networking& networking)
-    : networking_{networking},
-      waitbits_{},
-      thread_{&ConnectionInitiator::run, this},
-      parent_infos_{},
-      first_parent_found_time_{0} {
+meshnow::Handshaker::Handshaker(Networking& networking) : networking_{networking}, thread_{&Handshaker::run, this} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
 }
 
-void meshnow::ConnectionInitiator::readyToConnect() {
+void meshnow::Handshaker::readyToConnect() {
     std::scoped_lock lock{mtx_};
     ESP_LOGI(TAG, "Ready to connect to a parent");
     waitbits_.setBits(READY_BIT);
 }
 
-void meshnow::ConnectionInitiator::stopConnecting() {
+void meshnow::Handshaker::stopConnecting() {
     std::scoped_lock lock{mtx_};
     ESP_LOGI(TAG, "Stopping connection attempts");
     parent_infos_.clear();
     waitbits_.clearBits(READY_BIT);
 }
 
-void meshnow::ConnectionInitiator::awaitVerdict() {
+void meshnow::Handshaker::awaitVerdict() {
     std::scoped_lock lock{mtx_};
     ESP_LOGI(TAG, "Awaiting connection verdict");
     waitbits_.setBits(AWAIT_VERDICT_BIT);
 }
 
-[[noreturn]] void meshnow::ConnectionInitiator::run() {
+[[noreturn]] void meshnow::Handshaker::run() {
     while (true) {
         // wait to be allowed to initiate a connection
         auto bits = waitbits_.waitFor(READY_BIT, false, true, portMAX_DELAY);
@@ -76,7 +73,7 @@ void meshnow::ConnectionInitiator::awaitVerdict() {
     }
 }
 
-void meshnow::ConnectionInitiator::tryConnect() {
+void meshnow::Handshaker::tryConnect() {
     {
         std::scoped_lock lock{mtx_};
         // ignore if we should stop connecting
@@ -110,7 +107,7 @@ void meshnow::ConnectionInitiator::tryConnect() {
     awaitVerdict();
 }
 
-void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr, int rssi) {
+void meshnow::Handshaker::foundParent(const meshnow::MAC_ADDR& mac_addr, int rssi) {
     std::scoped_lock lock{mtx_};
 
     if (parent_infos_.empty()) {
@@ -142,7 +139,7 @@ void meshnow::ConnectionInitiator::foundParent(const meshnow::MAC_ADDR& mac_addr
     }
 }
 
-void meshnow::ConnectionInitiator::reject(meshnow::MAC_ADDR mac_addr) {
+void meshnow::Handshaker::reject(meshnow::MAC_ADDR mac_addr) {
     std::scoped_lock lock{mtx_};
 
     // remove parent from list
