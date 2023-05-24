@@ -29,15 +29,10 @@ meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routi
 }
 
 [[noreturn]] void meshnow::Handshaker::run() {
-    // at start, we want to look for connections
-    {
-        std::scoped_lock lock{sync_.mtx};
-        sync_.waitbits.setBits(CONNECT_SUCCESS_BIT);
-    }
-
     while (true) {
         // wait to be allowed to initiate a connection and acquire state_lock during a whole cycle
-        auto state_lock = state_.waitForState(NodeState::StateEnum::STARTED);
+        auto state_lock = state_.acquireLock();
+        state_.waitForDisconnected(state_lock);
 
         std::unique_lock sync_lock{sync_.mtx};
         if (sync_.searching) {
@@ -49,7 +44,7 @@ meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routi
             // try connecting if there's suitable parent and if so we want to stop searching and instead wait for the
             // connection reply in the next cycle
             sync_lock.lock();
-            sync_.searching = tryConnect();
+            sync_.searching = !tryConnect();
         } else {
             sync_lock.unlock();
             // TODO magic constant 50
@@ -57,16 +52,17 @@ meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routi
             auto bits = sync_.waitbits.waitFor(CONNECT_SUCCESS_BIT | CONNECT_FAIL_BIT, true, false, pdMS_TO_TICKS(50));
             sync_lock.lock();
             if (bits & CONNECT_SUCCESS_BIT) {
+                ESP_LOGI(TAG, "Handshake successful");
                 // reset the searching flag
                 sync_.searching = true;
                 // clear found parents
                 parent_infos_.clear();
                 // we assume we can reach the root because the parent only answers if it itself can reach the root
-                state_.setState(NodeState::StateEnum::ROOT_REACHABLE);
+                state_.setConnectionStatus(NodeState::ConnectionStatus::ROOT_REACHABLE);
             } else {
-                ESP_LOGI(TAG, "Connection failed, trying to connect to next best parent");
+                ESP_LOGI(TAG, "Handshake failed, trying to connect to next best parent");
                 // simply try to connect to the next best parent
-                sync_.searching = tryConnect();
+                sync_.searching = !tryConnect();
             }
         }
     }
@@ -149,9 +145,8 @@ void meshnow::Handshaker::reject(meshnow::MAC_ADDR mac_addr) {
 
 bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::AnyoneThere&) {
     // TODO check if cannot accept any more children
-
     // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
-    if (state_.getState() != NodeState::StateEnum::ROOT_REACHABLE) return true;
+    if (state_.getConnectionStatus() != NodeState::ConnectionStatus::ROOT_REACHABLE) return true;
 
     ESP_LOGI(TAG, "Sending I am here");
     send_worker_.enqueuePacket(meta.src_addr, meshnow::packets::Packet{0, meshnow::packets::IAmHere{}});
@@ -159,18 +154,19 @@ bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow
 }
 
 bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::IAmHere&) {
-    std::scoped_lock lock{sync_.mtx};
+    std::scoped_lock sync_lock{sync_.mtx};
     // ignore when already connected (this packet came in late, we already chose a parent)
-    if (state_.getState() == NodeState::StateEnum::CONNECTED) return true;
+    if (state_.getConnectionStatus() == NodeState::ConnectionStatus::CONNECTED) return true;
     addPotentialParent(meta.src_addr, meta.rssi);
     return true;
 }
 
 bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::PlsConnect&) {
+    auto lock = state_.acquireLock();
     // only accept if we can reach the root
     // this should have been handled by not sending the handleAnyoneThere packet, but race conditions and delays are a
     // thing
-    if (state_.getState() != NodeState::StateEnum::ROOT_REACHABLE) return true;
+    if (state_.getConnectionStatus() != NodeState::ConnectionStatus::ROOT_REACHABLE) return true;
 
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes
@@ -185,10 +181,10 @@ bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow
 }
 
 bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Verdict& p) {
-    std::scoped_lock lock{sync_.mtx};
+    std::scoped_lock sync_lock{sync_.mtx};
     // ignore if root or already connected (should actually never happen)
-    if (state_.isRoot() || state_.getState() == NodeState::StateEnum::CONNECTED ||
-        state_.getState() == NodeState::StateEnum::ROOT_REACHABLE)
+    if (state_.isRoot() || state_.getConnectionStatus() == NodeState::ConnectionStatus::CONNECTED ||
+        state_.getConnectionStatus() == NodeState::ConnectionStatus::ROOT_REACHABLE)
         return true;
 
     if (p.accept) {

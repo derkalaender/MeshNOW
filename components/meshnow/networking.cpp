@@ -43,11 +43,12 @@ meshnow::Networking::Networking(meshnow::NodeState& state)
 
 void meshnow::Networking::start() {
     if (!state_.isRoot()) {
-        ESP_LOGI(TAG, "Starting Handshaker");
-//        handshaker_.readyToConnect();
+        ESP_LOGI(TAG, "Ready to connect!");
     } else {
         // update the routing info. Add our own MAC as the root MAC
-
+        routing_info_.setRoot(queryThisMac());
+        // the root can always reach itself
+        state_.setConnectionStatus(NodeState::ConnectionStatus::ROOT_REACHABLE);
     }
 }
 

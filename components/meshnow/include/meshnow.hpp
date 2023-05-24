@@ -78,8 +78,6 @@ class App {
     const Config config_;
     NodeState state_;
     Networking networking_;
-
-    std::mutex mtx{};
 };
 
 }  // namespace meshnow

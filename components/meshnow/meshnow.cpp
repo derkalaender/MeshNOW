@@ -5,8 +5,6 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
-#include <mutex>
-
 #include "error.hpp"
 #include "internal.hpp"
 
@@ -105,8 +103,6 @@ void meshnow::App::deinitEspnow() {
 }
 
 meshnow::App::App(const Config config) : config_{config}, state_{config_.root}, networking_{state_} {
-    std::scoped_lock lock{mtx};
-
     ESP_LOGI(TAG, "Initializing MeshNOW");
     initNVS();
     initWifi();
@@ -115,12 +111,16 @@ meshnow::App::App(const Config config) : config_{config}, state_{config_.root}, 
 }
 
 meshnow::App::~App() {
-    if (state_.getState() != NodeState::StateEnum::STOPPED) {
+    if (state_.isStarted()) {
         ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
-        stop();
+        try {
+            stop();
+        } catch (const std::exception &e) {
+            ESP_LOGE(TAG, "Error while stopping MeshNOW: %s", e.what());
+            ESP_LOGE(TAG, "This should never happen. Terminating....");
+            std::terminate();
+        }
     }
-
-    std::scoped_lock lock{mtx};
 
     ESP_LOGI(TAG, "Deinitializing MeshNOW");
 
@@ -138,46 +138,33 @@ meshnow::App::~App() {
 }
 
 void meshnow::App::start() {
-    std::scoped_lock lock{mtx};
+    auto lock = state_.acquireLock();
 
-    if (state_.getState() != NodeState::StateEnum::STOPPED) {
+    if (state_.isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is already running");
         throw AlreadyStartedException();
     }
 
-
-    if (config_.root) {
-        ESP_LOGI(TAG, "Starting MeshNOW as root...");
-        // TODO start root
-        // we are connected and can reach the root because we *are* the root
-        state_.setState(NodeState::StateEnum::CONNECTED);
-    } else {
-        ESP_LOGI(TAG, "Starting MeshNOW as node...");
-        state_.setState(NodeState::StateEnum::STARTED);
-        // TODO start node
-    }
+    ESP_LOGI(TAG, "Starting MeshNOW as %s...", state_.isRoot() ? "root" : "node");
 
     networking_.start();
 
     ESP_LOGI(TAG, "Liftoff! 🚀");
+
+    state_.setStarted(true);
 }
 
 void meshnow::App::stop() {
-    std::scoped_lock lock{mtx};
+    auto lock = state_.acquireLock();
 
-    if (state_.getState() == NodeState::StateEnum::STOPPED) {
+    if (!state_.isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is not running");
         throw NotStartedException();
     }
-    state_.setState(NodeState::StateEnum::STOPPED);
 
-    if (config_.root) {
-        ESP_LOGI(TAG, "Stopping MeshNOW as root...");
-        // TODO stop root
-    } else {
-        ESP_LOGI(TAG, "Stopping MeshNOW as node...");
-        // TODO stop node
-    }
+    ESP_LOGI(TAG, "Stopping MeshNOW as %s...", state_.isRoot() ? "root" : "node");
 
     ESP_LOGI(TAG, "Mesh stopped! 🛑");
+
+    state_.setStarted(false);
 }
