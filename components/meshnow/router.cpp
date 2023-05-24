@@ -1,11 +1,16 @@
 #include "router.hpp"
 
+#include <esp_log.h>
+
 #include <algorithm>
 #include <optional>
 
 #include "constants.hpp"
+#include "internal.hpp"
 #include "layout.hpp"
 #include "optional"
+
+static const char* TAG = "Router";
 
 meshnow::routing::Router::HopResult meshnow::routing::Router::hopToNode(const meshnow::MAC_ADDR& mac) const {
     if (mac == layout_.mac) {
@@ -50,4 +55,25 @@ std::vector<meshnow::MAC_ADDR> meshnow::routing::Router::hopToChildren() const {
     std::transform(layout_.children.begin(), layout_.children.end(), std::back_inserter(children),
                    [](const auto& child) { return child.mac; });
     return children;
+}
+
+void meshnow::routing::Router::updateRssi(const MAC_ADDR& mac, int rssi) {
+    if (mac == layout_.mac) {
+        // ignore packets from self
+        return;
+    }
+
+    if (layout_.parent && mac == layout_.parent->mac) {
+        // update parent RSSI
+        layout_.parent->rssi = rssi;
+    } else {
+        // update child RSSI
+        auto child = std::find_if(layout_.children.begin(), layout_.children.end(),
+                                  [&mac](auto&& child) { return routing::contains(child, mac); });
+        if (child != layout_.children.end()) {
+            child->rssi = rssi;
+        }
+    }
+
+    ESP_LOGI(TAG, "Updated RSSI of neighbor " MAC_FORMAT " to %d", MAC_FORMAT_ARGS(mac), rssi);
 }

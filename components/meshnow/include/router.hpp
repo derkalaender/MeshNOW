@@ -43,6 +43,13 @@ class Router {
      */
     void setParentMac(const MAC_ADDR& mac) { layout_.parent.emplace(mac); }
 
+    /**
+     * Update the RSSI value of a node.
+     * @param mac MAC address of the node
+     * @param rssi last RSSI value of the node
+     */
+    void updateRssi(const MAC_ADDR& mac, int rssi);
+
    private:
     bool is_root_;
     std::optional<MAC_ADDR> root_mac_{};

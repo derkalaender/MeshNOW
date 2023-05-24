@@ -31,7 +31,7 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
 }
 
 meshnow::Networking::Networking(meshnow::NodeState& state) : state_{state} {
-    packet_handlers_.push_back(std::make_unique<Handshaker>(send_worker_, state_, router_));
+    packet_handlers_.push_back(std::make_shared<Handshaker>(send_worker_, state_, router_));
 }
 
 void meshnow::Networking::start() {
@@ -86,4 +86,7 @@ void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, con
     for (auto& handler : packet_handlers_) {
         handler->handlePacket(meta, packet->payload);
     }
+
+    // update RSSI value
+    router_.updateRssi(meta.src_addr, meta.rssi);
 }

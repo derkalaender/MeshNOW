@@ -65,7 +65,7 @@ class Networking {
 
     routing::Router router_{state_.isRoot()};
 
-    std::vector<std::unique_ptr<PacketHandler>> packet_handlers_{};
+    std::vector<std::shared_ptr<PacketHandler>> packet_handlers_{};
 
     friend SendWorker;
 };
