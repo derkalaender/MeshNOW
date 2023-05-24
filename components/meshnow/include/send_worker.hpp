@@ -1,10 +1,11 @@
 #pragma once
 
-#include <waitbits.hpp>
 #include <queue.hpp>
 #include <thread>
-#include <constants.hpp>
-#include <packets.hpp>
+#include <waitbits.hpp>
+
+#include "constants.hpp"
+#include "packets.hpp"
 
 namespace meshnow {
 
@@ -55,4 +56,4 @@ class SendWorker {
     std::thread thread_;
 };
 
-}
+}  // namespace meshnow

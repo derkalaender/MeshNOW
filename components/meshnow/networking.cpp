@@ -5,14 +5,15 @@
 #include <esp_now.h>
 
 #include <cstdint>
-#include <variant>
 #include <vector>
 
 #include "constants.hpp"
 #include "error.hpp"
+#include "handshaker.hpp"
 #include "internal.hpp"
 #include "packets.hpp"
 #include "receive_meta.hpp"
+#include "state.hpp"
 
 static const char* TAG = CREATE_TAG("Networking");
 

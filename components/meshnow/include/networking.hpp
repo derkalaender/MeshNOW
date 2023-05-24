@@ -1,20 +1,11 @@
 #pragma once
 
-#include <esp_log.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/queue.h>
-
 #include <cstdint>
 #include <memory>
-#include <optional>
-#include <queue.hpp>
-#include <thread>
 #include <vector>
-#include <waitbits.hpp>
 
 #include "constants.hpp"
-#include "handshaker.hpp"
-#include "packets.hpp"
+#include "packet_handler.hpp"
 #include "receive_meta.hpp"
 #include "routing.hpp"
 #include "send_worker.hpp"

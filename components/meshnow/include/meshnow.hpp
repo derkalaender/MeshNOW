@@ -1,8 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <memory>
-
 #include "networking.hpp"
 #include "state.hpp"
 

@@ -1,5 +1,7 @@
 #include "send_worker.hpp"
 
+#include <esp_log.h>
+
 #include <utility>
 
 #include "internal.hpp"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+
 #include "constants.hpp"
 
 namespace meshnow {
@@ -12,4 +13,4 @@ struct ReceiveMeta {
     int rssi;
 };
 
-}
+}  // namespace meshnow

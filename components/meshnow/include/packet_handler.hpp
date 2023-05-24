@@ -26,7 +26,6 @@ class PacketHandler {
 template <typename T>
 class PacketHandlerTrait : public PacketHandler {
    public:
-
     bool handlePacket(const ReceiveMeta& meta, const packets::Payload& p) override {
         // handler takes payload as parameter
         auto handle = [&](auto& p) {

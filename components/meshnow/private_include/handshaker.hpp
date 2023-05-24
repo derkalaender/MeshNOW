@@ -1,16 +1,15 @@
 #pragma once
 
+#include <mutex>
 #include <thread>
 #include <vector>
-#include <mutex>
-#include <condition_variable>
+#include <waitbits.hpp>
 
 #include "constants.hpp"
 #include "packet_handler.hpp"
-#include "receive_meta.hpp"
+#include "routing.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
-#include "routing.hpp"
 
 namespace meshnow {
 
@@ -23,7 +22,8 @@ class Handshaker : public PacketHandlerTrait<Handshaker> {
     explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::RoutingInfo& routing_info);
 
     /**
-     * If this node can reach the root (i.e., is not part of island) and other conditions are met, it will reply with IAmHere.
+     * If this node can reach the root (i.e., is not part of island) and other conditions are met, it will reply with
+     * IAmHere.
      */
     bool handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
 
@@ -33,12 +33,14 @@ class Handshaker : public PacketHandlerTrait<Handshaker> {
     bool handle(const ReceiveMeta& meta, const packets::IAmHere& p);
 
     /**
-     * If this node can accept any more children will reply with an accepting verdict, otherwise reject the connecting node.
+     * If this node can accept any more children will reply with an accepting verdict, otherwise reject the connecting
+     * node.
      */
     bool handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
 
     /**
-     * If accepted by the parent, this node will save it as its parent and send out events. Otherwise, will try the next best parent.
+     * If accepted by the parent, this node will save it as its parent and send out events. Otherwise, will try the next
+     * best parent.
      */
     bool handle(const ReceiveMeta& meta, const packets::Verdict& p);
 
