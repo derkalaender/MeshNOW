@@ -7,7 +7,7 @@
 
 #include "constants.hpp"
 #include "packet_handler.hpp"
-#include "routing.hpp"
+#include "router.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 
@@ -19,30 +19,30 @@ namespace meshnow {
  */
 class Handshaker : public PacketHandlerTrait<Handshaker> {
    public:
-    explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::RoutingInfo& routing_info);
+    explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router);
 
     /**
      * If this node can reach the root (i.e., is not part of island) and other conditions are met, it will reply with
      * IAmHere.
      */
-    bool handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
+    void handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
 
     /**
      * Adds the node as a potential parent.
      */
-    bool handle(const ReceiveMeta& meta, const packets::IAmHere& p);
+    void handle(const ReceiveMeta& meta, const packets::IAmHere& p);
 
     /**
      * If this node can accept any more children will reply with an accepting verdict, otherwise reject the connecting
      * node.
      */
-    bool handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
+    void handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
 
     /**
      * If accepted by the parent, this node will save it as its parent and send out events. Otherwise, will try the next
      * best parent.
      */
-    bool handle(const ReceiveMeta& meta, const packets::Verdict& p);
+    void handle(const ReceiveMeta& meta, const packets::Verdict& p);
 
     /**
      * Notify the Handshaker that a possible parent was found.
@@ -73,7 +73,7 @@ class Handshaker : public PacketHandlerTrait<Handshaker> {
 
     NodeState& state_;
 
-    routing::RoutingInfo& routing_info_;
+    routing::Router& router_;
 
     std::thread thread_;
 

@@ -12,8 +12,7 @@ static const char* TAG = CREATE_TAG("SendWorker");
 static const auto SEND_SUCCESS_BIT = BIT0;
 static const auto SEND_FAILED_BIT = BIT1;
 
-meshnow::SendWorker::SendWorker(meshnow::Networking& networking)
-    : networking_{networking}, thread_{&SendWorker::run, this} {}
+meshnow::SendWorker::SendWorker() : thread_{&SendWorker::run, this} {}
 
 void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet) {
     // TODO use custom delay, don't wait forever (risk of deadlock)

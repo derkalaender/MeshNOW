@@ -7,52 +7,67 @@ namespace meshnow {
 
 class NodeState {
    public:
-    enum class ConnectionStatus { DISCONNECTED, CONNECTED, ROOT_REACHABLE };
-
-    explicit NodeState(bool is_root) : is_root_{is_root} {}
+    explicit NodeState(bool is_root) : root_{is_root} {}
 
     [[nodiscard]] std::unique_lock<std::mutex> acquireLock() { return std::unique_lock{mtx_}; }
 
     void setStarted(bool started) {
-        is_started_ = started;
+        started_ = started;
+        if (!started_) {
+            connected_ = false;
+            root_reachable_ = false;
+        }
         cv_.notify_all();
     }
 
-    bool isStarted() const { return is_started_; }
+    bool isStarted() const { return started_; }
 
     void waitForStarted(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return is_started_; });
+        cv_.wait(lock, [&] { return started_; });
     }
 
-    void setConnectionStatus(ConnectionStatus s) {
-        connection_status = s;
+    void setConnected(bool connected) {
+        connected_ = connected;
+        if (connected_) {
+            started_ = true;
+        } else {
+            root_reachable_ = false;
+        }
         cv_.notify_all();
     }
 
-    ConnectionStatus getConnectionStatus() const { return connection_status; }
-
-    void waitForDisconnected(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return is_started_ && connection_status == ConnectionStatus::DISCONNECTED; });
-    }
+    bool isConnected() const { return connected_; }
 
     void waitForConnected(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] {
-            return is_started_ && (connection_status == ConnectionStatus::CONNECTED ||
-                                   connection_status == ConnectionStatus::ROOT_REACHABLE);
-        });
+        cv_.wait(lock, [&] { return connected_; });
     }
+
+    void waitForDisconnected(std::unique_lock<std::mutex>& lock) {
+        cv_.wait(lock, [&] { return started_ && !connected_; });
+    }
+
+    void setRootReachable(bool reachable) {
+        root_reachable_ = reachable;
+        if (root_reachable_) {
+            started_ = true;
+            connected_ = true;
+        }
+        cv_.notify_all();
+    }
+
+    bool isRootReachable() const { return root_reachable_; }
 
     void waitForRootReachable(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return is_started_ && connection_status == ConnectionStatus::ROOT_REACHABLE; });
+        cv_.wait(lock, [&] { return root_reachable_; });
     }
 
-    bool isRoot() const { return is_root_; }
+    bool isRoot() const { return root_; }
 
    private:
-    ConnectionStatus connection_status{ConnectionStatus::DISCONNECTED};
-
-    bool is_root_;
-    bool is_started_{false};
+    bool root_;
+    bool started_{false};
+    bool connected_{false};
+    bool root_reachable_{false};
 
     std::mutex mtx_{};
 

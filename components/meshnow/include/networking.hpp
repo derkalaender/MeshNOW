@@ -7,7 +7,7 @@
 #include "constants.hpp"
 #include "packet_handler.hpp"
 #include "receive_meta.hpp"
-#include "routing.hpp"
+#include "router.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 
@@ -26,8 +26,6 @@ namespace meshnow {
  */
 class Networking {
    public:
-    static MAC_ADDR queryThisMac();
-
     explicit Networking(NodeState& state);
 
     Networking(const Networking&) = delete;
@@ -48,8 +46,6 @@ class Networking {
      */
     void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
 
-    void handle(const ReceiveMeta& meta, const packets::NodeConnected& p);
-
    private:
     /**
      * Sends raw data to the specific device (ESP-NOW wrapper).
@@ -65,9 +61,9 @@ class Networking {
      */
     NodeState& state_;
 
-    SendWorker send_worker_;
+    SendWorker send_worker_{};
 
-    routing::RoutingInfo routing_info_;
+    routing::Router router_{state_.isRoot()};
 
     std::vector<std::unique_ptr<PacketHandler>> packet_handlers_{};
 

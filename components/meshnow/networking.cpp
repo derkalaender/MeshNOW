@@ -1,7 +1,6 @@
 #include "networking.hpp"
 
 #include <esp_log.h>
-#include <esp_mac.h>
 #include <esp_now.h>
 
 #include <cstdint>
@@ -17,12 +16,6 @@
 
 static const char* TAG = CREATE_TAG("Networking");
 
-meshnow::MAC_ADDR meshnow::Networking::queryThisMac() {
-    meshnow::MAC_ADDR mac;
-    esp_read_mac(mac.data(), ESP_MAC_WIFI_STA);
-    return mac;
-}
-
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     ESP_LOGV(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
@@ -37,19 +30,16 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-meshnow::Networking::Networking(meshnow::NodeState& state)
-    : state_{state}, send_worker_{*this}, routing_info_{queryThisMac()} {
-    packet_handlers_.push_back(std::make_unique<Handshaker>(send_worker_, state_, routing_info_));
+meshnow::Networking::Networking(meshnow::NodeState& state) : state_{state} {
+    packet_handlers_.push_back(std::make_unique<Handshaker>(send_worker_, state_, router_));
 }
 
 void meshnow::Networking::start() {
     if (!state_.isRoot()) {
         ESP_LOGI(TAG, "Ready to connect!");
     } else {
-        // update the routing info. Add our own MAC as the root MAC
-        routing_info_.setRoot(queryThisMac());
         // the root can always reach itself
-        state_.setConnectionStatus(NodeState::ConnectionStatus::ROOT_REACHABLE);
+        state_.setRootReachable(true);
     }
 }
 
@@ -94,17 +84,6 @@ void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, con
 
     // call the corresponding handlers
     for (auto& handler : packet_handlers_) {
-        if (handler->handlePacket(meta, packet->payload)) {
-            break;
-        }
-    }
-}
-
-void meshnow::Networking::handle(const ReceiveMeta& meta, const packets::NodeConnected& p) {
-    // add to routing table
-    routing_info_.addToRoutingTable(meta.src_addr, p.child_mac);
-    // forward to parent, if not root
-    if (!state_.isRoot()) {
-        send_worker_.enqueuePacket(routing_info_.getParentMac(), packets::Packet{0, p});
+        handler->handlePacket(meta, packet->payload);
     }
 }

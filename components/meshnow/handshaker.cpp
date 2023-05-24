@@ -7,8 +7,8 @@
 #include <mutex>
 
 #include "internal.hpp"
-#include "networking.hpp"
 #include "send_worker.hpp"
+#include "seq.hpp"
 
 static const char* TAG = CREATE_TAG("Handshaker");
 
@@ -23,8 +23,8 @@ static const auto FIRST_PARENT_WAIT_MS = 5000;
 
 static const auto MAX_PARENTS_TO_CONSIDER = 5;
 
-meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routing::RoutingInfo& routing_info)
-    : send_worker_{send_worker}, state_{state}, routing_info_{routing_info}, thread_{&Handshaker::run, this} {
+meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router)
+    : send_worker_{send_worker}, state_{state}, router_{router}, thread_{&Handshaker::run, this} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
 }
 
@@ -58,7 +58,7 @@ meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routi
                 // clear found parents
                 parent_infos_.clear();
                 // we assume we can reach the root because the parent only answers if it itself can reach the root
-                state_.setConnectionStatus(NodeState::ConnectionStatus::ROOT_REACHABLE);
+                state_.setRootReachable(true);
             } else {
                 ESP_LOGI(TAG, "Handshake failed, trying to connect to next best parent");
                 // simply try to connect to the next best parent
@@ -70,8 +70,8 @@ meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routi
 
 void meshnow::Handshaker::sendBeacon() {
     ESP_LOGI(TAG, "Sending anyone there beacon");
-    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR,
-                               meshnow::packets::Packet{0, meshnow::packets::AnyoneThere{}});
+    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR, meshnow::packets::Packet{meshnow::generateSequenceNumber(),
+                                                                                     meshnow::packets::AnyoneThere{}});
 }
 
 bool meshnow::Handshaker::tryConnect() {
@@ -96,7 +96,8 @@ bool meshnow::Handshaker::tryConnect() {
     ESP_LOGI(TAG, "Connecting to best parent " MAC_FORMAT " with rssi %d", MAC_FORMAT_ARGS(best_parent->mac_addr),
              best_parent->rssi);
     // send pls connect payload
-    send_worker_.enqueuePacket(best_parent->mac_addr, meshnow::packets::Packet{0, meshnow::packets::PlsConnect{}});
+    send_worker_.enqueuePacket(best_parent->mac_addr, meshnow::packets::Packet{meshnow::generateSequenceNumber(),
+                                                                               meshnow::packets::PlsConnect{}});
     // remove it from the list
     parent_infos_.erase(best_parent);
     // TODO check if plsconnect actually arrived
@@ -143,56 +144,61 @@ void meshnow::Handshaker::reject(meshnow::MAC_ADDR mac_addr) {
     }
 }
 
-bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::AnyoneThere&) {
+void meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::AnyoneThere&) {
     // TODO check if cannot accept any more children
     // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
-    if (state_.getConnectionStatus() != NodeState::ConnectionStatus::ROOT_REACHABLE) return true;
+    if (!state_.isRootReachable()) return;
 
     ESP_LOGI(TAG, "Sending I am here");
-    send_worker_.enqueuePacket(meta.src_addr, meshnow::packets::Packet{0, meshnow::packets::IAmHere{}});
-    return true;
+    send_worker_.enqueuePacket(
+        meta.src_addr, meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::IAmHere{}});
 }
 
-bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::IAmHere&) {
+void meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::IAmHere&) {
     std::scoped_lock sync_lock{sync_.mtx};
     // ignore when already connected (this packet came in late, we already chose a parent)
-    if (state_.getConnectionStatus() == NodeState::ConnectionStatus::CONNECTED) return true;
+    if (state_.isConnected()) return;
     addPotentialParent(meta.src_addr, meta.rssi);
-    return true;
 }
 
-bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::PlsConnect&) {
+void meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::PlsConnect&) {
     auto lock = state_.acquireLock();
     // only accept if we can reach the root
     // this should have been handled by not sending the handleAnyoneThere packet, but race conditions and delays are a
     // thing
-    if (state_.getConnectionStatus() != NodeState::ConnectionStatus::ROOT_REACHABLE) return true;
+    if (!state_.isRootReachable()) return;
 
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes
-    // TODO add child information
     ESP_LOGI(TAG, "Sending welcome");
     // TODO check can accept
-    send_worker_.enqueuePacket(meta.src_addr, packets::Packet{0, packets::Verdict{routing_info_.getRootMac(), true}});
+    auto root_mac = router_.getRootMac();
+    assert(root_mac);
+    send_worker_.enqueuePacket(meta.src_addr,
+                               packets::Packet{meshnow::generateSequenceNumber(), packets::Verdict{*root_mac, true}});
+    // TODO wait for packet to be sent
+
+    // TODO add child information
 
     // send a node connected event to root
-    send_worker_.enqueuePacket(routing_info_.getParentMac(), packets::Packet{0, packets::NodeConnected{meta.src_addr}});
-    return true;
+    auto res = router_.hopToParent();
+    if (res.reached_target_) return;
+    assert(res.next_hop_);
+    send_worker_.enqueuePacket(
+        *res.next_hop_, packets::Packet{meshnow::generateSequenceNumber(), packets::NodeConnected{meta.src_addr}});
 }
 
-bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Verdict& p) {
+void meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Verdict& p) {
     std::scoped_lock sync_lock{sync_.mtx};
     // ignore if root or already connected (should actually never happen)
-    if (state_.isRoot() || state_.getConnectionStatus() == NodeState::ConnectionStatus::CONNECTED ||
-        state_.getConnectionStatus() == NodeState::ConnectionStatus::ROOT_REACHABLE)
-        return true;
+    if (state_.isRoot() || state_.isConnected()) return;
 
     if (p.accept) {
         ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(meta.src_addr));
         // set the root MAC
-        routing_info_.setRoot(p.root_mac);
+        router_.setRootMac(p.root_mac);
         // set parent MAC
-        routing_info_.setParent(meta.src_addr);
+        router_.setParentMac(meta.src_addr);
 
         sync_.waitbits.setBits(CONNECT_SUCCESS_BIT);
     } else {
@@ -202,5 +208,4 @@ bool meshnow::Handshaker::handle(const meshnow::ReceiveMeta& meta, const meshnow
 
         sync_.waitbits.setBits(CONNECT_FAIL_BIT);
     }
-    return true;
 }

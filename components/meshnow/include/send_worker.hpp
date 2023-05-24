@@ -16,7 +16,7 @@ class Networking;
  */
 class SendWorker {
    public:
-    explicit SendWorker(Networking& networking);
+    SendWorker();
 
     /**
      * Add packet to the send queue.
@@ -40,9 +40,6 @@ class SendWorker {
     };
 
     [[noreturn]] void run();
-
-    // TODO unused
-    Networking& networking_;
 
     /**
      * Communicates a successful/failed payload from the send callback to the thread.
