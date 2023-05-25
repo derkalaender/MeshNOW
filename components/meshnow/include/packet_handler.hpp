@@ -7,40 +7,46 @@
 
 namespace meshnow {
 
+// Forward declare the Networking class. Will do everything through it.
+class Networking;
+
+namespace packets {
+
 /**
- * Abstract base class for PacketHandlers to allow them to be used in vectors.
+ * Handles incoming packets.
  */
 class PacketHandler {
    public:
-    virtual ~PacketHandler() = default;
+    explicit PacketHandler(Networking& networking);
 
-    virtual void handlePacket(const ReceiveMeta& meta, const packets::Payload& p) = 0;
+    /**
+     * Handle a packet. Calls the corresponding private methods.
+     * @param meta the meta data of the packet
+     * @param p the payload of the packet
+     */
+    void handlePacket(const ReceiveMeta& meta, const Payload& p);
+
+   private:
+    // HANDLERS for each payload type //
+
+    void handle(const ReceiveMeta& meta, const StillAlive& p);
+    void handle(const ReceiveMeta& meta, const AnyoneThere& p);
+    void handle(const ReceiveMeta& meta, const IAmHere& p);
+    void handle(const ReceiveMeta& meta, const PlsConnect& p);
+    void handle(const ReceiveMeta& meta, const Verdict& p);
+    void handle(const ReceiveMeta& meta, const NodeConnected& p);
+    void handle(const ReceiveMeta& meta, const NodeDisconnected& p);
+    void handle(const ReceiveMeta& meta, const MeshUnreachable& p);
+    void handle(const ReceiveMeta& meta, const MeshReachable& p);
+    void handle(const ReceiveMeta& meta, const Ack& p);
+    void handle(const ReceiveMeta& meta, const Nack& p);
+    void handle(const ReceiveMeta& meta, const LwipDataFirst& p);
+    void handle(const ReceiveMeta& meta, const CustomDataFirst& p);
+    void handle(const ReceiveMeta& meta, const LwipDataNext& p);
+    void handle(const ReceiveMeta& meta, const CustomDataNext& p);
+
+    Networking& net_;
 };
 
-/**
- * Trait which allows derived classes to define handling methods for any packet they wish.
- * The handle methods should have the signature `void handle(const ReceiveMeta&, const SomePayload&)`.
- * @tparam T the derived class
- */
-template <typename T>
-class PacketHandlerTrait : public PacketHandler {
-   public:
-    void handlePacket(const ReceiveMeta& meta, const packets::Payload& p) override {
-        // handler takes payload as parameter
-        auto handle = [&](auto& p) {
-            // check that there exists a handle method that excepts ReceiveMeta and correct payload and returns bool
-            constexpr bool has_handle_func = requires(T t) {
-                { t.handle(meta, p) } -> std::same_as<void>;
-            };
-
-            // if a such method exists call it on the derived class, otherwise return false per default
-            if constexpr (has_handle_func) {
-                static_cast<T&>(*this).handle(meta, p);
-            }
-        };
-        // call the handle closure using visitor with the payload
-        return std::visit(handle, p);
-    }
-};
-
+}  // namespace packets
 }  // namespace meshnow
