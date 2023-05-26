@@ -16,7 +16,20 @@ class Networking;
  */
 class SendWorker {
    public:
-    SendWorker();
+    SendWorker() = default;
+
+    SendWorker(const SendWorker&) = delete;
+    SendWorker& operator=(const SendWorker&) = delete;
+
+    /**
+     * Starts the SendWorker.
+     */
+    void start();
+
+    /**
+     * Stops the SendWorker.
+     */
+    void stop();
 
     /**
      * Add packet to the send queue.
@@ -39,7 +52,11 @@ class SendWorker {
         packets::Packet packet{};
     };
 
-    [[noreturn]] void run();
+    /**
+     * Loop of the SendWorker thread.
+     * @param stoken stop token to interrupt the loop
+     */
+    void runLoop(std::stop_token stoken);
 
     /**
      * Communicates a successful/failed payload from the send callback to the thread.
@@ -50,7 +67,7 @@ class SendWorker {
     // TODO extract max_items to constants.hpp
     util::Queue<SendQueueItem> send_queue_{10};
 
-    std::thread thread_;
+    std::jthread run_thread_{};
 };
 
 }  // namespace meshnow

@@ -31,7 +31,8 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-meshnow::Networking::Networking(meshnow::NodeState& state) : state_{state}, packet_handler_{*this}, handshaker_{send_worker_, state_, router_} {}
+meshnow::Networking::Networking(meshnow::NodeState& state)
+    : state_{state}, packet_handler_{*this}, handshaker_{send_worker_, state_, router_} {}
 
 void meshnow::Networking::start() {
     if (state_.isRoot()) {
@@ -40,11 +41,21 @@ void meshnow::Networking::start() {
     }
     ESP_LOGI(TAG, "Starting main run loop!");
     run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
+
+    // also start the send worker
+    send_worker_.start();
 }
 
 void meshnow::Networking::stop() {
     ESP_LOGI(TAG, "Stopping main run loop!");
+
+    // TODO this will fail an assert because of https://github.com/espressif/esp-idf/issues/10664
+    // TODO maybe wrap all of networking in yet another thread which we can safely stop ourselves (no jthread)
+
     run_thread_.request_stop();
+
+    // also stop the send worker
+    send_worker_.stop();
 }
 
 void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {

@@ -35,12 +35,12 @@ class Networking {
     Networking& operator=(const Networking&) = delete;
 
     /**
-     * Start the networking stack.
+     * Starts the networking stack.
      */
     void start();
 
     /**
-     * Stop the networking stack.
+     * Stops the networking stack.
      */
     void stop();
 
