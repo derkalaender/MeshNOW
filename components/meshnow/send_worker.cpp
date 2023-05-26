@@ -12,6 +12,9 @@ static const char* TAG = CREATE_TAG("SendWorker");
 static const auto SEND_SUCCESS_BIT = BIT0;
 static const auto SEND_FAILED_BIT = BIT1;
 
+// timeout for sending a packet (ms)
+static const auto SEND_TIMEOUT = 10 * 1000;
+
 void meshnow::SendWorker::start() {
     ESP_LOGI(TAG, "Starting!");
     run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
@@ -51,11 +54,9 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
         meshnow::Networking::rawSend(item.dest_addr, meshnow::packets::serialize(item.packet));
 
         // wait for callback
-        // TODO use custom delay, don't wait forever (risk of deadlock)
-        auto bits = waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, portMAX_DELAY);
-        bool ok = bits & SEND_SUCCESS_BIT;
+        auto bits = waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, SEND_TIMEOUT);
 
-        if (ok) {
+        if (bits & SEND_SUCCESS_BIT) {
             ESP_LOGD(TAG, "Send successful");
 
             // handle QoS
@@ -64,12 +65,18 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
             } else {
                 // TODO
             }
-
-        } else {
+        } else if (bits & SEND_FAILED_BIT) {
             ESP_LOGD(TAG, "Send failed");
 
             // TODO handle qos and requeue if the dest node is still registered
             item.result_promise.set_value(SendResult{false});
+        } else {
+            ESP_LOGW(TAG,
+                     "Sending of packet timed out.\n"
+                     "This should never happen in regular usage and hints at a problem with either ESP-NOW, hardware "
+                     "or the rest of your code.\n"
+                     "To avoid any potential deadlocks, the packet that was tried to be sent will be dropped "
+                     "regardless of QoS.");
         }
     }
 
