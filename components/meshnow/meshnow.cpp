@@ -164,6 +164,8 @@ void meshnow::App::stop() {
 
     ESP_LOGI(TAG, "Stopping MeshNOW as %s...", state_.isRoot() ? "root" : "node");
 
+    networking_.stop();
+
     ESP_LOGI(TAG, "Mesh stopped! 🛑");
 
     state_.setStarted(false);

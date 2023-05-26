@@ -12,7 +12,15 @@ static const char* TAG = CREATE_TAG("SendWorker");
 static const auto SEND_SUCCESS_BIT = BIT0;
 static const auto SEND_FAILED_BIT = BIT1;
 
-meshnow::SendWorker::SendWorker() : thread_{&SendWorker::run, this} {}
+void meshnow::SendWorker::start() {
+    ESP_LOGI(TAG, "Starting!");
+    run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
+}
+
+void meshnow::SendWorker::stop() {
+    ESP_LOGI(TAG, "Stopping!");
+    run_thread_.request_stop();
+}
 
 void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet) {
     // TODO use custom delay, don't wait forever (risk of deadlock)
@@ -24,8 +32,8 @@ void meshnow::SendWorker::sendFinished(bool successful) {
     waitbits_.setBits(successful ? SEND_SUCCESS_BIT : SEND_FAILED_BIT);
 }
 
-[[noreturn]] void meshnow::SendWorker::run() {
-    while (true) {
+void meshnow::SendWorker::runLoop(std::stop_token stoken) {
+    while (!stoken.stop_requested()) {
         // wait forever for the next item in the queue
         auto optional = send_queue_.pop(portMAX_DELAY);
         if (!optional) {
@@ -44,4 +52,6 @@ void meshnow::SendWorker::sendFinished(bool successful) {
             ESP_LOGD(TAG, "Send failed");
         }
     }
+
+    // TODO cleanup
 }

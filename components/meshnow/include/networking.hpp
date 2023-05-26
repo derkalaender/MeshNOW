@@ -1,10 +1,13 @@
 #pragma once
 
+#include <freertos/portmacro.h>
+
 #include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "constants.hpp"
+#include "handshaker.hpp"
 #include "packet_handler.hpp"
 #include "receive_meta.hpp"
 #include "router.hpp"
@@ -32,9 +35,14 @@ class Networking {
     Networking& operator=(const Networking&) = delete;
 
     /**
-     * Start the networking stack.
+     * Starts the networking stack.
      */
     void start();
+
+    /**
+     * Stops the networking stack.
+     */
+    void stop();
 
     /**
      * Send callback for ESP-NOW.
@@ -47,6 +55,13 @@ class Networking {
     void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
 
    private:
+    struct ReceiveQueueItem {
+        MAC_ADDR from;
+        MAC_ADDR to;
+        Buffer data;
+        int rssi;
+    };
+
     /**
      * Sends raw data to the specific device (ESP-NOW wrapper).
      * @param mac_addr the MAC address of the device to send to
@@ -57,17 +72,41 @@ class Networking {
     static void rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
 
     /**
+     * Main run loop of the network stack.
+     * - Queries incoming packets and handles them
+     * - Checks if connected neighbors are still alive
+     * - Sends still alive beacon itself
+     * - Tries to reconnect if not connected
+     * @param stoken stop token to interrupt the loop
+     */
+    void runLoop(const std::stop_token& stoken);
+
+    /**
+     * Calculates the minimum timeout until the next action should be performed.
+     * This is used as the timeout for waiting for a new packet.
+     * @return the timeout value
+     */
+    TickType_t nextActionIn() const;
+
+    /**
      * Reference to the current state of the node. Used to know if we are connected or not, etc.
      */
     NodeState& state_;
 
-    SendWorker send_worker_{};
-
     routing::Router router_{state_.isRoot()};
 
-    std::vector<std::shared_ptr<PacketHandler>> packet_handlers_{};
+    SendWorker send_worker_{};
 
-    friend SendWorker;
+    std::jthread run_thread_{};
+
+    packets::PacketHandler packet_handler_;
+
+    Handshaker handshaker_;
+
+    util::Queue<ReceiveQueueItem> receive_queue_{10};
+
+    friend class SendWorker;
+    friend class packets::PacketHandler;
 };
 
 }  // namespace meshnow

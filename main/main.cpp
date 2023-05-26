@@ -32,9 +32,9 @@ static const char *TAG = "main";
 //     }
 // }
 
-static std::unique_ptr<meshnow::App> MeshNOW;
-
 static const meshnow::MAC_ADDR root{0x24, 0x6f, 0x28, 0x4a, 0x63, 0x3c};
+
+static std::unique_ptr<meshnow::App> MeshNOW;
 
 extern "C" void app_main(void) {
     meshnow::MAC_ADDR my_mac;
