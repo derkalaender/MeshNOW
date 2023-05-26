@@ -1,8 +1,9 @@
 #pragma once
 
+#include <freertos/portmacro.h>
+
 #include <optional>
 #include <vector>
-#include <freertos/portmacro.h>
 
 #include "constants.hpp"
 #include "packet_handler.hpp"
@@ -96,10 +97,9 @@ class Handshaker {
     void sendConnectReply(const MAC_ADDR& mac_addr, bool accept);
 
     /**
-     * Tries to connect to the best current parent if enough time elapsed and parents are available.
-     * @return true if a connection request was sent and the node is awaiting a response
+     * Tries to connect to the best current parent.
      */
-    bool tryConnect();
+    void tryConnect();
 
     /**
      * Reject a possible parent.

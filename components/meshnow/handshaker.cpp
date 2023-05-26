@@ -29,18 +29,31 @@ void meshnow::Handshaker::performHandshake() {
     // don't do anything if already connected
     if (state_.isConnected()) return;
 
+    // check if we have found enough parents in case we were searching, so we can stop
+    if (searching_for_parents_ && !parent_infos_.empty()) {
+        if (xTaskGetTickCount() - first_parent_found_time_ >= pdMS_TO_TICKS(FIRST_PARENT_WAIT_MS)) {
+            ESP_LOGI(TAG, "Found enough parents");
+            searching_for_parents_ = false;
+        }
+    }
+
+    // if we aren't searching but also don't have any parents yet, it means we have exhausted all potential parents
+    // in this case we reset everything and start searching again
+    if (!searching_for_parents_ && parent_infos_.empty()) {
+        ESP_LOGI(TAG, "Exhausted all potential parents");
+        reset();
+    }
+
     if (searching_for_parents_) {
         // check that we should send a search probe again
         if (xTaskGetTickCount() - last_search_probe_time_ < pdMS_TO_TICKS(SEARCH_PROBE_FREQ_MS)) return;
         sendSearchProbe();
-        // immediately try to connect, otherwise searching_for_parents will never be set to false (TODO fix this)
-        searching_for_parents_ = !tryConnect();
     } else {
         // check that the last connect request timed out, otherwise return and keep waiting
         if (xTaskGetTickCount() - last_connect_request_time_ < pdMS_TO_TICKS(CONNECT_TIMEOUT_MS)) return;
 
-        // tryConnect() returns true if it sent a connection request so in that case we stop searching for new parents
-        searching_for_parents_ = !tryConnect();
+        // try to connect to the best parent
+        tryConnect();
     }
 }
 
@@ -99,18 +112,8 @@ void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept
                                                                   meshnow::packets::Verdict{root_mac.value(), accept}});
 }
 
-bool meshnow::Handshaker::tryConnect() {
-    // check if we found any parents
-    if (parent_infos_.empty()) {
-        ESP_LOGI(TAG, "No parents found, not trying to connect");
-        return false;
-    }
-
-    // check if we still wait for other potential parents
-    if (xTaskGetTickCount() - first_parent_found_time_ < pdMS_TO_TICKS(FIRST_PARENT_WAIT_MS)) {
-        ESP_LOGI(TAG, "Still waiting for other potential parents, not trying to connect");
-        return false;
-    }
+void meshnow::Handshaker::tryConnect() {
+    assert(!parent_infos_.empty());
 
     // find the best parent
     auto best_parent = std::max_element(parent_infos_.begin(), parent_infos_.end(),
@@ -130,7 +133,6 @@ bool meshnow::Handshaker::tryConnect() {
     // remove the best parent from the list because we don't want to reconnect in case of failure
     parent_infos_.erase(best_parent);
     // TODO check if plsconnect actually arrived
-    return true;
 }
 
 void meshnow::Handshaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
