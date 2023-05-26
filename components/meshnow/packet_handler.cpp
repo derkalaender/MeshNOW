@@ -53,11 +53,13 @@ void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Ack& p) {
-    // TODO
+    // TODO check if for this node, otherwise forward
+    net_.send_worker_.receivedAck(p.seq_num_ack);
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Nack& p) {
-    // TODO
+    // TODO check if for this node, otherwise forward
+    net_.send_worker_.receivedNack(p.seq_num_nack, p.reason);
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,

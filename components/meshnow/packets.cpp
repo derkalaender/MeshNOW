@@ -66,12 +66,15 @@ static void serialize(S&, meshnow::packets::MeshReachable&) {
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::Ack& p) {
+    s.container1b(p.target);
     s.value2b(p.seq_num_ack);
 }
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::Nack& p) {
+    s.container1b(p.target);
     s.value2b(p.seq_num_nack);
+    s.value1b(p.reason);
 }
 
 template <typename S>

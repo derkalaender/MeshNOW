@@ -53,6 +53,8 @@ class Queue {
         }
     }
 
+    void clear() { xQueueReset(queue.get()); }
+
    private:
     std::unique_ptr<QueueDefinition, void (*)(QueueDefinition*)> queue;
 };

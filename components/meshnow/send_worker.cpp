@@ -1,7 +1,10 @@
 #include "send_worker.hpp"
 
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
+#include <algorithm>
 #include <utility>
 
 #include "internal.hpp"
@@ -14,21 +17,43 @@ static const auto SEND_FAILED_BIT = BIT1;
 
 // timeout for sending a packet (ms)
 static const auto SEND_TIMEOUT = 10 * 1000;
+// maximum number of retries for sending a packet
+static const uint8_t MAX_RETRIES = 5;
+// timeout for waiting for an ack (ms)
+static const auto ACK_TIMEOUT = 500;
+// frequency for checking QoS (ms)
+static const auto QOS_CHECK_FREQUENCY = 100;
 
 void meshnow::SendWorker::start() {
     ESP_LOGI(TAG, "Starting!");
     run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
+    qos_thread_ = std::jthread{[this](std::stop_token stoken) { qosChecker(stoken); }};
 }
 
 void meshnow::SendWorker::stop() {
     ESP_LOGI(TAG, "Stopping!");
     run_thread_.request_stop();
+    qos_thread_.request_stop();
+
+    // cleanup //
+
+    // resolve all qos promises and clear container
+    for (auto& item : qos_vector_) {
+        item.item.result_promise.set_value(SendResult{false});
+    }
+    qos_vector_.clear();
+
+    // clear send queue
+    send_queue_.clear();
+
+    // clear waitbits
+    waitbits_.clearBits(SEND_SUCCESS_BIT | SEND_FAILED_BIT);
 }
 
 void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet,
                                         SendPromise&& result_promise, bool priority, QoS qos) {
     // TODO use custom delay, don't wait forever (risk of deadlock)
-    SendQueueItem item{std::move(packet), std::move(result_promise), dest_addr, qos};
+    SendQueueItem item{std::move(packet), std::move(result_promise), dest_addr, qos, 0};
     if (priority) {
         send_queue_.push_front(std::move(item), portMAX_DELAY);
     } else {
@@ -39,6 +64,43 @@ void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::pack
 void meshnow::SendWorker::sendFinished(bool successful) {
     // simply use waitbits to notify the waiting thread
     waitbits_.setBits(successful ? SEND_SUCCESS_BIT : SEND_FAILED_BIT);
+}
+
+void meshnow::SendWorker::receivedAck(uint8_t seq_num) {
+    // TODO mutex
+
+    // go through QoS list and find the item with matching sequence number
+    auto item = std::find_if(qos_vector_.begin(), qos_vector_.end(),
+                             [seq_num](const QoSVectorItem& item) { return item.item.packet.seq_num == seq_num; });
+    if (item == qos_vector_.end()) return;  // not found
+
+    // resolve promise to ok
+    item->item.result_promise.set_value(SendResult{true});
+    // remove item from QoS vector
+    qos_vector_.erase(item);
+}
+
+void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason reason) {
+    // TODO mutex
+
+    // go through QoS list and find the item with matching sequence number
+    auto item = std::find_if(qos_vector_.begin(), qos_vector_.end(),
+                             [seq_num](const QoSVectorItem& item) { return item.item.packet.seq_num == seq_num; });
+    if (item == qos_vector_.end()) return;  // not found
+
+    // immediately fail the promise if the reason is NOT_FOUND
+    if (reason == packets::Nack::Reason::NOT_FOUND) {
+        // immediately resolve the promise to fail
+        item->item.result_promise.set_value(SendResult{false});
+    } else {
+        // update the retries counter
+        item->item.retries++;
+        // requeue the item (always in the back per default, priority is atm not supported for requeueing) TODO
+        send_queue_.push_back(std::move(item->item), portMAX_DELAY);
+    }
+
+    // remove the item from the QoS vector as we either don't need it anymore or the send worker will re-add it
+    qos_vector_.erase(item);
 }
 
 void meshnow::SendWorker::runLoop(std::stop_token stoken) {
@@ -61,9 +123,18 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
 
             // handle QoS
             if (item.qos == QoS::FIRE_AND_FORGET) {
+                // simply resolve the promise
                 item.result_promise.set_value(SendResult{true});
+            } else if (item.qos == QoS::WAIT_ACK_TIMEOUT) {
+                // if we haven't exhausted the maximum number of retries, add the item to the QoS vector
+                if (item.retries < MAX_RETRIES) {
+                    qos_vector_.push_back(QoSVectorItem{std::move(item), xTaskGetTickCount()});
+                } else {
+                    // immediately resolve the promise to fail
+                    item.result_promise.set_value(SendResult{false});
+                }
             } else {
-                // TODO
+                // TODO maybe add a new QoS level that waits for an ack forever?
             }
         } else if (bits & SEND_FAILED_BIT) {
             ESP_LOGD(TAG, "Send failed");
@@ -79,6 +150,25 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
                      "regardless of QoS.");
         }
     }
+}
 
-    // TODO cleanup
+void meshnow::SendWorker::qosChecker(std::stop_token stoken) {
+    while (!stoken.stop_requested()) {
+        // TODO mutex
+
+        auto now = xTaskGetTickCount();
+
+        // remove all items from QoS vector that have timed out and instead requeue them for sending
+        // (always in the back per default, priority is atm not supported for requeueing) TODO
+        std::erase_if(qos_vector_, [now, this](QoSVectorItem& item) {
+            if (now - item.sent_time > pdMS_TO_TICKS(ACK_TIMEOUT)) {
+                item.item.retries++;
+                send_queue_.push_back(std::move(item.item), portMAX_DELAY);
+                return true;
+            }
+            return false;
+        });
+
+        vTaskDelay(pdMS_TO_TICKS(QOS_CHECK_FREQUENCY));
+    }
 }

@@ -84,13 +84,16 @@ struct MeshReachable {
 struct Ack {
     static constexpr Type type{Type::DATA_ACK};
 
+    meshnow::MAC_ADDR target;
     uint16_t seq_num_ack;
 };
 
 struct Nack {
     static constexpr Type type{Type::DATA_NACK};
 
+    meshnow::MAC_ADDR target;
     uint16_t seq_num_nack;
+    enum class Reason : uint8_t { NOT_FOUND, CANNOT_PROCESS } reason;
 };
 
 template <bool is_lwip>

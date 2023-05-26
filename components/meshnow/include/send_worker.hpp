@@ -1,5 +1,7 @@
 #pragma once
 
+#include <freertos/portmacro.h>
+
 #include <cstdint>
 #include <future>
 #include <queue.hpp>
@@ -69,12 +71,31 @@ class SendWorker {
      */
     void sendFinished(bool successful);
 
+    /**
+     * Notify of a received ACK.
+     * @param seq_num sequence number of the ACK
+     */
+    void receivedAck(uint8_t seq_num);
+
+    /**
+     * Notify of a received NACK.
+     * @param seq_num sequence number of the NACK
+     * @param reason reason for the NACK
+     */
+    void receivedNack(uint8_t seq_num, packets::Nack::Reason reason);
+
    private:
     struct SendQueueItem {
         packets::Packet packet;
         SendPromise result_promise;
         MAC_ADDR dest_addr;
         QoS qos;
+        uint8_t retries;
+    };
+
+    struct QoSVectorItem {
+        SendQueueItem item;
+        TickType_t sent_time;
     };
 
     /**
@@ -84,14 +105,23 @@ class SendWorker {
     void runLoop(std::stop_token stoken);
 
     /**
+     * Goes through all waiting packets and checks if they have timed out and need to be requeued.
+     * @param stoken stop token to interrupt the loop
+     */
+    void qosChecker(std::stop_token stoken);
+
+    /**
      * Communicates a successful/failed payload from the send callback to the thread.
      */
-    util::WaitBits waitbits_{};
+    util::WaitBits waitbits_;
 
     // TODO extract max_items to constants.hpp
     util::Queue<SendQueueItem> send_queue_{10};
 
-    std::jthread run_thread_{};
+    std::vector<QoSVectorItem> qos_vector_;
+
+    std::jthread run_thread_;
+    std::jthread qos_thread_;
 };
 
 }  // namespace meshnow
