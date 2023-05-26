@@ -80,8 +80,9 @@ class Handshaker {
 
     /**
      * Answers a search probe with a reply.
+     * @param mac_addr the MAC address of the child
      */
-    void sendSearchProbeReply();
+    void sendSearchProbeReply(const MAC_ADDR& mac_addr);
 
     /**
      * Sends a connect request to a parent.

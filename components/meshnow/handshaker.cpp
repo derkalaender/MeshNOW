@@ -92,9 +92,9 @@ void meshnow::Handshaker::sendSearchProbe() {
     last_search_probe_time_ = xTaskGetTickCount();
 }
 
-void meshnow::Handshaker::sendSearchProbeReply() {
+void meshnow::Handshaker::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Sending i am here");
-    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR,
+    send_worker_.enqueuePacket(mac_addr,
                                meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::IAmHere{}},
                                SendPromise{}, true, QoS::FIRE_AND_FORGET);
 }
@@ -226,7 +226,7 @@ void meshnow::Handshaker::receivedSearchProbe(const MAC_ADDR& mac_addr) {
     // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
     if (!state_.isRootReachable()) return;
 
-    sendSearchProbeReply();
+    sendSearchProbeReply(mac_addr);
 }
 
 void meshnow::Handshaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
