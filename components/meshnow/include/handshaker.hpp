@@ -87,14 +87,14 @@ class Handshaker {
      * Sends a connect request to a parent.
      * @param mac_addr the MAC address of the parent
      */
-    void sendConnectRequest(const MAC_ADDR& mac_addr);
+    void sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise);
 
     /**
      * Sends a connect reply to a child.
      * @param mac_addr the MAC address of the child
      * @param accept whether the connection request is accepted
      */
-    void sendConnectReply(const MAC_ADDR& mac_addr, bool accept);
+    void sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise);
 
     /**
      * Tries to connect to the best current parent.

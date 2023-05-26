@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <future>
 #include <queue.hpp>
 #include <thread>
 #include <waitbits.hpp>
@@ -10,6 +12,23 @@
 namespace meshnow {
 
 class Networking;
+
+class SendResult {
+   public:
+    explicit SendResult(bool successful) : successful_{successful} {}
+
+    bool isOk() const { return successful_; }
+
+   private:
+    bool successful_;
+};
+
+using SendPromise = std::promise<SendResult>;
+
+enum class QoS : uint8_t {
+    FIRE_AND_FORGET,   // Resolves the promise with a result immediately after the send callback is called
+    WAIT_ACK_TIMEOUT,  // Waits a certain amount of time for an ACK matching the packet's sequence number
+};
 
 /**
  * Thread that handles sending payloads by queueing them and working them off one by one.
@@ -38,8 +57,12 @@ class SendWorker {
      *
      * @param dest_addr MAC address of the immediate node to send the packet to
      * @param packet packet to send
+     * @param result_promise promise to resolve according to the chosen QoS
+     * @param priority whether the packet should be put in front of the queue
+     * @param qos quality of service
      */
-    void enqueuePacket(const MAC_ADDR& dest_addr, packets::Packet packet);
+    void enqueuePacket(const MAC_ADDR& dest_addr, packets::Packet packet, SendPromise&& result_promise, bool priority,
+                       QoS qos);
 
     /**
      * Notify the SendWorker that the previous payload was sent.
@@ -48,8 +71,10 @@ class SendWorker {
 
    private:
     struct SendQueueItem {
-        MAC_ADDR dest_addr{};
-        packets::Packet packet{};
+        packets::Packet packet;
+        SendPromise result_promise;
+        MAC_ADDR dest_addr;
+        QoS qos;
     };
 
     /**
@@ -63,7 +88,6 @@ class SendWorker {
      */
     util::WaitBits waitbits_{};
 
-    // TODO make priority queue because we want events and stuff first
     // TODO extract max_items to constants.hpp
     util::Queue<SendQueueItem> send_queue_{10};
 

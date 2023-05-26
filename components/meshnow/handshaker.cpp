@@ -84,32 +84,38 @@ TickType_t meshnow::Handshaker::nextActionIn(TickType_t now) const {
 
 void meshnow::Handshaker::sendSearchProbe() {
     ESP_LOGI(TAG, "Sending anyone there");
-    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR, meshnow::packets::Packet{meshnow::generateSequenceNumber(),
-                                                                                     meshnow::packets::AnyoneThere{}});
+    send_worker_.enqueuePacket(
+        meshnow::BROADCAST_MAC_ADDR,
+        meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::AnyoneThere{}}, SendPromise{},
+        true, QoS::FIRE_AND_FORGET);
     // update the last time we sent a search probe
     last_search_probe_time_ = xTaskGetTickCount();
 }
 
 void meshnow::Handshaker::sendSearchProbeReply() {
     ESP_LOGI(TAG, "Sending i am here");
-    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR, meshnow::packets::Packet{meshnow::generateSequenceNumber(),
-                                                                                     meshnow::packets::IAmHere{}});
+    send_worker_.enqueuePacket(meshnow::BROADCAST_MAC_ADDR,
+                               meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::IAmHere{}},
+                               SendPromise{}, true, QoS::FIRE_AND_FORGET);
 }
 
-void meshnow::Handshaker::sendConnectRequest(const MAC_ADDR& mac_addr) {
+void meshnow::Handshaker::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending connect request to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     send_worker_.enqueuePacket(
-        mac_addr, meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::PlsConnect{}});
+        mac_addr, meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::PlsConnect{}},
+        std::move(result_promise), true, QoS::FIRE_AND_FORGET);
 }
 
-void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept) {
+void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending verdict to " MAC_FORMAT ": %s", MAC_FORMAT_ARGS(mac_addr),
              accept ? "accept" : "rejectParent");
     auto root_mac = router_.getRootMac();
     // we can be sure that the root mac is set because we only send a verdict if we have a parent
     assert(root_mac);
-    send_worker_.enqueuePacket(mac_addr, meshnow::packets::Packet{meshnow::generateSequenceNumber(),
-                                                                  meshnow::packets::Verdict{root_mac.value(), accept}});
+    send_worker_.enqueuePacket(mac_addr,
+                               meshnow::packets::Packet{meshnow::generateSequenceNumber(),
+                                                        meshnow::packets::Verdict{root_mac.value(), accept}},
+                               std::move(result_promise), true, QoS::FIRE_AND_FORGET);
 }
 
 void meshnow::Handshaker::tryConnect() {
@@ -124,15 +130,20 @@ void meshnow::Handshaker::tryConnect() {
              best_parent->rssi);
 
     // send pls connect payload
-    sendConnectRequest(best_parent->mac_addr);
+    SendPromise promise;
+    auto feature = promise.get_future();
+    sendConnectRequest(best_parent->mac_addr, std::move(promise));
 
-    // set the current time as the last time we sent a connection request
-    // this allows us to timeout if we don't get a reply
-    last_connect_request_time_ = xTaskGetTickCount();
+    // wait for the result
+    // if ok we want to update the last time we requested a connections
+    // otherwise do nothing so that the next best parent is chosen next time
+    if (feature.get().isOk()) {
+        // this allows us to timeout if we don't get a reply
+        last_connect_request_time_ = xTaskGetTickCount();
+    }
 
     // remove the best parent from the list because we don't want to reconnect in case of failure
     parent_infos_.erase(best_parent);
-    // TODO check if plsconnect actually arrived
 }
 
 void meshnow::Handshaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
@@ -226,8 +237,14 @@ void meshnow::Handshaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes
     // TODO check can accept
-    sendConnectReply(mac_addr, true);
-    // TODO wait for packet to be sent
+    SendPromise promise;
+    auto feature = promise.get_future();
+    sendConnectReply(mac_addr, true, std::move(promise));
+    // wait for result and in case of failure do nothing, the child will sort things out itself
+    if (!feature.get().isOk()) {
+        ESP_LOGI(TAG, "Failed to send connect reply. Ignoring.");
+        return;
+    }
 
     // TODO add child information
 
@@ -236,6 +253,8 @@ void meshnow::Handshaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     auto res = router_.hopToParent();
     if (res.reached_target_) return;
     assert(res.next_hop_);
-    send_worker_.enqueuePacket(*res.next_hop_,
-                               packets::Packet{meshnow::generateSequenceNumber(), packets::NodeConnected{mac_addr}});
+    // TODO add back in
+    //    send_worker_.enqueuePacket(*res.next_hop_,
+    //                               packets::Packet{meshnow::generateSequenceNumber(),
+    //                               packets::NodeConnected{mac_addr}});
 }

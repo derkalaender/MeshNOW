@@ -22,9 +22,15 @@ void meshnow::SendWorker::stop() {
     run_thread_.request_stop();
 }
 
-void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet) {
+void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet,
+                                        SendPromise&& result_promise, bool priority, QoS qos) {
     // TODO use custom delay, don't wait forever (risk of deadlock)
-    send_queue_.push_back({dest_addr, std::move(packet)}, portMAX_DELAY);
+    SendQueueItem item{std::move(packet), std::move(result_promise), dest_addr, qos};
+    if (priority) {
+        send_queue_.push_front(std::move(item), portMAX_DELAY);
+    } else {
+        send_queue_.push_back(std::move(item), portMAX_DELAY);
+    }
 }
 
 void meshnow::SendWorker::sendFinished(bool successful) {
@@ -40,16 +46,30 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
             ESP_LOGE(TAG, "Failed to pop from send queue");
             continue;
         }
-        auto& [mac_addr, packet] = *optional;
-        meshnow::Networking::rawSend(mac_addr, meshnow::packets::serialize(packet));
+        SendQueueItem item{std::move(*optional)};
+
+        meshnow::Networking::rawSend(item.dest_addr, meshnow::packets::serialize(item.packet));
 
         // wait for callback
         // TODO use custom delay, don't wait forever (risk of deadlock)
         auto bits = waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, portMAX_DELAY);
-        if (bits & SEND_SUCCESS_BIT) {
+        bool ok = bits & SEND_SUCCESS_BIT;
+
+        if (ok) {
             ESP_LOGD(TAG, "Send successful");
+
+            // handle QoS
+            if (item.qos == QoS::FIRE_AND_FORGET) {
+                item.result_promise.set_value(SendResult{true});
+            } else {
+                // TODO
+            }
+
         } else {
             ESP_LOGD(TAG, "Send failed");
+
+            // TODO handle qos and requeue if the dest node is still registered
+            item.result_promise.set_value(SendResult{false});
         }
     }
 
