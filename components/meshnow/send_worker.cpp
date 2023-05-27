@@ -5,6 +5,7 @@
 #include <freertos/task.h>
 
 #include <algorithm>
+#include <mutex>
 #include <utility>
 
 #include "internal.hpp"
@@ -67,7 +68,7 @@ void meshnow::SendWorker::sendFinished(bool successful) {
 }
 
 void meshnow::SendWorker::receivedAck(uint8_t seq_num) {
-    // TODO mutex
+    std::scoped_lock lock{qos_mutex_};
 
     // go through QoS list and find the item with matching sequence number
     auto item = std::find_if(qos_vector_.begin(), qos_vector_.end(),
@@ -81,7 +82,7 @@ void meshnow::SendWorker::receivedAck(uint8_t seq_num) {
 }
 
 void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason reason) {
-    // TODO mutex
+    std::scoped_lock lock{qos_mutex_};
 
     // go through QoS list and find the item with matching sequence number
     auto item = std::find_if(qos_vector_.begin(), qos_vector_.end(),
@@ -128,6 +129,7 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
             } else if (item.qos == QoS::WAIT_ACK_TIMEOUT) {
                 // if we haven't exhausted the maximum number of retries, add the item to the QoS vector
                 if (item.retries < MAX_RETRIES) {
+                    std::scoped_lock lock{qos_mutex_};
                     qos_vector_.push_back(QoSVectorItem{std::move(item), xTaskGetTickCount()});
                 } else {
                     // immediately resolve the promise to fail
@@ -154,20 +156,22 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
 
 void meshnow::SendWorker::qosChecker(std::stop_token stoken) {
     while (!stoken.stop_requested()) {
-        // TODO mutex
-
         auto now = xTaskGetTickCount();
 
-        // remove all items from QoS vector that have timed out and instead requeue them for sending
-        // (always in the back per default, priority is atm not supported for requeueing) TODO
-        std::erase_if(qos_vector_, [now, this](QoSVectorItem& item) {
-            if (now - item.sent_time > pdMS_TO_TICKS(ACK_TIMEOUT)) {
-                item.item.retries++;
-                send_queue_.push_back(std::move(item.item), portMAX_DELAY);
-                return true;
-            }
-            return false;
-        });
+        {
+            std::scoped_lock lock{qos_mutex_};
+
+            // remove all items from QoS vector that have timed out and instead requeue them for sending
+            // (always in the back per default, priority is atm not supported for requeueing) TODO
+            std::erase_if(qos_vector_, [now, this](QoSVectorItem& item) {
+                if (now - item.sent_time > pdMS_TO_TICKS(ACK_TIMEOUT)) {
+                    item.item.retries++;
+                    send_queue_.push_back(std::move(item.item), portMAX_DELAY);
+                    return true;
+                }
+                return false;
+            });
+        }
 
         vTaskDelay(pdMS_TO_TICKS(QOS_CHECK_FREQUENCY));
     }

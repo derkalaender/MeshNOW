@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <future>
+#include <mutex>
 #include <queue.hpp>
 #include <thread>
 #include <waitbits.hpp>
@@ -119,6 +120,7 @@ class SendWorker {
     util::Queue<SendQueueItem> send_queue_{10};
 
     std::vector<QoSVectorItem> qos_vector_;
+    std::mutex qos_mutex_;
 
     std::jthread run_thread_;
     std::jthread qos_thread_;
