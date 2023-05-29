@@ -15,13 +15,19 @@ static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
 void meshnow::KeepAlive::checkConnections() {
     auto now = xTaskGetTickCount();
+
     // iterate while erasing
     for (auto it = neighbors.cbegin(); it != neighbors.cend();) {
-        auto& [mac_addr, last_beacon_received] = *it;
+        auto [mac_addr, last_beacon_received] = *it;
         if (now - last_beacon_received > KEEP_ALIVE_TIMEOUT) {
-            ESP_LOGW(TAG, "Neighbor " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(mac_addr));
-            // TODO disconnect or send node disconnect packet
             it = neighbors.erase(it);
+            ESP_LOGW(TAG, "Neighbor " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(mac_addr));
+            auto result = router_.removeNeighbor(mac_addr);
+            if (result == routing::Router::RemoveResult::PARENT) {
+                sendMeshUnreachable();
+            } else if (result == routing::Router::RemoveResult::CHILD) {
+                sendChildDisconnected(mac_addr);
+            }
         } else {
             ++it;
         }
@@ -30,6 +36,7 @@ void meshnow::KeepAlive::checkConnections() {
 
 void meshnow::KeepAlive::sendKeepAliveBeacon() {
     if (xTaskGetTickCount() - last_beacon_sent_ < KEEP_ALIVE_BEACON_INTERVAL) return;
+    if (neighbors.empty()) return;
 
     ESP_LOGD(TAG, "Sending keep alive beacons to %d neighbors", neighbors.size());
 
@@ -68,4 +75,22 @@ void meshnow::KeepAlive::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& mac_ad
 void meshnow::KeepAlive::trackNeighbor(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Starting tracking neighbor " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     neighbors[mac_addr] = xTaskGetTickCount();
+}
+
+void meshnow::KeepAlive::sendMeshUnreachable() {
+    if (neighbors.empty()) return;
+    ESP_LOGI(TAG, "Sending mesh unreachable event to %d neighbors", neighbors.size());
+
+    // enqueue packet for each neighbor
+    for (auto& [mac_addr, _] : neighbors) {
+        send_worker_.enqueuePayload(mac_addr, false, packets::MeshUnreachable{}, SendPromise{}, true, QoS::NEXT_HOP);
+    }
+}
+
+void meshnow::KeepAlive::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr) {
+    ESP_LOGI(TAG, "Sending child disconnected event");
+
+    // send to root
+    send_worker_.enqueuePayload(ROOT_MAC_ADDR, true, packets::NodeDisconnected{mac_addr}, SendPromise{}, true,
+                                QoS::NEXT_HOP);
 }
