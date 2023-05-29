@@ -25,6 +25,7 @@ void meshnow::KeepAlive::checkConnections() {
             auto result = router_.removeNeighbor(mac_addr);
             if (result == routing::Router::RemoveResult::PARENT) {
                 sendMeshUnreachable();
+                state_.setConnected(false);
             } else if (result == routing::Router::RemoveResult::CHILD) {
                 sendChildDisconnected(mac_addr);
             }
