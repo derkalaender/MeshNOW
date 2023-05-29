@@ -31,9 +31,6 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-meshnow::Networking::Networking(meshnow::NodeState& state)
-    : state_{state}, packet_handler_{*this}, handshaker_{send_worker_, state_, router_} {}
-
 void meshnow::Networking::start() {
     if (state_.isRoot()) {
         // the root can always reach itself

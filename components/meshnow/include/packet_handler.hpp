@@ -1,6 +1,7 @@
 #pragma once
 
 #include <variant>
+#include <vector>
 
 #include "packets.hpp"
 #include "receive_meta.hpp"

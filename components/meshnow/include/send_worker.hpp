@@ -11,6 +11,7 @@
 
 #include "constants.hpp"
 #include "packets.hpp"
+#include "router.hpp"
 
 namespace meshnow {
 
@@ -29,7 +30,8 @@ class SendResult {
 using SendPromise = std::promise<SendResult>;
 
 enum class QoS : uint8_t {
-    FIRE_AND_FORGET,   // Resolves the promise with a result immediately after the send callback is called
+    SINGLE_TRY,        // Resolves the promise with a result immediately after the send callback is called
+    NEXT_HOP,          // Guaranteed sending to the next hop, as long as the next hop hasn't disconnected
     WAIT_ACK_TIMEOUT,  // Waits a certain amount of time for an ACK matching the packet's sequence number
 };
 
@@ -38,7 +40,7 @@ enum class QoS : uint8_t {
  */
 class SendWorker {
    public:
-    SendWorker() = default;
+    explicit SendWorker(routing::Router& router) : router_{router} {}
 
     SendWorker(const SendWorker&) = delete;
     SendWorker& operator=(const SendWorker&) = delete;
@@ -58,14 +60,15 @@ class SendWorker {
      *
      * @note Blocks if send queue is full.
      *
-     * @param dest_addr MAC address of the immediate node to send the packet to
+     * @param dest_addr MAC address of the target node to send to. Immediate node will be resolved if resolve is true.
+     * @param resolve whether to resolve the immediate node
      * @param packet packet to send
      * @param result_promise promise to resolve according to the chosen QoS
      * @param priority whether the packet should be put in front of the queue
      * @param qos quality of service
      */
-    void enqueuePacket(const MAC_ADDR& dest_addr, packets::Packet packet, SendPromise&& result_promise, bool priority,
-                       QoS qos);
+    void enqueuePacket(const MAC_ADDR& dest_addr, bool resolve, packets::Packet packet, SendPromise&& result_promise,
+                       bool priority, QoS qos);
 
     /**
      * Notify the SendWorker that the previous payload was sent.
@@ -87,9 +90,10 @@ class SendWorker {
 
    private:
     struct SendQueueItem {
+        MAC_ADDR dest_addr;
+        bool resolve;
         packets::Packet packet;
         SendPromise result_promise;
-        MAC_ADDR dest_addr;
         QoS qos;
         uint8_t retries;
     };
@@ -103,13 +107,19 @@ class SendWorker {
      * Loop of the SendWorker thread.
      * @param stoken stop token to interrupt the loop
      */
-    void runLoop(std::stop_token stoken);
+    void runLoop(const std::stop_token& stoken);
+
+    void handleSuccess(SendQueueItem&& item, const MAC_ADDR& next_hop);
+
+    void handleFailure(SendQueueItem&& item, const MAC_ADDR& next_hop);
 
     /**
      * Goes through all waiting packets and checks if they have timed out and need to be requeued.
      * @param stoken stop token to interrupt the loop
      */
-    void qosChecker(std::stop_token stoken);
+    void qosChecker(const std::stop_token& stoken);
+
+    routing::Router& router_;
 
     /**
      * Communicates a successful/failed payload from the send callback to the thread.

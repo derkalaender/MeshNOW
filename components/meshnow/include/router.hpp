@@ -8,22 +8,27 @@
 
 namespace meshnow::routing {
 
+// TODO MUTEX because we access it from send worker and main loop
+
 class Router {
    public:
-    struct HopResult {
-        bool reached_target_;
-        std::optional<MAC_ADDR> next_hop_;
-    };
-
     explicit Router(bool is_root) : is_root_{is_root} {}
 
-    HopResult hopToNode(const MAC_ADDR& mac) const;
+    /**
+     * Resolve the next hop for a given MAC address.
+     * @param mac MAC address of the target node
+     * @return next hop MAC address if possible, otherwise std::nullopt
+     */
+    std::optional<MAC_ADDR> resolve(const MAC_ADDR& mac) const;
 
-    HopResult hopToRoot() const;
+    /**
+     * Whether the neighbor exists
+     * @param mac MAC address of the neighbor
+     * @return true if the neighbor exists, false otherwise
+     */
+    bool hasNeighbor(const MAC_ADDR& mac) const;
 
-    HopResult hopToParent() const;
-
-    std::vector<MAC_ADDR> hopToChildren() const;
+    std::vector<MAC_ADDR> getChildMacs() const;
 
     /**
      * Set the MAC address of the root node.
@@ -42,6 +47,23 @@ class Router {
      * @param mac MAC address of the parent node
      */
     void setParentMac(const MAC_ADDR& mac) { layout_.parent.emplace(mac); }
+
+    std::optional<MAC_ADDR> getParentMac() const {
+        if (layout_.parent) {
+            return layout_.parent->mac;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    /**
+     * Adds the given child as a direct child of the given parent.
+     * @param child_mac mac of the (in)direct child
+     * @param parent_mac parent mac, can be this node's mac
+     */
+    void addChild(const MAC_ADDR& child_mac, const MAC_ADDR& parent_mac);
+
+    MAC_ADDR getThisMac() const { return layout_.mac; }
 
     /**
      * Update the RSSI value of a node.

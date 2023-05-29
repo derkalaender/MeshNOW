@@ -85,25 +85,25 @@ TickType_t meshnow::Handshaker::nextActionIn(TickType_t now) const {
 void meshnow::Handshaker::sendSearchProbe() {
     ESP_LOGI(TAG, "Sending anyone there");
     send_worker_.enqueuePacket(
-        meshnow::BROADCAST_MAC_ADDR,
+        meshnow::BROADCAST_MAC_ADDR, false,
         meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::AnyoneThere{}}, SendPromise{},
-        true, QoS::FIRE_AND_FORGET);
+        true, QoS::SINGLE_TRY);
     // update the last time we sent a search probe
     last_search_probe_time_ = xTaskGetTickCount();
 }
 
 void meshnow::Handshaker::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Sending i am here");
-    send_worker_.enqueuePacket(mac_addr,
+    send_worker_.enqueuePacket(mac_addr, false,
                                meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::IAmHere{}},
-                               SendPromise{}, true, QoS::FIRE_AND_FORGET);
+                               SendPromise{}, true, QoS::SINGLE_TRY);
 }
 
 void meshnow::Handshaker::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending connect request to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     send_worker_.enqueuePacket(
-        mac_addr, meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::PlsConnect{}},
-        std::move(result_promise), true, QoS::FIRE_AND_FORGET);
+        mac_addr, false, meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::PlsConnect{}},
+        std::move(result_promise), true, QoS::SINGLE_TRY);
 }
 
 void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
@@ -112,10 +112,15 @@ void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept
     auto root_mac = router_.getRootMac();
     // we can be sure that the root mac is set because we only send a verdict if we have a parent
     assert(root_mac);
-    send_worker_.enqueuePacket(mac_addr,
+    send_worker_.enqueuePacket(mac_addr, false,
                                meshnow::packets::Packet{meshnow::generateSequenceNumber(),
                                                         meshnow::packets::Verdict{root_mac.value(), accept}},
-                               std::move(result_promise), true, QoS::FIRE_AND_FORGET);
+                               std::move(result_promise), true, QoS::SINGLE_TRY);
+}
+
+void meshnow::Handshaker::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac,
+                                                meshnow::SendPromise&& result_promise) {
+    ESP_LOGI(TAG, "Sending child connect event");
 }
 
 void meshnow::Handshaker::tryConnect() {
@@ -237,24 +242,29 @@ void meshnow::Handshaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes
     // TODO check can accept
-    SendPromise promise;
-    auto feature = promise.get_future();
-    sendConnectReply(mac_addr, true, std::move(promise));
-    // wait for result and in case of failure do nothing, the child will sort things out itself
-    if (!feature.get().isOk()) {
-        ESP_LOGI(TAG, "Failed to send connect reply. Ignoring.");
-        return;
+    {
+        SendPromise promise;
+        auto feature = promise.get_future();
+        sendConnectReply(mac_addr, true, std::move(promise));
+        // wait for result and in case of failure do nothing, the child will sort things out itself
+        if (!feature.get().isOk()) {
+            ESP_LOGI(TAG, "Failed to send connect reply. Ignoring.");
+            return;
+        }
     }
 
-    // TODO add child information
-
     // send a node connected event to root
-    // TODO refactor into own method
-    auto res = router_.hopToParent();
-    if (res.reached_target_) return;
-    assert(res.next_hop_);
-    // TODO add back in
-    //    send_worker_.enqueuePacket(*res.next_hop_,
-    //                               packets::Packet{meshnow::generateSequenceNumber(),
-    //                               packets::NodeConnected{mac_addr}});
+    if (!state_.isRoot()) {
+        SendPromise promise;
+        auto feature = promise.get_future();
+        sendChildConnectEvent(mac_addr, std::move(promise));
+        // wait for result and in case of failure don't add to router
+        if (!feature.get().isOk()) {
+            ESP_LOGI(TAG, "Failed to send child connect event. Not adding to router.");
+            return;
+        }
+    }
+
+    // add child to router
+    router_.addChild(mac_addr, router_.getThisMac());
 }

@@ -21,7 +21,7 @@ struct NodeTree {
     explicit NodeTree(const MAC_ADDR& mac) : mac{mac} {}
 
     MAC_ADDR mac;
-    std::list<T> children;
+    std::list<std::shared_ptr<T>> children;
 };
 
 struct IndirectChild : NodeTree<IndirectChild> {};
@@ -51,8 +51,8 @@ bool contains(const T& tree, const MAC_ADDR& mac) {
         return true;
     }
 
-    for (auto&& child : tree.children) {
-        if (contains(child, mac)) {
+    for (const auto& child : tree.children) {
+        if (contains(*child, mac)) {
             return true;
         }
     }

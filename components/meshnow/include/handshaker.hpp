@@ -98,6 +98,12 @@ class Handshaker {
     void sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise);
 
     /**
+     * Sends a child connect event to the root.
+     * @param child_mac the MAC address of the child
+     */
+    void sendChildConnectEvent(const MAC_ADDR& child_mac, SendPromise&& result_promise);
+
+    /**
      * Tries to connect to the best current parent.
      */
     void tryConnect();

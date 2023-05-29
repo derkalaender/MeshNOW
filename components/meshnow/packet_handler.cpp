@@ -6,6 +6,11 @@ meshnow::packets::PacketHandler::PacketHandler(meshnow::Networking& networking) 
 
 void meshnow::packets::PacketHandler::handlePacket(const meshnow::ReceiveMeta& meta,
                                                    const meshnow::packets::Payload& p) {
+    // update RSSI
+    net_.router_.updateRssi(meta.src_addr, meta.rssi);
+
+    // TODO handle sequence numbers
+
     // simply visit the corresponding overload
     std::visit([&](const auto& p) { handle(meta, p); }, p);
 }

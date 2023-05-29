@@ -51,10 +51,10 @@ void meshnow::SendWorker::stop() {
     waitbits_.clearBits(SEND_SUCCESS_BIT | SEND_FAILED_BIT);
 }
 
-void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, meshnow::packets::Packet packet,
+void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, bool resolve, meshnow::packets::Packet packet,
                                         SendPromise&& result_promise, bool priority, QoS qos) {
     // TODO use custom delay, don't wait forever (risk of deadlock)
-    SendQueueItem item{std::move(packet), std::move(result_promise), dest_addr, qos, 0};
+    SendQueueItem item{dest_addr, resolve, std::move(packet), std::move(result_promise), qos, 0};
     if (priority) {
         send_queue_.push_front(std::move(item), portMAX_DELAY);
     } else {
@@ -96,7 +96,7 @@ void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason re
     } else {
         // update the retries counter
         item->item.retries++;
-        // requeue the item (always in the back per default, priority is atm not supported for requeueing) TODO
+        // requeue the item
         send_queue_.push_back(std::move(item->item), portMAX_DELAY);
     }
 
@@ -104,7 +104,7 @@ void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason re
     qos_vector_.erase(item);
 }
 
-void meshnow::SendWorker::runLoop(std::stop_token stoken) {
+void meshnow::SendWorker::runLoop(const std::stop_token& stoken) {
     while (!stoken.stop_requested()) {
         // wait forever for the next item in the queue
         auto optional = send_queue_.pop(portMAX_DELAY);
@@ -114,35 +114,34 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
         }
         SendQueueItem item{std::move(*optional)};
 
-        meshnow::Networking::rawSend(item.dest_addr, meshnow::packets::serialize(item.packet));
+        assert(!(item.resolve && item.qos == QoS::SINGLE_TRY) && "Cannot resolve with no QoS");
+
+        MAC_ADDR addr;
+        if (item.resolve) {
+            // resolve next hop mac
+            auto next_hop_mac = router_.resolve(item.dest_addr);
+            if (!next_hop_mac) {
+                // couldn't resolve next hop mac
+                ESP_LOGD(TAG, "Couldn't resolve next hop mac");
+                item.result_promise.set_value(SendResult{false});
+                continue;
+            }
+            addr = *next_hop_mac;
+        } else {
+            addr = item.dest_addr;
+        }
+
+        meshnow::Networking::rawSend(addr, meshnow::packets::serialize(item.packet));
 
         // wait for callback
         auto bits = waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, SEND_TIMEOUT);
 
         if (bits & SEND_SUCCESS_BIT) {
             ESP_LOGD(TAG, "Send successful");
-
-            // handle QoS
-            if (item.qos == QoS::FIRE_AND_FORGET) {
-                // simply resolve the promise
-                item.result_promise.set_value(SendResult{true});
-            } else if (item.qos == QoS::WAIT_ACK_TIMEOUT) {
-                // if we haven't exhausted the maximum number of retries, add the item to the QoS vector
-                if (item.retries < MAX_RETRIES) {
-                    std::scoped_lock lock{qos_mutex_};
-                    qos_vector_.push_back(QoSVectorItem{std::move(item), xTaskGetTickCount()});
-                } else {
-                    // immediately resolve the promise to fail
-                    item.result_promise.set_value(SendResult{false});
-                }
-            } else {
-                // TODO maybe add a new QoS level that waits for an ack forever?
-            }
+            handleSuccess(std::move(item), addr);
         } else if (bits & SEND_FAILED_BIT) {
             ESP_LOGD(TAG, "Send failed");
-
-            // TODO handle qos and requeue if the dest node is still registered
-            item.result_promise.set_value(SendResult{false});
+            handleFailure(std::move(item), addr);
         } else {
             ESP_LOGW(TAG,
                      "Sending of packet timed out.\n"
@@ -154,7 +153,46 @@ void meshnow::SendWorker::runLoop(std::stop_token stoken) {
     }
 }
 
-void meshnow::SendWorker::qosChecker(std::stop_token stoken) {
+void meshnow::SendWorker::handleSuccess(meshnow::SendWorker::SendQueueItem&& item, const MAC_ADDR&) {
+    switch (item.qos) {
+        case QoS::SINGLE_TRY:
+        case QoS::NEXT_HOP: {
+            // in these cases, we are done and can successfully resolve the promise
+            item.result_promise.set_value(SendResult{true});
+        } break;
+        case QoS::WAIT_ACK_TIMEOUT: {
+            // if we haven't exhausted the maximum number of retries, add the item to the QoS vector
+            if (item.retries < MAX_RETRIES) {
+                std::scoped_lock lock{qos_mutex_};
+                qos_vector_.push_back(QoSVectorItem{std::move(item), xTaskGetTickCount()});
+            } else {
+                // immediately resolve the promise to fail
+                item.result_promise.set_value(SendResult{false});
+            }
+        } break;
+    }
+}
+
+void meshnow::SendWorker::handleFailure(meshnow::SendWorker::SendQueueItem&& item, const MAC_ADDR& next_hop) {
+    switch (item.qos) {
+        case QoS::SINGLE_TRY: {
+            item.result_promise.set_value(SendResult{false});
+        } break;
+        case QoS::WAIT_ACK_TIMEOUT:
+        case QoS::NEXT_HOP: {
+            // check if the resolved host is still registered
+            if (router_.hasNeighbor(next_hop)) {
+                // requeue the item
+                send_queue_.push_back(std::move(item), portMAX_DELAY);
+            } else {
+                // immediately resolve the promise to fail
+                item.result_promise.set_value(SendResult{false});
+            }
+        } break;
+    }
+}
+
+void meshnow::SendWorker::qosChecker(const std::stop_token& stoken) {
     while (!stoken.stop_requested()) {
         auto now = xTaskGetTickCount();
 
@@ -162,7 +200,6 @@ void meshnow::SendWorker::qosChecker(std::stop_token stoken) {
             std::scoped_lock lock{qos_mutex_};
 
             // remove all items from QoS vector that have timed out and instead requeue them for sending
-            // (always in the back per default, priority is atm not supported for requeueing) TODO
             std::erase_if(qos_vector_, [now, this](QoSVectorItem& item) {
                 if (now - item.sent_time > pdMS_TO_TICKS(ACK_TIMEOUT)) {
                     item.item.retries++;
