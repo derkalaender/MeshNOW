@@ -113,6 +113,9 @@ void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept
 void meshnow::Handshaker::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac,
                                                 meshnow::SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending child connect event");
+    send_worker_.enqueuePayload(meshnow::ROOT_MAC_ADDR, true,
+                                meshnow::packets::NodeConnected{router_.getThisMac(), child_mac},
+                                std::move(result_promise), true, QoS::NEXT_HOP);
 }
 
 void meshnow::Handshaker::tryConnect() {

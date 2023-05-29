@@ -51,9 +51,13 @@ void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, c
     net_.handshaker_.receivedConnectResponse(meta.src_addr, p.accept, p.root_mac);
 }
 
-void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
-                                             const meshnow::packets::NodeConnected& p) {
-    // TODO
+void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta&, const meshnow::packets::NodeConnected& p) {
+    // add node
+    net_.router_.addChild(p.child_mac, p.parent_mac);
+    // forward upwards
+    if (!net_.state_.isRoot()) {
+        net_.send_worker_.enqueuePayload(meshnow::ROOT_MAC_ADDR, true, p, SendPromise{}, true, QoS::NEXT_HOP);
+    }
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,

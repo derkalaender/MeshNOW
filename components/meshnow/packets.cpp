@@ -46,6 +46,7 @@ static void serialize(S& s, meshnow::packets::Verdict& p) {
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::NodeConnected& p) {
+    s.container1b(p.parent_mac);
     s.container1b(p.child_mac);
 }
 

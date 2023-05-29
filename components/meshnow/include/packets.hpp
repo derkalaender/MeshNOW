@@ -64,6 +64,7 @@ struct Verdict {
 struct NodeConnected {
     static constexpr Type type{Type::NODE_CONNECTED};
 
+    MAC_ADDR parent_mac;
     MAC_ADDR child_mac;
 };
 

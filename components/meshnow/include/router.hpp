@@ -40,17 +40,17 @@ class Router {
      * Get the MAC address of the root node.
      * @return MAC address of the root node
      */
-    std::optional<MAC_ADDR> getRootMac() const { return is_root_ ? layout_.mac : root_mac_; }
+    std::optional<MAC_ADDR> getRootMac() const { return is_root_ ? layout_->mac : root_mac_; }
 
     /**
      * Set the MAC address of the parent node.
      * @param mac MAC address of the parent node
      */
-    void setParentMac(const MAC_ADDR& mac) { layout_.parent.emplace(mac); }
+    void setParentMac(const MAC_ADDR& mac) { layout_->parent.emplace(mac); }
 
     std::optional<MAC_ADDR> getParentMac() const {
-        if (layout_.parent) {
-            return layout_.parent->mac;
+        if (layout_->parent) {
+            return layout_->parent->mac;
         } else {
             return std::nullopt;
         }
@@ -63,7 +63,7 @@ class Router {
      */
     void addChild(const MAC_ADDR& child_mac, const MAC_ADDR& parent_mac);
 
-    MAC_ADDR getThisMac() const { return layout_.mac; }
+    MAC_ADDR getThisMac() const { return layout_->mac; }
 
     /**
      * Update the RSSI value of a node.
@@ -74,8 +74,8 @@ class Router {
 
    private:
     bool is_root_;
-    std::optional<MAC_ADDR> root_mac_{};
-    Layout layout_{};
+    std::optional<MAC_ADDR> root_mac_;
+    std::shared_ptr<Layout> layout_{std::make_shared<Layout>()};
 };
 
 }  // namespace meshnow::routing
