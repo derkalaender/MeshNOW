@@ -109,7 +109,7 @@ void meshnow::Networking::runLoop(const std::stop_token& stoken) {
                 // TODO ignore if sequence_number is less than last received
 
                 // if deserialization worked, give packet to packet handler
-                ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->seq_num};
+                ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->id};
                 packet_handler_.handlePacket(meta, packet->payload);
             }
         }

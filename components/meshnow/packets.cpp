@@ -67,13 +67,13 @@ static void serialize(S&, meshnow::packets::MeshReachable&) {
 template <typename S>
 static void serialize(S& s, meshnow::packets::Ack& p) {
     s.container1b(p.target);
-    s.value2b(p.seq_num_ack);
+    s.value4b(p.id_ack);
 }
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::Nack& p) {
     s.container1b(p.target);
-    s.value2b(p.seq_num_nack);
+    s.value4b(p.id_nack);
     s.value1b(p.reason);
 }
 
@@ -111,7 +111,7 @@ static void serialize(S& s, meshnow::packets::CustomDataNext& p) {
 struct Header {
     std::array<uint8_t, 3> magic;
     meshnow::packets::Type type;
-    uint16_t seq_num;
+    uint32_t id;
 };
 
 // serialize header
@@ -119,7 +119,7 @@ template <typename S>
 static void serialize(S& s, Header& h) {
     s.container1b(h.magic);
     s.value1b(h.type);
-    s.value2b(h.seq_num);
+    s.value4b(h.id);
 }
 
 meshnow::Buffer meshnow::packets::serialize(const meshnow::packets::Packet& packet) {
@@ -127,7 +127,7 @@ meshnow::Buffer meshnow::packets::serialize(const meshnow::packets::Packet& pack
     buffer.reserve(sizeof(meshnow::packets::Packet));
 
     // write header
-    Header header{meshnow::MAGIC, getType(packet.payload), packet.seq_num};
+    Header header{meshnow::MAGIC, getType(packet.payload), packet.id};
     auto written_header_size = bitsery::quickSerialization(OutputAdapter{buffer}, header);
 
     // create out adapter that is advanced past the header so that we don't overwrite it with the payload
@@ -235,7 +235,7 @@ std::optional<meshnow::packets::Packet> meshnow::packets::deserialize(const mesh
 
     // wrap payload in packet
     if (payload) {
-        return meshnow::packets::Packet{header.seq_num, *payload};
+        return meshnow::packets::Packet{header.id, *payload};
     } else {
         return std::nullopt;
     }

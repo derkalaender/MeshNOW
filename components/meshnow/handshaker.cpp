@@ -5,7 +5,6 @@
 
 #include "internal.hpp"
 #include "send_worker.hpp"
-#include "seq.hpp"
 
 static const char* TAG = CREATE_TAG("Handshaker");
 
@@ -84,26 +83,21 @@ TickType_t meshnow::Handshaker::nextActionIn(TickType_t now) const {
 
 void meshnow::Handshaker::sendSearchProbe() {
     ESP_LOGI(TAG, "Sending anyone there");
-    send_worker_.enqueuePacket(
-        meshnow::BROADCAST_MAC_ADDR, false,
-        meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::AnyoneThere{}}, SendPromise{},
-        true, QoS::SINGLE_TRY);
+    send_worker_.enqueuePayload(meshnow::BROADCAST_MAC_ADDR, false, meshnow::packets::AnyoneThere{}, SendPromise{},
+                                true, QoS::SINGLE_TRY);
     // update the last time we sent a search probe
     last_search_probe_time_ = xTaskGetTickCount();
 }
 
 void meshnow::Handshaker::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Sending i am here");
-    send_worker_.enqueuePacket(mac_addr, false,
-                               meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::IAmHere{}},
-                               SendPromise{}, true, QoS::SINGLE_TRY);
+    send_worker_.enqueuePayload(mac_addr, false, meshnow::packets::IAmHere{}, SendPromise{}, true, QoS::SINGLE_TRY);
 }
 
 void meshnow::Handshaker::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending connect request to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
-    send_worker_.enqueuePacket(
-        mac_addr, false, meshnow::packets::Packet{meshnow::generateSequenceNumber(), meshnow::packets::PlsConnect{}},
-        std::move(result_promise), true, QoS::SINGLE_TRY);
+    send_worker_.enqueuePayload(mac_addr, false, meshnow::packets::PlsConnect{}, std::move(result_promise), true,
+                                QoS::SINGLE_TRY);
 }
 
 void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
@@ -112,10 +106,8 @@ void meshnow::Handshaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept
     auto root_mac = router_.getRootMac();
     // we can be sure that the root mac is set because we only send a verdict if we have a parent
     assert(root_mac);
-    send_worker_.enqueuePacket(mac_addr, false,
-                               meshnow::packets::Packet{meshnow::generateSequenceNumber(),
-                                                        meshnow::packets::Verdict{root_mac.value(), accept}},
-                               std::move(result_promise), true, QoS::SINGLE_TRY);
+    send_worker_.enqueuePayload(mac_addr, false, meshnow::packets::Verdict{root_mac.value(), accept},
+                                std::move(result_promise), true, QoS::SINGLE_TRY);
 }
 
 void meshnow::Handshaker::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac,

@@ -85,14 +85,14 @@ struct Ack {
     static constexpr Type type{Type::DATA_ACK};
 
     meshnow::MAC_ADDR target;
-    uint16_t seq_num_ack;
+    uint32_t id_ack;
 };
 
 struct Nack {
     static constexpr Type type{Type::DATA_NACK};
 
     meshnow::MAC_ADDR target;
-    uint16_t seq_num_nack;
+    uint32_t id_nack;
     enum class Reason : uint8_t { NOT_FOUND, CANNOT_PROCESS } reason;
 };
 
@@ -125,7 +125,7 @@ using Payload = std::variant<StillAlive, AnyoneThere, IAmHere, PlsConnect, Verdi
                              CustomDataNext>;
 
 struct Packet {
-    uint16_t seq_num;
+    uint32_t id;
     Payload payload;
 };
 

@@ -56,19 +56,19 @@ class SendWorker {
     void stop();
 
     /**
-     * Add packet to the send queue.
+     * Add a payload to the send queue.
      *
      * @note Blocks if send queue is full.
      *
      * @param dest_addr MAC address of the target node to send to. Immediate node will be resolved if resolve is true.
      * @param resolve whether to resolve the immediate node
-     * @param packet packet to send
+     * @param payload payload to send
      * @param result_promise promise to resolve according to the chosen QoS
      * @param priority whether the packet should be put in front of the queue
      * @param qos quality of service
      */
-    void enqueuePacket(const MAC_ADDR& dest_addr, bool resolve, packets::Packet packet, SendPromise&& result_promise,
-                       bool priority, QoS qos);
+    void enqueuePayload(const MAC_ADDR& dest_addr, bool resolve, const packets::Payload& payload,
+                        SendPromise&& result_promise, bool priority, QoS qos);
 
     /**
      * Notify the SendWorker that the previous payload was sent.

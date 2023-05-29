@@ -9,7 +9,7 @@ void meshnow::packets::PacketHandler::handlePacket(const meshnow::ReceiveMeta& m
     // update RSSI
     net_.router_.updateRssi(meta.src_addr, meta.rssi);
 
-    // TODO handle sequence numbers
+    // TODO handle id
 
     // simply visit the corresponding overload
     std::visit([&](const auto& p) { handle(meta, p); }, p);
@@ -59,12 +59,12 @@ void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Ack& p) {
     // TODO check if for this node, otherwise forward
-    net_.send_worker_.receivedAck(p.seq_num_ack);
+    net_.send_worker_.receivedAck(p.id_ack);
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Nack& p) {
     // TODO check if for this node, otherwise forward
-    net_.send_worker_.receivedNack(p.seq_num_nack, p.reason);
+    net_.send_worker_.receivedNack(p.id_nack, p.reason);
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,

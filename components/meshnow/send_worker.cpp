@@ -1,6 +1,7 @@
 #include "send_worker.hpp"
 
 #include <esp_log.h>
+#include <esp_random.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -27,8 +28,8 @@ static const auto QOS_CHECK_FREQUENCY = 100;
 
 void meshnow::SendWorker::start() {
     ESP_LOGI(TAG, "Starting!");
-    run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
-    qos_thread_ = std::jthread{[this](std::stop_token stoken) { qosChecker(stoken); }};
+    run_thread_ = std::jthread{[this](const std::stop_token& stoken) { runLoop(stoken); }};
+    qos_thread_ = std::jthread{[this](const std::stop_token& stoken) { qosChecker(stoken); }};
 }
 
 void meshnow::SendWorker::stop() {
@@ -51,10 +52,14 @@ void meshnow::SendWorker::stop() {
     waitbits_.clearBits(SEND_SUCCESS_BIT | SEND_FAILED_BIT);
 }
 
-void meshnow::SendWorker::enqueuePacket(const MAC_ADDR& dest_addr, bool resolve, meshnow::packets::Packet packet,
-                                        SendPromise&& result_promise, bool priority, QoS qos) {
+void meshnow::SendWorker::enqueuePayload(const MAC_ADDR& dest_addr, bool resolve, const packets::Payload& payload,
+                                         SendPromise&& result_promise, bool priority, QoS qos) {
+    // create packet
+    // TODO don't use magic multiple times
+    packets::Packet packet{esp_random(), payload};
+
     // TODO use custom delay, don't wait forever (risk of deadlock)
-    SendQueueItem item{dest_addr, resolve, std::move(packet), std::move(result_promise), qos, 0};
+    SendQueueItem item{dest_addr, resolve, packet, std::move(result_promise), qos, 0};
     if (priority) {
         send_queue_.push_front(std::move(item), portMAX_DELAY);
     } else {
@@ -72,7 +77,7 @@ void meshnow::SendWorker::receivedAck(uint8_t seq_num) {
 
     // go through QoS list and find the item with matching sequence number
     auto item = std::find_if(qos_vector_.begin(), qos_vector_.end(),
-                             [seq_num](const QoSVectorItem& item) { return item.item.packet.seq_num == seq_num; });
+                             [seq_num](const QoSVectorItem& item) { return item.item.packet.id == seq_num; });
     if (item == qos_vector_.end()) return;  // not found
 
     // resolve promise to ok
@@ -86,7 +91,7 @@ void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason re
 
     // go through QoS list and find the item with matching sequence number
     auto item = std::find_if(qos_vector_.begin(), qos_vector_.end(),
-                             [seq_num](const QoSVectorItem& item) { return item.item.packet.seq_num == seq_num; });
+                             [seq_num](const QoSVectorItem& item) { return item.item.packet.id == seq_num; });
     if (item == qos_vector_.end()) return;  // not found
 
     // immediately fail the promise if the reason is NOT_FOUND
