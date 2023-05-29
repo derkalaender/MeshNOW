@@ -65,7 +65,11 @@ void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
     // stop tracking
     net_.keep_alive_.stopTrackingNeighbor(p.child_mac);
     // remove from routing
-    net_.router_.removeNeighbor(p.child_mac);
+    net_.router_.removeChild(p.child_mac);
+
+    if (!net_.state_.isRoot()) {
+        net_.send_worker_.enqueuePayload(meshnow::ROOT_MAC_ADDR, true, p, SendPromise{}, true, QoS::NEXT_HOP);
+    }
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,

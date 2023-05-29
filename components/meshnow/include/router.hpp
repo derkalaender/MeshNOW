@@ -72,6 +72,13 @@ class Router {
     MAC_ADDR getThisMac() const { return layout_->mac; }
 
     /**
+     * Removes the given (indirect) child from the layout.
+     * @param mac mac of the child to remove
+     * @param mac
+     */
+    void removeChild(const MAC_ADDR& mac);
+
+    /**
      * Removes the given parent or child from the layout.
      * @param mac mac of the node to remove
      * @return which kind of node was removed

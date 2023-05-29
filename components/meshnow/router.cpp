@@ -91,6 +91,14 @@ void meshnow::routing::Router::addChild(const MAC_ADDR& child_mac, const MAC_ADD
     }
 }
 
+void meshnow::routing::Router::removeChild(const MAC_ADDR& mac) {
+    if (routing::remove(layout_, mac)) {
+        ESP_LOGI(TAG, "Removed child " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+    } else {
+        ESP_LOGE(TAG, "Could not remove child " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+    }
+}
+
 meshnow::routing::Router::RemoveResult meshnow::routing::Router::removeNeighbor(const meshnow::MAC_ADDR& mac) {
     // can't be ourselves
     assert(mac != layout_->mac);
