@@ -31,8 +31,8 @@ void meshnow::packets::PacketHandler::handlePacket(const meshnow::ReceiveMeta& m
 
 // HANDLERS //
 
-void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::StillAlive& p) {
-    // TODO
+void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::KeepAlive& p) {
+    net_.keep_alive_.receivedKeepAliveBeacon(meta.src_addr);
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::AnyoneThere&) {

@@ -10,7 +10,7 @@ namespace meshnow::packets {
 
 enum class Type : uint8_t {
     // HEALTH
-    STILL_ALIVE,  ///< Periodically sent by all nodes to detect dead nodes
+    KEEP_ALIVE,  ///< Periodically sent by all nodes to detect dead nodes
 
     // HANDSHAKE
     ANYONE_THERE,  ///< Sent by a node trying to connect to the mesh
@@ -38,8 +38,8 @@ enum class Type : uint8_t {
     MAX,  ///< Number of packet types. Meta, should not actually be used
 };
 
-struct StillAlive {
-    static constexpr Type type{Type::STILL_ALIVE};
+struct KeepAlive {
+    static constexpr Type type{Type::KEEP_ALIVE};
 };
 
 struct AnyoneThere {
@@ -121,9 +121,9 @@ struct DataNext {
 using LwipDataNext = DataNext<true>;
 using CustomDataNext = DataNext<false>;
 
-using Payload = std::variant<StillAlive, AnyoneThere, IAmHere, PlsConnect, Verdict, NodeConnected, NodeDisconnected,
-                             MeshUnreachable, MeshReachable, Ack, Nack, LwipDataFirst, CustomDataFirst, LwipDataNext,
-                             CustomDataNext>;
+using Payload =
+    std::variant<KeepAlive, AnyoneThere, IAmHere, PlsConnect, Verdict, NodeConnected, NodeDisconnected, MeshUnreachable,
+                 MeshReachable, Ack, Nack, LwipDataFirst, CustomDataFirst, LwipDataNext, CustomDataNext>;
 
 struct Packet {
     uint32_t id;

@@ -8,6 +8,7 @@
 
 #include "constants.hpp"
 #include "handshaker.hpp"
+#include "keep_alive.hpp"
 #include "packet_handler.hpp"
 #include "receive_meta.hpp"
 #include "router.hpp"
@@ -102,6 +103,8 @@ class Networking {
     packets::PacketHandler packet_handler_{*this};
 
     Handshaker handshaker_{send_worker_, state_, router_};
+
+    KeepAlive keep_alive_{send_worker_, state_, router_};
 
     util::Queue<ReceiveQueueItem> receive_queue_{10};
 

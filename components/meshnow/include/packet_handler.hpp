@@ -32,7 +32,7 @@ class PacketHandler {
    private:
     // HANDLERS for each payload type //
 
-    void handle(const ReceiveMeta& meta, const StillAlive& p);
+    void handle(const ReceiveMeta& meta, const KeepAlive& p);
     void handle(const ReceiveMeta& meta, const AnyoneThere& p);
     void handle(const ReceiveMeta& meta, const IAmHere& p);
     void handle(const ReceiveMeta& meta, const PlsConnect& p);

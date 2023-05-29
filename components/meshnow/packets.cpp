@@ -19,7 +19,7 @@ using InputAdapter = bitsery::InputBufferAdapter<meshnow::Buffer>;
 namespace meshnow::packets {
 
 template <typename S>
-static void serialize(S&, meshnow::packets::StillAlive&) {
+static void serialize(S&, meshnow::packets::KeepAlive&) {
     // no data
 }
 
@@ -184,8 +184,8 @@ std::optional<meshnow::packets::Packet> meshnow::packets::deserialize(const mesh
 
     // select corresponding deserializer
     switch (header.type) {
-        case Type::STILL_ALIVE:
-            deserializePayload<meshnow::packets::StillAlive>(payload, it, size);
+        case Type::KEEP_ALIVE:
+            deserializePayload<meshnow::packets::KeepAlive>(payload, it, size);
             break;
         case Type::ANYONE_THERE:
             deserializePayload<meshnow::packets::AnyoneThere>(payload, it, size);
