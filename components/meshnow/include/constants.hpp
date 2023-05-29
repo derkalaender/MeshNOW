@@ -31,7 +31,7 @@ constexpr int MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - DATA_HEADER_NEXT_SIZE};
 
 constexpr int RECEIVE_QUEUE_SIZE{10};
 
-constexpr int HEADER_SIZE{6};
+constexpr int HEADER_SIZE{8};
 
 using Buffer = std::vector<uint8_t>;
 }  // namespace meshnow

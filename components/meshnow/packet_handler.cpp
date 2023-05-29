@@ -1,6 +1,12 @@
+
 #include "packet_handler.hpp"
 
+#include <esp_log.h>
+
+#include "internal.hpp"
 #include "networking.hpp"
+
+static const char* TAG = CREATE_TAG("PacketHandler");
 
 meshnow::packets::PacketHandler::PacketHandler(meshnow::Networking& networking) : net_{networking} {}
 
@@ -9,7 +15,15 @@ void meshnow::packets::PacketHandler::handlePacket(const meshnow::ReceiveMeta& m
     // update RSSI
     net_.router_.updateRssi(meta.src_addr, meta.rssi);
 
-    // TODO handle id
+    // handle duplicate packets
+    auto it = last_id.find(meta.src_addr);
+    if (it != last_id.end()) {
+        if (it->second == meta.id) {
+            ESP_LOGW(TAG, "Duplicate packet, ignoring");
+            return;
+        }
+    }
+    last_id[meta.src_addr] = meta.id;
 
     // simply visit the corresponding overload
     std::visit([&](const auto& p) { handle(meta, p); }, p);

@@ -5,9 +5,10 @@
 #include <optional>
 
 #include "constants.hpp"
+#include "internal.hpp"
 #include "layout.hpp"
 
-static const char* TAG = "Router";
+static const char* TAG = CREATE_TAG("Router");
 
 std::optional<meshnow::MAC_ADDR> meshnow::routing::Router::resolve(const MAC_ADDR& mac) const {
     if (mac == layout_.mac || mac == BROADCAST_MAC_ADDR) {
@@ -77,7 +78,7 @@ void meshnow::routing::Router::updateRssi(const MAC_ADDR& mac, int rssi) {
         }
     }
 
-    ESP_LOGI(TAG, "Updated RSSI of neighbor " MAC_FORMAT " to %d", MAC_FORMAT_ARGS(mac), rssi);
+    ESP_LOGV(TAG, "Updated RSSI of neighbor " MAC_FORMAT " to %d", MAC_FORMAT_ARGS(mac), rssi);
 }
 
 void meshnow::routing::Router::addChild(const MAC_ADDR& child_mac, const MAC_ADDR& parent_mac) {}

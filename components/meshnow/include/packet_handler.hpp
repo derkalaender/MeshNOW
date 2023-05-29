@@ -1,8 +1,10 @@
 #pragma once
 
+#include <map>
 #include <variant>
 #include <vector>
 
+#include "constants.hpp"
 #include "packets.hpp"
 #include "receive_meta.hpp"
 
@@ -47,6 +49,8 @@ class PacketHandler {
     void handle(const ReceiveMeta& meta, const CustomDataNext& p);
 
     Networking& net_;
+
+    std::map<MAC_ADDR, uint32_t> last_id;
 };
 
 }  // namespace packets
