@@ -21,10 +21,12 @@ struct NodeTree {
     explicit NodeTree(const MAC_ADDR& mac) : mac{mac} {}
 
     MAC_ADDR mac;
-    std::list<T> children;
+    std::list<std::shared_ptr<T>> children;
 };
 
-struct IndirectChild : NodeTree<IndirectChild> {};
+struct IndirectChild : NodeTree<IndirectChild> {
+    using NodeTree::NodeTree;
+};
 
 struct DirectChild : NodeTree<IndirectChild> {
     using NodeTree::NodeTree;
@@ -39,23 +41,57 @@ struct Parent {
     int rssi{0};
 };
 
-struct Layout : NodeTree<DirectChild> {
+struct Layout : NodeTree<DirectChild>, std::enable_shared_from_this<Layout> {
     Layout() : NodeTree{queryThisMac()} {}
 
     std::optional<Parent> parent;
 };
 
 template <typename T>
-bool contains(const T& tree, const MAC_ADDR& mac) {
-    if (tree.mac == mac) {
+bool contains(const std::shared_ptr<T>& tree, const MAC_ADDR& mac) {
+    if (tree->mac == mac) {
         return true;
     }
 
-    for (auto&& child : tree.children) {
+    for (const auto& child : tree->children) {
         if (contains(child, mac)) {
             return true;
         }
     }
+    return false;
+}
+
+template <typename T>
+inline auto createChild(const MAC_ADDR& mac);
+
+template <>
+inline auto createChild<Layout>(const MAC_ADDR& mac) {
+    return std::make_shared<DirectChild>(mac);
+}
+
+template <>
+inline auto createChild<DirectChild>(const MAC_ADDR& mac) {
+    return std::make_shared<IndirectChild>(mac);
+}
+
+template <>
+inline auto createChild<IndirectChild>(const MAC_ADDR& mac) {
+    return std::make_shared<IndirectChild>(mac);
+}
+
+template <typename T>
+bool append(const std::shared_ptr<T>& tree, const MAC_ADDR& find_mac, const MAC_ADDR& append_mac) {
+    if (tree->mac == find_mac) {
+        tree->children.emplace_back(createChild<T>(append_mac));
+        return true;
+    }
+
+    for (const auto& child : tree->children) {
+        if (append(child, find_mac, append_mac)) {
+            return true;
+        }
+    }
+
     return false;
 }
 

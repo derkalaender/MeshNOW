@@ -64,6 +64,7 @@ struct Verdict {
 struct NodeConnected {
     static constexpr Type type{Type::NODE_CONNECTED};
 
+    MAC_ADDR parent_mac;
     MAC_ADDR child_mac;
 };
 
@@ -84,13 +85,16 @@ struct MeshReachable {
 struct Ack {
     static constexpr Type type{Type::DATA_ACK};
 
-    uint16_t seq_num_ack;
+    meshnow::MAC_ADDR target;
+    uint32_t id_ack;
 };
 
 struct Nack {
     static constexpr Type type{Type::DATA_NACK};
 
-    uint16_t seq_num_nack;
+    meshnow::MAC_ADDR target;
+    uint32_t id_nack;
+    enum class Reason : uint8_t { NOT_FOUND, CANNOT_PROCESS } reason;
 };
 
 template <bool is_lwip>
@@ -122,7 +126,7 @@ using Payload = std::variant<StillAlive, AnyoneThere, IAmHere, PlsConnect, Verdi
                              CustomDataNext>;
 
 struct Packet {
-    uint16_t seq_num;
+    uint32_t id;
     Payload payload;
 };
 

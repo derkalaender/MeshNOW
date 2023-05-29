@@ -29,7 +29,7 @@ namespace meshnow {
  */
 class Networking {
    public:
-    explicit Networking(NodeState& state);
+    explicit Networking(meshnow::NodeState& state) : state_{state} {}
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
@@ -95,13 +95,13 @@ class Networking {
 
     routing::Router router_{state_.isRoot()};
 
-    SendWorker send_worker_{};
+    SendWorker send_worker_{router_};
 
-    std::jthread run_thread_{};
+    std::jthread run_thread_;
 
-    packets::PacketHandler packet_handler_;
+    packets::PacketHandler packet_handler_{*this};
 
-    Handshaker handshaker_;
+    Handshaker handshaker_{send_worker_, state_, router_};
 
     util::Queue<ReceiveQueueItem> receive_queue_{10};
 

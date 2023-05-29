@@ -31,9 +31,6 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-meshnow::Networking::Networking(meshnow::NodeState& state)
-    : state_{state}, packet_handler_{*this}, handshaker_{send_worker_, state_, router_} {}
-
 void meshnow::Networking::start() {
     if (state_.isRoot()) {
         // the root can always reach itself
@@ -49,7 +46,7 @@ void meshnow::Networking::start() {
 void meshnow::Networking::stop() {
     ESP_LOGI(TAG, "Stopping main run loop!");
 
-    // TODO this will fail an assert because of https://github.com/espressif/esp-idf/issues/10664
+    // TODO this will fail an assert (and crash) because of https://github.com/espressif/esp-idf/issues/10664
     // TODO maybe wrap all of networking in yet another thread which we can safely stop ourselves (no jthread)
 
     run_thread_.request_stop();
@@ -70,8 +67,7 @@ void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<ui
     CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
 }
 
-void meshnow::Networking::onSend(const uint8_t* mac_addr, esp_now_send_status_t status) {
-    // TODO
+void meshnow::Networking::onSend(const uint8_t*, esp_now_send_status_t status) {
     ESP_LOGD(TAG, "Send status: %d", status);
     // notify send worker
     send_worker_.sendFinished(status == ESP_NOW_SEND_SUCCESS);
@@ -111,7 +107,7 @@ void meshnow::Networking::runLoop(const std::stop_token& stoken) {
             auto packet = packets::deserialize(receive_item->data);
             if (packet) {
                 // if deserialization worked, give packet to packet handler
-                ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->seq_num};
+                ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->id};
                 packet_handler_.handlePacket(meta, packet->payload);
             }
         }
