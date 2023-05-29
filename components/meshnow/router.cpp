@@ -90,3 +90,27 @@ void meshnow::routing::Router::addChild(const MAC_ADDR& child_mac, const MAC_ADD
                  MAC_FORMAT_ARGS(parent_mac));
     }
 }
+
+meshnow::routing::Router::RemoveResult meshnow::routing::Router::removeNeighbor(const meshnow::MAC_ADDR& mac) {
+    // can't be ourselves
+    assert(mac != layout_->mac);
+
+    if (layout_->parent && mac == layout_->parent->mac) {
+        // remove parent
+        layout_->parent = std::nullopt;
+        ESP_LOGI(TAG, "Removed parent " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+        return RemoveResult::PARENT;
+    } else {
+        // remove child
+        auto child = std::find_if(layout_->children.begin(), layout_->children.end(),
+                                  [&mac](auto&& child) { return child->mac == mac; });
+        if (child != layout_->children.end()) {
+            layout_->children.erase(child);
+            ESP_LOGI(TAG, "Removed child " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+            return RemoveResult::CHILD;
+        } else {
+            ESP_LOGE(TAG, "Could not remove neighbor " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+            return RemoveResult::NONE;
+        }
+    }
+}

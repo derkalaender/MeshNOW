@@ -44,6 +44,17 @@ class KeepAlive {
     void trackNeighbor(const MAC_ADDR& mac_addr);
 
    private:
+    /**
+     * Sends a mesh unreachable message to all neighbors.
+     */
+    void sendMeshUnreachable();
+
+    /**
+     * Sends a child disconnected message to all neighbors.
+     * @param mac_addr the MAC address of the child that disconnected
+     */
+    void sendChildDisconnected(const MAC_ADDR& mac_addr);
+
     SendWorker& send_worker_;
     NodeState& state_;
     routing::Router& router_;

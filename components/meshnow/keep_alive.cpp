@@ -15,12 +15,20 @@ static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
 void meshnow::KeepAlive::checkConnections() {
     auto now = xTaskGetTickCount();
+    auto parent = router_.getParentMac();
+    auto children = router_.getChildMacs();
+
     // iterate while erasing
     for (auto it = neighbors.cbegin(); it != neighbors.cend();) {
         auto& [mac_addr, last_beacon_received] = *it;
         if (now - last_beacon_received > KEEP_ALIVE_TIMEOUT) {
             ESP_LOGW(TAG, "Neighbor " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(mac_addr));
-            // TODO disconnect or send node disconnect packet
+            auto result = router_.removeNeighbor(mac_addr);
+            if (result == routing::Router::RemoveResult::PARENT) {
+                sendMeshUnreachable();
+            } else if (result == routing::Router::RemoveResult::CHILD) {
+                sendChildDisconnected(mac_addr);
+            }
             it = neighbors.erase(it);
         } else {
             ++it;
@@ -68,4 +76,21 @@ void meshnow::KeepAlive::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& mac_ad
 void meshnow::KeepAlive::trackNeighbor(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Starting tracking neighbor " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     neighbors[mac_addr] = xTaskGetTickCount();
+}
+
+void meshnow::KeepAlive::sendMeshUnreachable() {
+    ESP_LOGI(TAG, "Sending mesh unreachable event to %d neighbors", neighbors.size());
+
+    // enqueue packet for each neighbor
+    for (auto& [mac_addr, _] : neighbors) {
+        send_worker_.enqueuePayload(mac_addr, false, packets::MeshUnreachable{}, SendPromise{}, true, QoS::NEXT_HOP);
+    }
+}
+
+void meshnow::KeepAlive::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr) {
+    ESP_LOGI(TAG, "Sending child disconnected event");
+
+    // send to root
+    send_worker_.enqueuePayload(ROOT_MAC_ADDR, true, packets::NodeDisconnected{mac_addr}, SendPromise{}, true,
+                                QoS::NEXT_HOP);
 }
