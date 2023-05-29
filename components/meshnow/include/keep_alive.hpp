@@ -2,6 +2,8 @@
 
 #include <freertos/portmacro.h>
 
+#include <map>
+
 #include "constants.hpp"
 #include "router.hpp"
 #include "send_worker.hpp"
@@ -35,12 +37,19 @@ class KeepAlive {
      */
     void receivedKeepAliveBeacon(const MAC_ADDR& mac_addr);
 
+    /**
+     * Add a neighbor to track.
+     * @param mac_addr the MAC address of the neighbor
+     */
+    void trackNeighbor(const MAC_ADDR& mac_addr);
+
    private:
     SendWorker& send_worker_;
     NodeState& state_;
     routing::Router& router_;
 
     TickType_t last_beacon_sent_{0};
+    std::map<MAC_ADDR, TickType_t> neighbors;
 };
 
 }  // namespace meshnow

@@ -19,8 +19,9 @@ static const auto FIRST_PARENT_WAIT_MS = 5000;
 
 static const auto MAX_PARENTS_TO_CONSIDER = 5;
 
-meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router)
-    : send_worker_{send_worker}, state_{state}, router_{router} {
+meshnow::Handshaker::Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router,
+                                KeepAlive& keep_alive)
+    : send_worker_{send_worker}, state_{state}, router_{router}, keep_alive_{keep_alive} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
 }
 
@@ -209,6 +210,9 @@ void meshnow::Handshaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool
         // newly connected, we can reach the root
         state_.setRootReachable(true);
 
+        // add the parent to the tracked neighbors for keep alive
+        keep_alive_.trackNeighbor(mac_addr);
+
         // reset everything for the next handshake when we might disconnect
         reset();
     } else {
@@ -262,4 +266,7 @@ void meshnow::Handshaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
 
     // add child to router
     router_.addChild(mac_addr, router_.getThisMac());
+
+    // add the child to the tracked neighbors for keep alive
+    keep_alive_.trackNeighbor(mac_addr);
 }
