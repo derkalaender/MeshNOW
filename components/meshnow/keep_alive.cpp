@@ -8,19 +8,30 @@
 const char* TAG = CREATE_TAG("KeepAlive");
 
 // send a keep alive beacon every 500ms
-static constexpr auto KEEP_ALIVE_BEACON_INTERVAL = pdMS_TO_TICKS(500);
+static constexpr auto KEEP_ALIVE_BEACON_INTERVAL = pdMS_TO_TICKS(300);
 
 // consider a neighbor dead if no beacon was received for 2s
-static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(2000);
+static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
 void meshnow::KeepAlive::checkConnections() {
-    // TODO
+    auto now = xTaskGetTickCount();
+    // iterate while erasing
+    for (auto it = neighbors.cbegin(); it != neighbors.cend();) {
+        auto& [mac_addr, last_beacon_received] = *it;
+        if (now - last_beacon_received > KEEP_ALIVE_TIMEOUT) {
+            ESP_LOGW(TAG, "Neighbor " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(mac_addr));
+            // TODO disconnect or send node disconnect packet
+            it = neighbors.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void meshnow::KeepAlive::sendKeepAliveBeacon() {
     if (xTaskGetTickCount() - last_beacon_sent_ < KEEP_ALIVE_BEACON_INTERVAL) return;
 
-    ESP_LOGI(TAG, "Sending keep alive beacons to %d neighbors", neighbors.size());
+    ESP_LOGD(TAG, "Sending keep alive beacons to %d neighbors", neighbors.size());
 
     // enqueue packet for each neighbor
     for (auto& [mac_addr, _] : neighbors) {
@@ -49,7 +60,7 @@ void meshnow::KeepAlive::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& mac_ad
     // ignore any stray beacons
     if (!neighbors.contains(mac_addr)) return;
 
-    ESP_LOGI(TAG, "Received keep alive from neighbor" MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    ESP_LOGD(TAG, "Received keep alive from neighbor " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
 
     neighbors[mac_addr] = xTaskGetTickCount();
 }
