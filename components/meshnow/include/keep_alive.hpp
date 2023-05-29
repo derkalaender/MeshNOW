@@ -43,6 +43,12 @@ class KeepAlive {
      */
     void trackNeighbor(const MAC_ADDR& mac_addr);
 
+    /**
+     * Stop tracking a neighbor.
+     * @param mac_addr the MAC address of the neighbor
+     */
+    void stopTrackingNeighbor(const MAC_ADDR& mac_addr);
+
    private:
     /**
      * Sends a mesh unreachable message to all neighbors.

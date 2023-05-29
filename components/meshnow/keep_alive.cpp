@@ -77,6 +77,11 @@ void meshnow::KeepAlive::trackNeighbor(const MAC_ADDR& mac_addr) {
     neighbors[mac_addr] = xTaskGetTickCount();
 }
 
+void meshnow::KeepAlive::stopTrackingNeighbor(const meshnow::MAC_ADDR& mac_addr) {
+    ESP_LOGI(TAG, "Stopping tracking neighbor " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    neighbors.erase(mac_addr);
+}
+
 void meshnow::KeepAlive::sendMeshUnreachable() {
     if (neighbors.empty()) return;
     ESP_LOGI(TAG, "Sending mesh unreachable event to %d neighbors", neighbors.size());

@@ -62,7 +62,10 @@ void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta&, const 
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
                                              const meshnow::packets::NodeDisconnected& p) {
-    // TODO
+    // stop tracking
+    net_.keep_alive_.stopTrackingNeighbor(p.child_mac);
+    // remove from routing
+    net_.router_.removeNeighbor(p.child_mac);
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
