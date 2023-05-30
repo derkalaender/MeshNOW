@@ -108,6 +108,7 @@ void meshnow::KeepAlive::sendMeshUnreachable() {
 }
 
 void meshnow::KeepAlive::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr) {
+    if(state_.isRoot()) return;
     ESP_LOGI(TAG, "Sending child disconnected event");
 
     // send to root
