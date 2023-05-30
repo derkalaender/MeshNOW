@@ -49,6 +49,16 @@ class KeepAlive {
      */
     void stopTrackingNeighbor(const MAC_ADDR& mac_addr);
 
+    /**
+     * A mesh unreachable message was received. Starts parent disconnect timeout.
+     */
+    void receivedMeshUnreachable();
+
+    /**
+     * A mesh reachable message was received. Stops parent disconnect timeout.
+     */
+    void receivedMeshReachable();
+
    private:
     /**
      * Sends a mesh unreachable message to all neighbors.
@@ -67,6 +77,9 @@ class KeepAlive {
 
     TickType_t last_beacon_sent_{0};
     std::map<MAC_ADDR, TickType_t> neighbors;
+
+    TickType_t mesh_unreachable_since_{0};
+    bool awaiting_reachable{false};
 };
 
 }  // namespace meshnow

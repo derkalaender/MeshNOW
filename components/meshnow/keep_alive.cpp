@@ -13,8 +13,19 @@ static constexpr auto KEEP_ALIVE_BEACON_INTERVAL = pdMS_TO_TICKS(300);
 // consider a neighbor dead if no beacon was received for 2s
 static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
+// disconnect from parent if the root was unreachable for 10s
+static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
+
 void meshnow::KeepAlive::checkConnections() {
     auto now = xTaskGetTickCount();
+
+    if (awaiting_reachable && now - mesh_unreachable_since_ > ROOT_UNREACHABLE_TIMEOUT) {
+        awaiting_reachable = false;
+        auto parent_mac = router_.getParentMac();
+        assert(parent_mac);
+        stopTrackingNeighbor(*parent_mac);
+        state_.setConnected(false);
+    }
 
     // iterate while erasing
     for (auto it = neighbors.cbegin(); it != neighbors.cend();) {
@@ -59,7 +70,10 @@ TickType_t meshnow::KeepAlive::nextActionIn(TickType_t now) const {
                                [](const auto& a, const auto& b) { return a.second < b.second; });
     auto next_timeout = it != neighbors.end() ? it->second + KEEP_ALIVE_TIMEOUT : portMAX_DELAY;
 
-    auto next_action = std::min(next_beacon, next_timeout);
+    auto next_root_unreachable_timeout =
+        awaiting_reachable ? mesh_unreachable_since_ + ROOT_UNREACHABLE_TIMEOUT : portMAX_DELAY;
+
+    auto next_action = std::min({next_beacon, next_timeout, next_root_unreachable_timeout});
     // clamp to 0
     return next_action > now ? next_action - now : 0;
 }
@@ -99,4 +113,20 @@ void meshnow::KeepAlive::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr
     // send to root
     send_worker_.enqueuePayload(ROOT_MAC_ADDR, true, packets::NodeDisconnected{mac_addr}, SendPromise{}, true,
                                 QoS::NEXT_HOP);
+}
+
+void meshnow::KeepAlive::receivedMeshUnreachable() {
+    if (state_.isRoot() || !state_.isConnected() || awaiting_reachable) return;
+    ESP_LOGI(TAG, "Received mesh unreachable event, waiting for reachable event");
+    state_.setRootReachable(false);
+    mesh_unreachable_since_ = xTaskGetTickCount();
+    awaiting_reachable = true;
+}
+
+void meshnow::KeepAlive::receivedMeshReachable() {
+    if (state_.isRoot() || !state_.isConnected() || !awaiting_reachable) return;
+    ESP_LOGI(TAG, "Received mesh reachable event, sending child connected event");
+    state_.setRootReachable(true);
+    mesh_unreachable_since_ = 0;
+    awaiting_reachable = false;
 }

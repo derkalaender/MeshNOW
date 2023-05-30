@@ -27,6 +27,8 @@ class NodeState {
     }
 
     void setConnected(bool connected) {
+        if (root_) return;
+
         connected_ = connected;
         if (connected_) {
             started_ = true;
@@ -36,7 +38,7 @@ class NodeState {
         cv_.notify_all();
     }
 
-    bool isConnected() const { return connected_; }
+    bool isConnected() const { return root_ || connected_; }
 
     void waitForConnected(std::unique_lock<std::mutex>& lock) {
         cv_.wait(lock, [&] { return connected_; });
@@ -47,6 +49,8 @@ class NodeState {
     }
 
     void setRootReachable(bool reachable) {
+        if (root_) return;
+
         root_reachable_ = reachable;
         if (root_reachable_) {
             started_ = true;
@@ -55,7 +59,7 @@ class NodeState {
         cv_.notify_all();
     }
 
-    bool isRootReachable() const { return root_reachable_; }
+    bool isRootReachable() const { return root_ || root_reachable_; }
 
     void waitForRootReachable(std::unique_lock<std::mutex>& lock) {
         cv_.wait(lock, [&] { return root_reachable_; });

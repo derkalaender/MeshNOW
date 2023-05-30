@@ -71,14 +71,22 @@ void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta&, const 
     }
 }
 
-void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
-                                             const meshnow::packets::MeshUnreachable& p) {
-    // TODO
+void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta&, const meshnow::packets::MeshUnreachable&) {
+    net_.keep_alive_.receivedMeshUnreachable();
+    // forward to all children
+    for (const auto& child : net_.router_.getChildMacs()) {
+        net_.send_worker_.enqueuePayload(child, true, meshnow::packets::MeshUnreachable{}, SendPromise{}, true,
+                                         QoS::NEXT_HOP);
+    }
 }
 
-void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta,
-                                             const meshnow::packets::MeshReachable& p) {
-    // TODO
+void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta&, const meshnow::packets::MeshReachable&) {
+    net_.keep_alive_.receivedMeshReachable();
+    // forward to all children
+    for (const auto& child : net_.router_.getChildMacs()) {
+        net_.send_worker_.enqueuePayload(child, true, meshnow::packets::MeshReachable{}, SendPromise{}, true,
+                                         QoS::NEXT_HOP);
+    }
 }
 
 void meshnow::packets::PacketHandler::handle(const meshnow::ReceiveMeta& meta, const meshnow::packets::Ack& p) {
