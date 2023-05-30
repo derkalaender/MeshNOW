@@ -152,10 +152,7 @@ void meshnow::Handshaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rss
     if (state_.isConnected() || !searching_for_parents_) return;
 
     // check if the potential parent is a child of this node
-    {
-        auto child_macs = router_.getChildMacs();
-        if (std::find(child_macs.begin(), child_macs.end(), mac_addr) != child_macs.end()) return;
-    }
+    if (contains(router_.layout_, mac_addr)) return;
 
     if (parent_infos_.empty()) {
         first_parent_found_time_ = xTaskGetTickCount();
@@ -202,10 +199,7 @@ void meshnow::Handshaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool
     if (state_.isRoot() || state_.isConnected()) return;
 
     // check if the potential parent is a child of this node
-    {
-        auto child_macs = router_.getChildMacs();
-        if (std::find(child_macs.begin(), child_macs.end(), mac_addr) != child_macs.end()) return;
-    }
+    if (contains(router_.layout_, mac_addr)) return;
 
     if (accept) {
         ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
@@ -243,11 +237,8 @@ void meshnow::Handshaker::receivedSearchProbe(const MAC_ADDR& mac_addr) {
     if (!state_.isRootReachable()) return;
 
     // check if already connected to this node
-    {
-        auto child_macs = router_.getChildMacs();
-        if (std::find(child_macs.begin(), child_macs.end(), mac_addr) != child_macs.end()) return;
-        if (router_.getParentMac() == mac_addr) return;
-    }
+    if (contains(router_.layout_, mac_addr)) return;
+    if (router_.getParentMac() == mac_addr) return;
 
     sendSearchProbeReply(mac_addr);
 }
@@ -256,12 +247,10 @@ void meshnow::Handshaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     // only accept if we can reach the root
     // this is necessary because we may have disconnected since we answered the search probe
     if (!state_.isRootReachable()) return;
+
     // check if already connected to this node
-    {
-        auto child_macs = router_.getChildMacs();
-        if (std::find(child_macs.begin(), child_macs.end(), mac_addr) != child_macs.end()) return;
-        if (router_.getParentMac() == mac_addr) return;
-    }
+    if (contains(router_.layout_, mac_addr)) return;
+    if (router_.getParentMac() == mac_addr) return;
 
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes

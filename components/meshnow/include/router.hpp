@@ -95,6 +95,8 @@ class Router {
    private:
     bool is_root_;
     std::optional<MAC_ADDR> root_mac_;
+    // TODO
+   public:
     std::shared_ptr<Layout> layout_{std::make_shared<Layout>()};
 };
 
