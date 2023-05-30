@@ -95,4 +95,26 @@ bool append(const std::shared_ptr<T>& tree, const MAC_ADDR& find_mac, const MAC_
     return false;
 }
 
+template <typename T>
+bool remove(std::shared_ptr<T> tree, const MAC_ADDR& mac) {
+    if (tree->mac == mac) {
+        return false;
+    }
+
+    for (const auto& child : tree->children) {
+        if (child->mac == mac) {
+            tree->children.remove(child);
+            return true;
+        }
+    }
+
+    for (const auto& child : tree->children) {
+        if (remove(child, mac)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 }  // namespace meshnow::routing

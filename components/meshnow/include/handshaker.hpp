@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "keep_alive.hpp"
 #include "packet_handler.hpp"
 #include "router.hpp"
 #include "send_worker.hpp"
@@ -20,7 +21,7 @@ namespace meshnow {
  */
 class Handshaker {
    public:
-    explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router);
+    explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router, KeepAlive& keep_alive);
 
     /**
      * Perform the current connection step (either sending search probes or connect requests).
@@ -119,6 +120,8 @@ class Handshaker {
     NodeState& state_;
 
     routing::Router& router_;
+
+    KeepAlive& keep_alive_;
 
     bool searching_for_parents_{true};
 

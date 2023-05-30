@@ -12,6 +12,12 @@ namespace meshnow::routing {
 
 class Router {
    public:
+    enum class RemoveResult {
+        NONE,
+        PARENT,
+        CHILD,
+    };
+
     explicit Router(bool is_root) : is_root_{is_root} {}
 
     /**
@@ -64,6 +70,20 @@ class Router {
     void addChild(const MAC_ADDR& child_mac, const MAC_ADDR& parent_mac);
 
     MAC_ADDR getThisMac() const { return layout_->mac; }
+
+    /**
+     * Removes the given (indirect) child from the layout.
+     * @param mac mac of the child to remove
+     * @param mac
+     */
+    void removeChild(const MAC_ADDR& mac);
+
+    /**
+     * Removes the given parent or child from the layout.
+     * @param mac mac of the node to remove
+     * @return which kind of node was removed
+     */
+    RemoveResult removeNeighbor(const MAC_ADDR& mac);
 
     /**
      * Update the RSSI value of a node.

@@ -88,9 +88,8 @@ void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, con
 }
 
 TickType_t meshnow::Networking::nextActionIn() const {
-    // TODO take min of all timeouts
     auto now = xTaskGetTickCount();
-    return handshaker_.nextActionIn(now);
+    return std::min(keep_alive_.nextActionIn(now), handshaker_.nextActionIn(now));
 }
 
 void meshnow::Networking::runLoop(const std::stop_token& stoken) {
@@ -112,8 +111,9 @@ void meshnow::Networking::runLoop(const std::stop_token& stoken) {
             }
         }
 
-        // TODO check if neighbors are still alive
-        // TODO send beacon
+        // Keep Alive handling
+        keep_alive_.checkConnections();
+        keep_alive_.sendKeepAliveBeacon();
 
         // try to reconnect if not connected
         handshaker_.performHandshake();
