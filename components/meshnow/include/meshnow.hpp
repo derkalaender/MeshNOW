@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory"
 #include "networking.hpp"
 #include "state.hpp"
 
@@ -19,7 +20,7 @@ struct Config {
 /**
  * Main entrypoint for meshnow.
  */
-class App {
+class Mesh {
    public:
     /**
      * Initializes the App library.
@@ -30,10 +31,10 @@ class App {
      * @attention Don't make any calls to WiFi, netif or ESP-NOW before deinitializing again, unless you know what
      * you're doing.
      */
-    explicit App(Config config);
+    explicit Mesh(Config config);
 
-    App(const App&) = delete;
-    App& operator=(const App&) = delete;
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
 
     /**
      * Deinitializes the App library.
@@ -44,7 +45,7 @@ class App {
      *
      * @attention Doesn't restore your last WiFi, netif or ESP-NOW configurations. You need to handle that yourself.
      */
-    ~App();
+    ~Mesh();
 
     /**
      * Starts the mesh.
@@ -73,7 +74,7 @@ class App {
     static void deinitEspnow();
 
     const Config config_;
-    NodeState state_;
+    std::shared_ptr<NodeState> state_;
     Networking networking_;
 };
 

@@ -21,8 +21,8 @@ enum class Type : uint8_t {
     // EVENT
     NODE_CONNECTED,     ///< Sent by a parent when a new child connects, bubbles up
     NODE_DISCONNECTED,  ///< Sent by a parent when a child disconnects, bubbles up
-    MESH_UNREACHABLE,   ///< Sent by a node to its children when it loses connection to its parent, propagates down
-    MESH_REACHABLE,     ///< Sent by a node to its children when it regains connection to its parent, propagates down
+    ROOT_UNREACHABLE,   ///< Sent by a node to its children when it loses connection to its parent, propagates down
+    ROOT_REACHABLE,     ///< Sent by a node to its children when it regains connection to its parent, propagates down
 
     // DATA
     DATA_ACK,   ///< Sent by the target node to acknowledge a complete datagram
@@ -74,12 +74,12 @@ struct NodeDisconnected {
     MAC_ADDR child_mac;
 };
 
-struct MeshUnreachable {
-    static constexpr Type type{Type::MESH_UNREACHABLE};
+struct RootUnreachable {
+    static constexpr Type type{Type::ROOT_UNREACHABLE};
 };
 
-struct MeshReachable {
-    static constexpr Type type{Type::MESH_REACHABLE};
+struct RootReachable {
+    static constexpr Type type{Type::ROOT_REACHABLE};
 };
 
 struct Ack {
@@ -122,8 +122,8 @@ using LwipDataNext = DataNext<true>;
 using CustomDataNext = DataNext<false>;
 
 using Payload =
-    std::variant<KeepAlive, AnyoneThere, IAmHere, PlsConnect, Verdict, NodeConnected, NodeDisconnected, MeshUnreachable,
-                 MeshReachable, Ack, Nack, LwipDataFirst, CustomDataFirst, LwipDataNext, CustomDataNext>;
+    std::variant<KeepAlive, AnyoneThere, IAmHere, PlsConnect, Verdict, NodeConnected, NodeDisconnected, RootUnreachable,
+                 RootReachable, Ack, Nack, LwipDataFirst, CustomDataFirst, LwipDataNext, CustomDataNext>;
 
 struct Packet {
     uint32_t id;

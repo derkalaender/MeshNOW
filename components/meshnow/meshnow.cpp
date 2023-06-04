@@ -13,7 +13,7 @@ static const char *TAG = CREATE_TAG("🦌");
 /**
  * Initializes NVS.
  */
-void meshnow::App::initNVS() {
+void meshnow::Mesh::initNVS() {
     ESP_LOGI(TAG, "Initializing NVS");
 
     // initialize nvs
@@ -30,7 +30,7 @@ void meshnow::App::initNVS() {
 /**
  * Initializes WiFi.
  */
-void meshnow::App::initWifi() {
+void meshnow::Mesh::initWifi() {
     ESP_LOGI(TAG, "Initializing WiFi");
 
     // initialize the tcp stack (not needed atm)
@@ -59,7 +59,7 @@ void meshnow::App::initWifi() {
 /**
  * Deinitializes WiFi.
  */
-void meshnow::App::deinitWifi() {
+void meshnow::Mesh::deinitWifi() {
     ESP_LOGI(TAG, "Deinitializing WiFi");
 
     CHECK_THROW(esp_wifi_stop());
@@ -74,7 +74,7 @@ static meshnow::Networking *networking_callback_ptr;
 /**
  * Initializes ESP-NOW.
  */
-void meshnow::App::initEspnow() {
+void meshnow::Mesh::initEspnow() {
     ESP_LOGI(TAG, "Initializing ESP-NOW");
 
     CHECK_THROW(esp_now_init());
@@ -90,7 +90,7 @@ void meshnow::App::initEspnow() {
 /**
  * Deinitializes ESP-NOW.
  */
-void meshnow::App::deinitEspnow() {
+void meshnow::Mesh::deinitEspnow() {
     ESP_LOGI(TAG, "Deinitializing ESP-NOW");
 
     CHECK_THROW(esp_now_unregister_recv_cb());
@@ -102,7 +102,8 @@ void meshnow::App::deinitEspnow() {
     ESP_LOGI(TAG, "ESP-NOW deinitialized");
 }
 
-meshnow::App::App(const Config config) : config_{config}, state_{config_.root}, networking_{state_} {
+meshnow::Mesh::Mesh(const Config config)
+    : config_{config}, state_{std::make_shared<NodeState>(config_.root)}, networking_{state_} {
     ESP_LOGI(TAG, "Initializing MeshNOW");
     initNVS();
     initWifi();
@@ -110,8 +111,8 @@ meshnow::App::App(const Config config) : config_{config}, state_{config_.root}, 
     ESP_LOGI(TAG, "MeshNOW initialized. You can started the mesh now 🦌");
 }
 
-meshnow::App::~App() {
-    if (state_.isStarted()) {
+meshnow::Mesh::~Mesh() {
+    if (state_->isStarted()) {
         ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
         try {
             stop();
@@ -137,36 +138,36 @@ meshnow::App::~App() {
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
 }
 
-void meshnow::App::start() {
+void meshnow::Mesh::start() {
     auto lock = state_.acquireLock();
 
-    if (state_.isStarted()) {
+    if (state_->isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is already running");
         throw AlreadyStartedException();
     }
 
-    ESP_LOGI(TAG, "Starting MeshNOW as %s...", state_.isRoot() ? "root" : "node");
+    ESP_LOGI(TAG, "Starting MeshNOW as %s...", state_->isRoot() ? "root" : "node");
 
     networking_.start();
 
     ESP_LOGI(TAG, "Liftoff! 🚀");
 
-    state_.setStarted(true);
+    state_->setStarted(true);
 }
 
-void meshnow::App::stop() {
-    auto lock = state_.acquireLock();
+void meshnow::Mesh::stop() {
+    auto lock = state_->acquireLock();
 
-    if (!state_.isStarted()) {
+    if (!state_->isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is not running");
         throw NotStartedException();
     }
 
-    ESP_LOGI(TAG, "Stopping MeshNOW as %s...", state_.isRoot() ? "root" : "node");
+    ESP_LOGI(TAG, "Stopping MeshNOW as %s...", state_->isRoot() ? "root" : "node");
 
     networking_.stop();
 
     ESP_LOGI(TAG, "Mesh stopped! 🛑");
 
-    state_.setStarted(false);
+    state_->setStarted(false);
 }

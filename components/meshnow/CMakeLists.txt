@@ -1,1 +1,13 @@
-idf_component_register(SRCS "meshnow.cpp" "networking.cpp" "packets.cpp" "send_worker.cpp" "handshaker.cpp" "router.cpp" "packet_handler.cpp" "keep_alive.cpp" INCLUDE_DIRS "include" PRIV_INCLUDE_DIRS "private_include" REQUIRES util esp_wifi PRIV_REQUIRES nvs_flash bitsery)
+file(
+        GLOB SRC_FILES
+        *.cpp
+        main_worker/*.cpp
+)
+
+idf_component_register(
+        SRCS "${SRC_FILES}"
+        INCLUDE_DIRS "include"
+        PRIV_INCLUDE_DIRS "." "main_worker"
+        REQUIRES util esp_wifi
+        PRIV_REQUIRES nvs_flash bitsery
+)

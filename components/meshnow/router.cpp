@@ -29,7 +29,7 @@ std::optional<meshnow::MAC_ADDR> meshnow::routing::Router::resolve(const MAC_ADD
 
     // try to find a suitable child
     auto child = std::find_if(layout_->children.begin(), layout_->children.end(),
-                              [&mac](auto&& child) { return routing::contains(child, mac); });
+                              [&mac](auto&& child) { return routing::containsChild(child, mac); });
 
     if (child != layout_->children.end()) {
         // found the child
@@ -72,7 +72,7 @@ void meshnow::routing::Router::updateRssi(const MAC_ADDR& mac, int rssi) {
     } else {
         // update child RSSI
         auto child = std::find_if(layout_->children.begin(), layout_->children.end(),
-                                  [&mac](auto&& child) { return routing::contains(child, mac); });
+                                  [&mac](auto&& child) { return routing::containsChild(child, mac); });
         if (child != layout_->children.end()) {
             (*child)->rssi = rssi;
         }
@@ -82,7 +82,7 @@ void meshnow::routing::Router::updateRssi(const MAC_ADDR& mac, int rssi) {
 }
 
 void meshnow::routing::Router::addChild(const MAC_ADDR& child_mac, const MAC_ADDR& parent_mac) {
-    if (routing::append(layout_, parent_mac, child_mac)) {
+    if (routing::insertChild(layout_, parent_mac, child_mac)) {
         ESP_LOGI(TAG, "Added child " MAC_FORMAT " to parent " MAC_FORMAT, MAC_FORMAT_ARGS(child_mac),
                  MAC_FORMAT_ARGS(parent_mac));
     } else {
@@ -92,7 +92,7 @@ void meshnow::routing::Router::addChild(const MAC_ADDR& child_mac, const MAC_ADD
 }
 
 void meshnow::routing::Router::removeChild(const MAC_ADDR& mac) {
-    if (routing::remove(layout_, mac)) {
+    if (routing::removeDirectChild(layout_, mac)) {
         ESP_LOGI(TAG, "Removed child " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
     } else {
         ESP_LOGE(TAG, "Could not remove child " MAC_FORMAT, MAC_FORMAT_ARGS(mac));

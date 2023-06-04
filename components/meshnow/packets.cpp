@@ -56,12 +56,12 @@ static void serialize(S& s, meshnow::packets::NodeDisconnected& p) {
 }
 
 template <typename S>
-static void serialize(S&, meshnow::packets::MeshUnreachable&) {
+static void serialize(S&, meshnow::packets::RootUnreachable&) {
     // no data
 }
 
 template <typename S>
-static void serialize(S&, meshnow::packets::MeshReachable&) {
+static void serialize(S&, meshnow::packets::RootReachable&) {
     // no data
 }
 
@@ -205,11 +205,11 @@ std::optional<meshnow::packets::Packet> meshnow::packets::deserialize(const mesh
         case Type::NODE_DISCONNECTED:
             deserializePayload<meshnow::packets::NodeDisconnected>(payload, it, size);
             break;
-        case Type::MESH_UNREACHABLE:
-            deserializePayload<meshnow::packets::MeshUnreachable>(payload, it, size);
+        case Type::ROOT_UNREACHABLE:
+            deserializePayload<meshnow::packets::RootUnreachable>(payload, it, size);
             break;
-        case Type::MESH_REACHABLE:
-            deserializePayload<meshnow::packets::MeshReachable>(payload, it, size);
+        case Type::ROOT_REACHABLE:
+            deserializePayload<meshnow::packets::RootReachable>(payload, it, size);
             break;
         case Type::DATA_ACK:
             deserializePayload<meshnow::packets::Ack>(payload, it, size);

@@ -124,7 +124,7 @@ void meshnow::SendWorker::runLoop(const std::stop_token& stoken) {
         MAC_ADDR addr;
         if (item.resolve) {
             // resolve next hop mac
-            auto next_hop_mac = router_.resolve(item.dest_addr);
+            auto next_hop_mac = layout_.resolve(item.dest_addr);
             if (!next_hop_mac) {
                 // couldn't resolve next hop mac
                 ESP_LOGD(TAG, "Couldn't resolve next hop mac");
@@ -186,7 +186,7 @@ void meshnow::SendWorker::handleFailure(meshnow::SendWorker::SendQueueItem&& ite
         case QoS::WAIT_ACK_TIMEOUT:
         case QoS::NEXT_HOP: {
             // check if the resolved host is still registered
-            if (router_.hasNeighbor(next_hop)) {
+            if (layout_.hasNeighbor(next_hop)) {
                 // requeue the item
                 send_queue_.push_back(std::move(item), portMAX_DELAY);
             } else {

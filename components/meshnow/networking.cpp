@@ -9,7 +9,7 @@
 
 #include "constants.hpp"
 #include "error.hpp"
-#include "handshaker.hpp"
+#include "hand_shaker.hpp"
 #include "internal.hpp"
 #include "packets.hpp"
 #include "receive_meta.hpp"
@@ -31,16 +31,14 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }
 
-void meshnow::Networking::start() {
-    if (state_.isRoot()) {
-        // the root can always reach itself
-        state_.setRootReachable(true);
-    }
-    ESP_LOGI(TAG, "Starting main run loop!");
-    run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
+meshnow::Networking::Networking(std::shared_ptr<NodeState> state)
+    : send_worker_(std::make_shared<SendWorker>(layout_)),
+      main_worker_(std::make_shared<MainWorker>(send_worker_, layout_, state)) {}
 
-    // also start the send worker
-    send_worker_.start();
+void meshnow::Networking::start() {
+    // start both workers
+    main_worker_->start();
+    send_worker_->start();
 }
 
 void meshnow::Networking::stop() {
@@ -49,10 +47,9 @@ void meshnow::Networking::stop() {
     // TODO this will fail an assert (and crash) because of https://github.com/espressif/esp-idf/issues/10664
     // TODO maybe wrap all of networking in yet another thread which we can safely stop ourselves (no jthread)
 
-    run_thread_.request_stop();
-
-    // also stop the send worker
-    send_worker_.stop();
+    // stop both workers
+    main_worker_->stop();
+    send_worker_->stop();
 }
 
 void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {
@@ -70,56 +67,5 @@ void meshnow::Networking::rawSend(const MAC_ADDR& mac_addr, const std::vector<ui
 void meshnow::Networking::onSend(const uint8_t*, esp_now_send_status_t status) {
     ESP_LOGD(TAG, "Send status: %d", status);
     // notify send worker
-    send_worker_.sendFinished(status == ESP_NOW_SEND_SUCCESS);
-}
-
-void meshnow::Networking::onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) {
-    ESP_LOGV(TAG, "Received data");
-
-    ReceiveQueueItem item{};
-    // copy everything because the pointers are only valid during this function call
-    std::copy(esp_now_info->src_addr, esp_now_info->src_addr + sizeof(MAC_ADDR), item.from.begin());
-    std::copy(esp_now_info->des_addr, esp_now_info->des_addr + sizeof(MAC_ADDR), item.to.begin());
-    item.rssi = esp_now_info->rx_ctrl->rssi;
-    item.data = std::vector<uint8_t>(data, data + data_len);
-
-    // add to receive queue
-    receive_queue_.push_back(std::move(item), portMAX_DELAY);
-}
-
-TickType_t meshnow::Networking::nextActionIn() const {
-    auto now = xTaskGetTickCount();
-    return std::min(keep_alive_.nextActionIn(now), handshaker_.nextActionIn(now));
-}
-
-void meshnow::Networking::runLoop(const std::stop_token& stoken) {
-    while (!stoken.stop_requested()) {
-        // calculate timeout from everything that needs to happen after popping from the queue
-        auto timeout = nextActionIn();
-
-        ESP_LOGV(TAG, "Next action in at most %lu ticks", timeout);
-
-        // get next packet from receive queue
-        auto receive_item = receive_queue_.pop(timeout);
-        if (receive_item) {
-            // if valid, try to parse
-            auto packet = packets::deserialize(receive_item->data);
-            if (packet) {
-                // if deserialization worked, give packet to packet handler
-                ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->id};
-                packet_handler_.handlePacket(meta, packet->payload);
-            }
-        }
-
-        // Keep Alive handling
-        keep_alive_.checkConnections();
-        keep_alive_.sendKeepAliveBeacon();
-
-        // try to reconnect if not connected
-        handshaker_.performHandshake();
-    }
-
-    ESP_LOGI(TAG, "Exiting main run loop!");
-
-    // TODO cleanup
+    send_worker_->sendFinished(status == ESP_NOW_SEND_SUCCESS);
 }

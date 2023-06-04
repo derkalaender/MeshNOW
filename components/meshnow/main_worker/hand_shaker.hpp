@@ -2,16 +2,17 @@
 
 #include <freertos/portmacro.h>
 
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "constants.hpp"
-#include "keep_alive.hpp"
 #include "packet_handler.hpp"
 #include "router.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 #include "waitbits.hpp"
+#include "worker_task.hpp"
 
 namespace meshnow {
 
@@ -19,14 +20,19 @@ namespace meshnow {
  * Whenever disconnected from a parent, this thread tries to connect to the best parent by continuously sending connect
  * requests.
  */
-class Handshaker {
+class HandShaker : public WorkerTask {
    public:
-    explicit Handshaker(SendWorker& send_worker, NodeState& state, routing::Router& router, KeepAlive& keep_alive);
+    explicit HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
+                        std::shared_ptr<routing::Layout> layout);
 
     /**
      * Perform the current connection step (either sending search probes or connect requests).
      */
     void performHandshake();
+
+    TickType_t nextActionAt() const noexcept override;
+
+    void performAction() override;
 
     /**
      * Remove all found parents, prepare to start searching for parents again.
@@ -120,8 +126,6 @@ class Handshaker {
     NodeState& state_;
 
     routing::Router& router_;
-
-    KeepAlive& keep_alive_;
 
     bool searching_for_parents_{true};
 

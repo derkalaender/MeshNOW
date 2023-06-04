@@ -7,8 +7,9 @@
 #include <vector>
 
 #include "constants.hpp"
-#include "handshaker.hpp"
+#include "hand_shaker.hpp"
 #include "keep_alive.hpp"
+#include "main_worker.hpp"
 #include "packet_handler.hpp"
 #include "receive_meta.hpp"
 #include "router.hpp"
@@ -30,7 +31,7 @@ namespace meshnow {
  */
 class Networking {
    public:
-    explicit Networking(meshnow::NodeState& state) : state_{state} {}
+    explicit Networking(std::shared_ptr<NodeState> state);
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
@@ -50,66 +51,12 @@ class Networking {
      */
     void onSend(const uint8_t* mac_addr, esp_now_send_status_t status);
 
-    /**
-     * Receive callback for ESP-NOW.
-     */
-    void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
-
    private:
-    struct ReceiveQueueItem {
-        MAC_ADDR from;
-        MAC_ADDR to;
-        Buffer data;
-        int rssi;
-    };
-
-    /**
-     * Sends raw data to the specific device (ESP-NOW wrapper).
-     * @param mac_addr the MAC address of the device to send to
-     * @param data data to send
-     *
-     * @note Payloads larger than MAX_RAW_PACKET_SIZE will throw an exception.
-     */
-    static void rawSend(const MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
-
-    /**
-     * Main run loop of the network stack.
-     * - Queries incoming packets and handles them
-     * - Checks if connected neighbors are still alive
-     * - Sends still alive beacon itself
-     * - Tries to reconnect if not connected
-     * @param stoken stop token to interrupt the loop
-     */
-    void runLoop(const std::stop_token& stoken);
-
-    /**
-     * Calculates the minimum timeout until the next action should be performed.
-     * This is used as the timeout for waiting for a new packet.
-     * @return the timeout value
-     */
-    TickType_t nextActionIn() const;
-
-    /**
-     * Reference to the current state of the node. Used to know if we are connected or not, etc.
-     */
-    NodeState& state_;
-
-    routing::Router router_{state_.isRoot()};
-
-    SendWorker send_worker_{router_};
-
-    std::jthread run_thread_;
-
-    packets::PacketHandler packet_handler_{*this};
-
-    KeepAlive keep_alive_{send_worker_, state_, router_};
-
-    Handshaker handshaker_{send_worker_, state_, router_, keep_alive_};
-
-    util::Queue<ReceiveQueueItem> receive_queue_{10};
+    std::shared_ptr<routing::Layout> layout_{std::make_shared<routing::Layout>()};
+    std::shared_ptr<SendWorker> send_worker_;
+    std::shared_ptr<MainWorker> main_worker_;
 
     friend class SendWorker;
-    friend class packets::PacketHandler;
 };
 
 }  // namespace meshnow

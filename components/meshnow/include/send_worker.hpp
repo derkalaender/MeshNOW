@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <queue.hpp>
 #include <thread>
@@ -40,7 +41,7 @@ enum class QoS : uint8_t {
  */
 class SendWorker {
    public:
-    explicit SendWorker(routing::Router& router) : router_{router} {}
+    explicit SendWorker(std::shared_ptr<routing::Layout> layout);
 
     SendWorker(const SendWorker&) = delete;
     SendWorker& operator=(const SendWorker&) = delete;
@@ -119,7 +120,7 @@ class SendWorker {
      */
     void qosChecker(const std::stop_token& stoken);
 
-    routing::Router& router_;
+    std::shared_ptr<routing::Layout> layout_;
 
     /**
      * Communicates a successful/failed payload from the send callback to the thread.
