@@ -3,10 +3,12 @@
 #include <esp_log.h>
 #include <freertos/portmacro.h>
 
+#include <utility>
+
 #include "internal.hpp"
 #include "send_worker.hpp"
 
-static const char* TAG = CREATE_TAG("Handshaker");
+static const char* TAG = CREATE_TAG("HandShaker");
 
 // Frequency at which to send search probe (ms)
 static const auto SEARCH_PROBE_FREQ_MS = 500;
@@ -19,15 +21,30 @@ static const auto FIRST_PARENT_WAIT_MS = 5000;
 
 static const auto MAX_PARENTS_TO_CONSIDER = 5;
 
-meshnow::HandShaker::HandShaker(SendWorker& send_worker, NodeState& state, routing::Router& router,
-                                KeepAlive& keep_alive)
-    : send_worker_{send_worker}, state_{state}, router_{router}, keep_alive_{keep_alive} {
+using meshnow::HandShaker;
+
+HandShaker::HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
+                       std::shared_ptr<routing::Layout> layout)
+    : send_worker_{std::move(send_worker)}, state_{std::move(state)}, layout_{std::move(layout)} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
 }
 
-void meshnow::HandShaker::performHandshake() {
+TickType_t HandShaker::nextActionAt() const noexcept {
+    // if connected we don't need to do anything
+    if (state_->isConnected()) return portMAX_DELAY;
+
+    if (searching_for_parents_) {
+        // next time until we need to send a search probe
+        return last_search_probe_time_ + pdMS_TO_TICKS(SEARCH_PROBE_FREQ_MS);
+    } else {
+        // next time until we need to send a connect request
+        return last_connect_request_time_ + pdMS_TO_TICKS(CONNECT_TIMEOUT_MS);
+    }
+}
+
+void HandShaker::performAction() {
     // don't do anything if already connected
-    if (state_.isConnected()) return;
+    if (state_->isConnected()) return;
 
     // check if we have found enough parents in case we were searching, so we can stop
     if (searching_for_parents_ && !parent_infos_.empty()) {
@@ -57,7 +74,7 @@ void meshnow::HandShaker::performHandshake() {
     }
 }
 
-void meshnow::HandShaker::reset() {
+void HandShaker::reset() {
     searching_for_parents_ = true;
     parent_infos_.clear();
     first_parent_found_time_ = 0;
@@ -65,61 +82,43 @@ void meshnow::HandShaker::reset() {
     last_search_probe_time_ = 0;
 }
 
-TickType_t meshnow::HandShaker::nextActionIn(TickType_t now) const {
-    // if connected we don't need to do anything
-    if (state_.isConnected()) return portMAX_DELAY;
-
-    TickType_t next_action;
-    if (searching_for_parents_) {
-        // next time until we need to send a search probe
-        next_action = last_search_probe_time_ + pdMS_TO_TICKS(SEARCH_PROBE_FREQ_MS);
-    } else {
-        // next time until we need to send a connect request
-        next_action = last_connect_request_time_ + pdMS_TO_TICKS(CONNECT_TIMEOUT_MS);
-    }
-
-    // clamp to 0
-    return next_action > now ? next_action - now : 0;
-}
-
-void meshnow::HandShaker::sendSearchProbe() {
+void HandShaker::sendSearchProbe() {
     ESP_LOGI(TAG, "Sending anyone there");
-    send_worker_.enqueuePayload(meshnow::BROADCAST_MAC_ADDR, false, meshnow::packets::AnyoneThere{}, SendPromise{},
-                                true, QoS::SINGLE_TRY);
+    send_worker_->enqueuePayload(meshnow::BROADCAST_MAC_ADDR, false, meshnow::packets::AnyoneThere{}, SendPromise{},
+                                 true, QoS::SINGLE_TRY);
     // update the last time we sent a search probe
     last_search_probe_time_ = xTaskGetTickCount();
 }
 
-void meshnow::HandShaker::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
+void HandShaker::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Sending i am here");
-    send_worker_.enqueuePayload(mac_addr, false, meshnow::packets::IAmHere{}, SendPromise{}, true, QoS::SINGLE_TRY);
+    send_worker_->enqueuePayload(mac_addr, false, meshnow::packets::IAmHere{}, SendPromise{}, true, QoS::SINGLE_TRY);
 }
 
-void meshnow::HandShaker::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
+void HandShaker::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending connect request to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
-    send_worker_.enqueuePayload(mac_addr, false, meshnow::packets::PlsConnect{}, std::move(result_promise), true,
-                                QoS::SINGLE_TRY);
+    send_worker_->enqueuePayload(mac_addr, false, meshnow::packets::PlsConnect{}, std::move(result_promise), true,
+                                 QoS::SINGLE_TRY);
 }
 
-void meshnow::HandShaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
+void HandShaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending verdict to " MAC_FORMAT ": %s", MAC_FORMAT_ARGS(mac_addr),
              accept ? "accept" : "rejectParent");
-    auto root_mac = router_.getRootMac();
+    std::scoped_lock lock{layout_->mtx};
+    auto root_mac = layout_->root;
     // we can be sure that the root mac is set because we only send a verdict if we have a parent
     assert(root_mac);
-    send_worker_.enqueuePayload(mac_addr, false, meshnow::packets::Verdict{root_mac.value(), accept},
-                                std::move(result_promise), true, QoS::SINGLE_TRY);
+    send_worker_->enqueuePayload(mac_addr, false, meshnow::packets::Verdict{root_mac.value(), accept},
+                                 std::move(result_promise), true, QoS::SINGLE_TRY);
 }
 
-void meshnow::HandShaker::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac,
-                                                meshnow::SendPromise&& result_promise) {
+void HandShaker::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac, meshnow::SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending child connect event");
-    send_worker_.enqueuePayload(meshnow::ROOT_MAC_ADDR, true,
-                                meshnow::packets::NodeConnected{router_.getThisMac(), child_mac},
-                                std::move(result_promise), true, QoS::NEXT_HOP);
+    send_worker_->enqueuePayload(meshnow::ROOT_MAC_ADDR, true, meshnow::packets::NodeConnected{layout_->mac, child_mac},
+                                 std::move(result_promise), true, QoS::NEXT_HOP);
 }
 
-void meshnow::HandShaker::tryConnect() {
+void HandShaker::tryConnect() {
     assert(!parent_infos_.empty());
 
     // find the best parent
@@ -147,12 +146,15 @@ void meshnow::HandShaker::tryConnect() {
     parent_infos_.erase(best_parent);
 }
 
-void meshnow::HandShaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
+void HandShaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
     // ignore when already connected or not searching anymore (this packet came in late, we already chose a parent)
-    if (state_.isConnected() || !searching_for_parents_) return;
+    if (state_->isConnected() || !searching_for_parents_) return;
 
     // check if the potential parent is a child of this node
-    if (containsChild(router_.layout_, mac_addr)) return;
+    {
+        std::scoped_lock lock{layout_->mtx};
+        if (containsChild(layout_, mac_addr)) return;
+    }
 
     if (parent_infos_.empty()) {
         first_parent_found_time_ = xTaskGetTickCount();
@@ -183,7 +185,7 @@ void meshnow::HandShaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rss
     }
 }
 
-void meshnow::HandShaker::rejectParent(MAC_ADDR mac_addr) {
+void HandShaker::rejectParent(MAC_ADDR mac_addr) {
     // remove parent from list
     auto it = std::find_if(parent_infos_.begin(), parent_infos_.end(),
                            [&mac_addr](const auto& parent_info) { return parent_info.mac_addr == mac_addr; });
@@ -193,31 +195,32 @@ void meshnow::HandShaker::rejectParent(MAC_ADDR mac_addr) {
     }
 }
 
-void meshnow::HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept,
-                                                  std::optional<MAC_ADDR> root_mac_addr) {
+void HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept, std::optional<MAC_ADDR> root_mac_addr) {
     // ignore if root or already connected (should actually never happen)
-    if (state_.isRoot() || state_.isConnected()) return;
+    if (state_->isRoot() || state_->isConnected()) return;
 
     // check if the potential parent is a child of this node
-    if (containsChild(router_.layout_, mac_addr)) return;
+    {
+        std::scoped_lock lock{layout_->mtx};
+        if (containsChild(layout_, mac_addr)) return;
+    }
 
     if (accept) {
         ESP_LOGI(TAG, "Got accepted by parent: " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
         // if accept we have the root mac
         assert(root_mac_addr);
 
+        std::scoped_lock lock{layout_->mtx};
+
         // set the root MAC
-        router_.setRootMac(root_mac_addr.value());
+        layout_->root = root_mac_addr;
         // set parent MAC
-        router_.setParentMac(mac_addr);
+        layout_->parent = std::make_shared<routing::Neighbor>(mac_addr);
 
         // update the state to connected
-        state_.setConnected(true);
+        state_->setConnected(true);
         // newly connected, we can reach the root
-        state_.setRootReachable(true);
-
-        // add the parent to the tracked neighbors for keep alive
-        keep_alive_.trackNeighbor(mac_addr);
+        state_->setRootReachable(true);
 
         // reset everything for the next handshake when we might disconnect
         reset();
@@ -231,26 +234,32 @@ void meshnow::HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool
     }
 }
 
-void meshnow::HandShaker::receivedSearchProbe(const MAC_ADDR& mac_addr) {
+void HandShaker::receivedSearchProbe(const MAC_ADDR& mac_addr) {
     // TODO check if cannot accept any more children
     // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
-    if (!state_.isRootReachable()) return;
+    if (!state_->isRootReachable()) return;
 
     // check if already connected to this node
-    if (containsChild(router_.layout_, mac_addr)) return;
-    if (router_.getParentMac() == mac_addr) return;
+    {
+        std::scoped_lock lock{layout_->mtx};
+        if (containsChild(layout_, mac_addr)) return;
+        if (layout_->parent && layout_->parent->mac == mac_addr) return;
+    }
 
     sendSearchProbeReply(mac_addr);
 }
 
-void meshnow::HandShaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
+void HandShaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     // only accept if we can reach the root
     // this is necessary because we may have disconnected since we answered the search probe
-    if (!state_.isRootReachable()) return;
+    if (!state_->isRootReachable()) return;
 
     // check if already connected to this node
-    if (containsChild(router_.layout_, mac_addr)) return;
-    if (router_.getParentMac() == mac_addr) return;
+    {
+        std::scoped_lock lock{layout_->mtx};
+        if (containsChild(layout_, mac_addr)) return;
+        if (layout_->parent && layout_->parent->mac == mac_addr) return;
+    }
 
     // TODO need some reservation/synchronization mechanism so we don not allocate the same "child slot" to multiple
     // nodes
@@ -267,7 +276,7 @@ void meshnow::HandShaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     }
 
     // send a node connected event to root
-    if (!state_.isRoot()) {
+    if (!state_->isRoot()) {
         SendPromise promise;
         auto feature = promise.get_future();
         sendChildConnectEvent(mac_addr, std::move(promise));
@@ -278,9 +287,7 @@ void meshnow::HandShaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
         }
     }
 
+    std::scoped_lock lock{layout_->mtx};
     // add child to router
-    router_.addChild(mac_addr, router_.getThisMac());
-
-    // add the child to the tracked neighbors for keep alive
-    keep_alive_.trackNeighbor(mac_addr);
+    insertDirectChild(layout_, mac_addr);
 }

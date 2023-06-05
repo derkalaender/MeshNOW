@@ -25,11 +25,6 @@ class HandShaker : public WorkerTask {
     explicit HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
                         std::shared_ptr<routing::Layout> layout);
 
-    /**
-     * Perform the current connection step (either sending search probes or connect requests).
-     */
-    void performHandshake();
-
     TickType_t nextActionAt() const noexcept override;
 
     void performAction() override;
@@ -121,11 +116,11 @@ class HandShaker : public WorkerTask {
      */
     void rejectParent(MAC_ADDR mac_addr);
 
-    SendWorker& send_worker_;
+    std::shared_ptr<SendWorker> send_worker_;
 
-    NodeState& state_;
+    std::shared_ptr<NodeState> state_;
 
-    routing::Router& router_;
+    std::shared_ptr<routing::Layout> layout_;
 
     bool searching_for_parents_{true};
 

@@ -49,6 +49,7 @@ struct Layout : Node, NodeTree<DirectChild> {
     Layout() : Node(queryThisMac()), NodeTree() {}
 
     std::shared_ptr<Neighbor> parent;
+    std::optional<MAC_ADDR> root;
 
     std::mutex mtx;
 };
