@@ -56,7 +56,7 @@ struct Layout : Node, NodeTree<DirectChild> {
 
 // FUNCTIONS //
 
-std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
+inline std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
     std::vector<std::shared_ptr<Neighbor>> neighbors;
     if (layout->parent) {
         neighbors.push_back(layout->parent);
@@ -67,6 +67,10 @@ std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout
 
 inline bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
     return std::ranges::any_of(layout->children, [&mac](auto&& child) { return child->mac == mac; });
+}
+
+inline bool hasNeighbor(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
+    return (layout->parent && layout->parent->mac == mac) || containsDirectChild(layout, mac);
 }
 
 template <typename T>

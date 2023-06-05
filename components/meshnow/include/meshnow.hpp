@@ -65,14 +65,6 @@ class Mesh {
     void stop();
 
    private:
-    static void initNVS();
-
-    static void initWifi();
-    static void deinitWifi();
-
-    void initEspnow();
-    static void deinitEspnow();
-
     const Config config_;
     std::shared_ptr<NodeState> state_;
     Networking networking_;

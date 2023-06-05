@@ -5,12 +5,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include <algorithm>
-#include <mutex>
 #include <utility>
 
+#include "constants.hpp"
+#include "error.hpp"
 #include "internal.hpp"
-#include "networking.hpp"
 
 static const char* TAG = CREATE_TAG("SendWorker");
 
@@ -26,13 +25,24 @@ static const auto ACK_TIMEOUT = 500;
 // frequency for checking QoS (ms)
 static const auto QOS_CHECK_FREQUENCY = 100;
 
-void meshnow::SendWorker::start() {
+/**
+ * Send raw data via ESP-NOW
+ * @param mac_addr address to send to
+ * @param data data to send
+ */
+static void rawSend(const meshnow::MAC_ADDR& mac_addr, const std::vector<uint8_t>& data);
+
+using meshnow::SendWorker;
+
+SendWorker::SendWorker(std::shared_ptr<routing::Layout> layout) : layout_(std::move(layout)) {}
+
+void SendWorker::start() {
     ESP_LOGI(TAG, "Starting!");
     run_thread_ = std::jthread{[this](const std::stop_token& stoken) { runLoop(stoken); }};
     qos_thread_ = std::jthread{[this](const std::stop_token& stoken) { qosChecker(stoken); }};
 }
 
-void meshnow::SendWorker::stop() {
+void SendWorker::stop() {
     ESP_LOGI(TAG, "Stopping!");
     run_thread_.request_stop();
     qos_thread_.request_stop();
@@ -52,8 +62,8 @@ void meshnow::SendWorker::stop() {
     waitbits_.clearBits(SEND_SUCCESS_BIT | SEND_FAILED_BIT);
 }
 
-void meshnow::SendWorker::enqueuePayload(const MAC_ADDR& dest_addr, bool resolve, const packets::Payload& payload,
-                                         SendPromise&& result_promise, bool priority, QoS qos) {
+void SendWorker::enqueuePayload(const MAC_ADDR& dest_addr, bool resolve, const packets::Payload& payload,
+                                SendPromise&& result_promise, bool priority, QoS qos) {
     // create packet
     // TODO don't use magic multiple times
     packets::Packet packet{esp_random(), payload};
@@ -67,12 +77,13 @@ void meshnow::SendWorker::enqueuePayload(const MAC_ADDR& dest_addr, bool resolve
     }
 }
 
-void meshnow::SendWorker::sendFinished(bool successful) {
-    // simply use waitbits to notify the waiting thread
-    waitbits_.setBits(successful ? SEND_SUCCESS_BIT : SEND_FAILED_BIT);
+void SendWorker::onSend(const uint8_t*, esp_now_send_status_t status) {
+    ESP_LOGD(TAG, "Send status: %d", status);
+    // set waitbits so we can send again
+    waitbits_.setBits(status == ESP_NOW_SEND_SUCCESS ? SEND_SUCCESS_BIT : SEND_FAILED_BIT);
 }
 
-void meshnow::SendWorker::receivedAck(uint8_t seq_num) {
+void SendWorker::receivedAck(uint8_t seq_num) {
     std::scoped_lock lock{qos_mutex_};
 
     // go through QoS list and find the item with matching sequence number
@@ -86,7 +97,7 @@ void meshnow::SendWorker::receivedAck(uint8_t seq_num) {
     qos_vector_.erase(item);
 }
 
-void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason reason) {
+void SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason reason) {
     std::scoped_lock lock{qos_mutex_};
 
     // go through QoS list and find the item with matching sequence number
@@ -109,7 +120,7 @@ void meshnow::SendWorker::receivedNack(uint8_t seq_num, packets::Nack::Reason re
     qos_vector_.erase(item);
 }
 
-void meshnow::SendWorker::runLoop(const std::stop_token& stoken) {
+void SendWorker::runLoop(const std::stop_token& stoken) {
     while (!stoken.stop_requested()) {
         // wait forever for the next item in the queue
         auto optional = send_queue_.pop(portMAX_DELAY);
@@ -123,8 +134,10 @@ void meshnow::SendWorker::runLoop(const std::stop_token& stoken) {
 
         MAC_ADDR addr;
         if (item.resolve) {
+            std::scoped_lock lock{layout_->mtx};
+
             // resolve next hop mac
-            auto next_hop_mac = layout_.resolve(item.dest_addr);
+            auto next_hop_mac = routing::resolve(layout_, item.dest_addr);
             if (!next_hop_mac) {
                 // couldn't resolve next hop mac
                 ESP_LOGD(TAG, "Couldn't resolve next hop mac");
@@ -136,7 +149,7 @@ void meshnow::SendWorker::runLoop(const std::stop_token& stoken) {
             addr = item.dest_addr;
         }
 
-        meshnow::Networking::rawSend(addr, meshnow::packets::serialize(item.packet));
+        rawSend(addr, packets::serialize(item.packet));
 
         // wait for callback
         auto bits = waitbits_.waitFor(SEND_SUCCESS_BIT | SEND_FAILED_BIT, true, false, SEND_TIMEOUT);
@@ -158,7 +171,7 @@ void meshnow::SendWorker::runLoop(const std::stop_token& stoken) {
     }
 }
 
-void meshnow::SendWorker::handleSuccess(meshnow::SendWorker::SendQueueItem&& item, const MAC_ADDR&) {
+void SendWorker::handleSuccess(SendWorker::SendQueueItem&& item, const MAC_ADDR&) {
     switch (item.qos) {
         case QoS::SINGLE_TRY:
         case QoS::NEXT_HOP: {
@@ -178,15 +191,17 @@ void meshnow::SendWorker::handleSuccess(meshnow::SendWorker::SendQueueItem&& ite
     }
 }
 
-void meshnow::SendWorker::handleFailure(meshnow::SendWorker::SendQueueItem&& item, const MAC_ADDR& next_hop) {
+void SendWorker::handleFailure(SendWorker::SendQueueItem&& item, const MAC_ADDR& next_hop) {
     switch (item.qos) {
         case QoS::SINGLE_TRY: {
             item.result_promise.set_value(SendResult{false});
         } break;
         case QoS::WAIT_ACK_TIMEOUT:
         case QoS::NEXT_HOP: {
+            std::scoped_lock lock{layout_->mtx};
+
             // check if the resolved host is still registered
-            if (layout_.hasNeighbor(next_hop)) {
+            if (routing::hasNeighbor(layout_, next_hop)) {
                 // requeue the item
                 send_queue_.push_back(std::move(item), portMAX_DELAY);
             } else {
@@ -197,7 +212,7 @@ void meshnow::SendWorker::handleFailure(meshnow::SendWorker::SendQueueItem&& ite
     }
 }
 
-void meshnow::SendWorker::qosChecker(const std::stop_token& stoken) {
+void SendWorker::qosChecker(const std::stop_token& stoken) {
     while (!stoken.stop_requested()) {
         auto now = xTaskGetTickCount();
 
@@ -217,4 +232,32 @@ void meshnow::SendWorker::qosChecker(const std::stop_token& stoken) {
 
         vTaskDelay(pdMS_TO_TICKS(QOS_CHECK_FREQUENCY));
     }
+}
+
+// INTERNAL //
+
+// TODO handle list of peers full
+static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
+    ESP_LOGV(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    if (esp_now_is_peer_exist(mac_addr.data())) {
+        return;
+    }
+    esp_now_peer_info_t peer_info{};
+    peer_info.channel = 0;
+    peer_info.encrypt = false;
+    peer_info.ifidx = WIFI_IF_STA;
+    std::copy(mac_addr.begin(), mac_addr.end(), peer_info.peer_addr);
+    CHECK_THROW(esp_now_add_peer(&peer_info));
+}
+
+static void rawSend(const meshnow::MAC_ADDR& mac_addr, const std::vector<uint8_t>& data) {
+    if (data.size() > meshnow::MAX_RAW_PACKET_SIZE) {
+        ESP_LOGE(TAG, "Payload size %d exceeds maximum data size %d", data.size(), meshnow::MAX_RAW_PACKET_SIZE);
+        throw meshnow::PayloadTooLargeException();
+    }
+
+    // TODO delete unused peers first
+    add_peer(mac_addr);
+    ESP_LOGV(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
+    CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
 }

@@ -11,8 +11,8 @@
 #include <waitbits.hpp>
 
 #include "constants.hpp"
+#include "layout.hpp"
 #include "packets.hpp"
-#include "router.hpp"
 
 namespace meshnow {
 
@@ -72,9 +72,9 @@ class SendWorker {
                         SendPromise&& result_promise, bool priority, QoS qos);
 
     /**
-     * Notify the SendWorker that the previous payload was sent.
+     * Send callback for ESP-NOW. Notifies the SendWorker that the previous payload was sent.
      */
-    void sendFinished(bool successful);
+    void onSend(const uint8_t* mac_addr, esp_now_send_status_t status);
 
     /**
      * Notify of a received ACK.

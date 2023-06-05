@@ -21,12 +21,12 @@ meshnow::MainWorker::MainWorker(std::shared_ptr<SendWorker> send_worker, std::sh
     : send_worker_(std::move(send_worker)), layout_(std::move(layout)), state_(std::move(state)) {}
 
 void MainWorker::start() {
-    ESP_LOGI(TAG, "Starting main run loop!");
+    ESP_LOGI(TAG, "Starting!");
     run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
 }
 
 void MainWorker::stop() {
-    ESP_LOGI(TAG, "Stopping main run loop!");
+    ESP_LOGI(TAG, "Stopping!");
     run_thread_.request_stop();
 }
 

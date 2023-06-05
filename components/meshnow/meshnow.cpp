@@ -10,37 +10,36 @@
 
 static const char *TAG = CREATE_TAG("🦌");
 
-/**
- * Initializes NVS.
- */
-void meshnow::Mesh::initNVS() {
-    ESP_LOGI(TAG, "Initializing NVS");
-
-    // initialize nvs
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
-        CHECK_THROW(nvs_flash_erase());
-        ret = nvs_flash_init();
+static void checkWiFi() {
+    // check if WiFi is initialized
+    // do dummy operation
+    wifi_mode_t mode;
+    esp_err_t ret = esp_wifi_get_mode(&mode);
+    if (ret == ESP_ERR_WIFI_NOT_INIT) {
+        ESP_LOGE(TAG, "WiFi is not initialized");
+        CHECK_THROW(ret);
+    } else {
+        ESP_LOGI(TAG, "WiFi OK!");
     }
-    CHECK_THROW(ret);
-
-    ESP_LOGI(TAG, "NVS initialized");
 }
 
-/**
- * Initializes WiFi.
- */
-void meshnow::Mesh::initWifi() {
-    ESP_LOGI(TAG, "Initializing WiFi");
+static void checkEspNow() {
+    // check if ESP-NOW is initialized
+    // do dummy operation
+    esp_now_peer_info_t peer;
+    esp_err_t ret = esp_now_fetch_peer(true, &peer);
+    if (ret == ESP_ERR_ESPNOW_NOT_INIT) {
+        ESP_LOGE(TAG, "ESP-NOW is not initialized");
+        CHECK_THROW(ret);
+    } else {
+        ESP_LOGI(TAG, "WiFi OK!");
+        ESP_LOGI(TAG, "You may register the MeshNow callbacks now...");
+    }
+}
 
-    // initialize the tcp stack (not needed atm)
-    //    ESP_ERROR_CHECK(esp_netif_init());
+void setupWiFi() {
+    ESP_LOGI(TAG, "Setting WiFi configuration");
 
-    // create default event loop (wifi posts events and will otherwise spam the logs)
-    CHECK_THROW(esp_event_loop_create_default());
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    CHECK_THROW(esp_wifi_init(&cfg));
     CHECK_THROW(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     // TODO set ap/sta mode for root
     CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_STA));
@@ -53,65 +52,23 @@ void meshnow::Mesh::initWifi() {
     // TODO this also needs to be different for root (LR + BGN)
     CHECK_THROW(esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR));
 
-    ESP_LOGI(TAG, "WiFi initialized");
-}
-
-/**
- * Deinitializes WiFi.
- */
-void meshnow::Mesh::deinitWifi() {
-    ESP_LOGI(TAG, "Deinitializing WiFi");
-
-    CHECK_THROW(esp_wifi_stop());
-    CHECK_THROW(esp_wifi_deinit());
-
-    ESP_LOGI(TAG, "WiFi deinitialized");
-}
-
-// this is a dirty hack because esp-now callbacks are C-style...
-static meshnow::Networking *networking_callback_ptr;
-
-/**
- * Initializes ESP-NOW.
- */
-void meshnow::Mesh::initEspnow() {
-    ESP_LOGI(TAG, "Initializing ESP-NOW");
-
-    CHECK_THROW(esp_now_init());
-    networking_callback_ptr = &networking_;
-    CHECK_THROW(esp_now_register_send_cb(
-        [](auto mac_addr, auto status) { networking_callback_ptr->onSend(mac_addr, status); }));
-    CHECK_THROW(esp_now_register_recv_cb(
-        [](auto info, auto data, auto len) { networking_callback_ptr->onReceive(info, data, len); }));
-
-    ESP_LOGI(TAG, "ESP-NOW initialized");
-}
-
-/**
- * Deinitializes ESP-NOW.
- */
-void meshnow::Mesh::deinitEspnow() {
-    ESP_LOGI(TAG, "Deinitializing ESP-NOW");
-
-    CHECK_THROW(esp_now_unregister_recv_cb());
-    CHECK_THROW(esp_now_unregister_send_cb());
-    CHECK_THROW(esp_now_deinit());
-
-    networking_callback_ptr = nullptr;
-
-    ESP_LOGI(TAG, "ESP-NOW deinitialized");
+    ESP_LOGI(TAG, "WiFi set up");
 }
 
 meshnow::Mesh::Mesh(const Config config)
     : config_{config}, state_{std::make_shared<NodeState>(config_.root)}, networking_{state_} {
     ESP_LOGI(TAG, "Initializing MeshNOW");
-    initNVS();
-    initWifi();
-    initEspnow();
+    ESP_LOGI(TAG, "Checking ESP-IDF network stack is properly initialized...");
+    checkWiFi();
+    checkEspNow();
+    ESP_LOGI(TAG, "Check OK!");
+    setupWiFi();
     ESP_LOGI(TAG, "MeshNOW initialized. You can started the mesh now 🦌");
 }
 
 meshnow::Mesh::~Mesh() {
+    ESP_LOGI(TAG, "Deinitializing MeshNOW");
+
     if (state_->isStarted()) {
         ESP_LOGW(TAG, "The mesh is still running. Stopping it for you. Consider calling stop() yourself! >:(");
         try {
@@ -123,23 +80,11 @@ meshnow::Mesh::~Mesh() {
         }
     }
 
-    ESP_LOGI(TAG, "Deinitializing MeshNOW");
-
-    try {
-        deinitEspnow();
-        deinitWifi();
-    } catch (const std::exception &e) {
-        ESP_LOGE(TAG, "Error while deinitializing MeshNOW: %s", e.what());
-        ESP_LOGE(TAG, "This should never happen. Terminating....");
-        std::terminate();
-    }
-
-    // TODO deinit nvs?
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
 }
 
 void meshnow::Mesh::start() {
-    auto lock = state_.acquireLock();
+    auto lock = state_->acquireLock();
 
     if (state_->isStarted()) {
         ESP_LOGE(TAG, "MeshNOW is already running");

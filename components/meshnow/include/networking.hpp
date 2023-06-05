@@ -7,12 +7,7 @@
 #include <vector>
 
 #include "constants.hpp"
-#include "hand_shaker.hpp"
-#include "keep_alive.hpp"
 #include "main_worker.hpp"
-#include "packet_handler.hpp"
-#include "receive_meta.hpp"
-#include "router.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 
@@ -45,11 +40,6 @@ class Networking {
      * Stops the networking stack.
      */
     void stop();
-
-    /**
-     * Send callback for ESP-NOW.
-     */
-    void onSend(const uint8_t* mac_addr, esp_now_send_status_t status);
 
    private:
     std::shared_ptr<routing::Layout> layout_{std::make_shared<routing::Layout>()};
