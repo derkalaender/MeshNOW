@@ -1,12 +1,7 @@
 #pragma once
 
-#include <freertos/portmacro.h>
-
-#include <cstdint>
 #include <memory>
-#include <vector>
 
-#include "constants.hpp"
 #include "main_worker.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
@@ -26,7 +21,7 @@ namespace meshnow {
  */
 class Networking {
    public:
-    explicit Networking(std::shared_ptr<NodeState> state);
+    explicit Networking(const std::shared_ptr<NodeState>& state);
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
@@ -43,10 +38,10 @@ class Networking {
 
    private:
     std::shared_ptr<routing::Layout> layout_{std::make_shared<routing::Layout>()};
+
+   public:
     std::shared_ptr<SendWorker> send_worker_;
     std::shared_ptr<MainWorker> main_worker_;
-
-    friend class SendWorker;
 };
 
 }  // namespace meshnow

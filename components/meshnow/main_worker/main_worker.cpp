@@ -10,6 +10,7 @@
 #include "hand_shaker.hpp"
 #include "internal.hpp"
 #include "keep_alive.hpp"
+#include "packet_handler.hpp"
 #include "worker_task.hpp"
 
 static const char *TAG = CREATE_TAG("MainWorker");

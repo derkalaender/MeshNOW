@@ -1,10 +1,14 @@
 #pragma once
 
-#include "memory"
+#include <esp_now.h>
+
+#include <memory>
+
 #include "networking.hpp"
 #include "state.hpp"
 
 namespace meshnow {
+
 struct Config {
     /**
      * Whether this node is the root node.
@@ -15,6 +19,26 @@ struct Config {
     bool root{false};
 };
 
+/**
+ * Struct that holds callbacks that the user needs to register with ESP-NOW.
+ */
+struct Callbacks {
+    /**
+     * Required argument that needs to be passed unmodified to the callbacks
+     */
+    void *arg;
+
+    /**
+     * ESP-NOW receive callback with additional arg parameter that needs to be equal to the arg member of this struct
+     */
+    void (*recv_cb)(const esp_now_recv_info_t *esp_now_info, const uint8_t *data, int data_len, void *arg);
+
+    /**
+     * ESP-NOW send callback with additional arg parameter that needs to be equal to the arg member of this struct
+     */
+    void (*send_cb)(const uint8_t *mac_addr, esp_now_send_status_t status, void *arg);
+};
+
 // TODO maybe singleton? Special copy constructor handling and stuff? -> YES, move semantics to guarantee only ever 1
 // instance
 /**
@@ -23,7 +47,7 @@ struct Config {
 class Mesh {
    public:
     /**
-     * Initializes the App library.
+     * Initializes the Mesh.
      *
      * This includes setting up WiFi, Network Interfaces (netif), and ESP-NOW.
      *
@@ -33,11 +57,11 @@ class Mesh {
      */
     explicit Mesh(Config config);
 
-    Mesh(const Mesh&) = delete;
-    Mesh& operator=(const Mesh&) = delete;
+    Mesh(const Mesh &) = delete;
+    Mesh &operator=(const Mesh &) = delete;
 
     /**
-     * Deinitializes the App library.
+     * Deinitializes the Mesh.
      *
      * This includes resetting WiFi, Network Interfaces (netif), and ESP-NOW.
      *
@@ -63,6 +87,17 @@ class Mesh {
      * @note Make sure to have actually started the mesh before calling this function.
      */
     void stop();
+
+    /**
+     * Returns the callbacks that need to be registered with ESP-NOW.
+     *
+     * @note You need(!) to register these yourself with ESP-NOW. If you don't, the mesh won't work!
+     *
+     * @note This design is required because the user may use ESP-NOW for other purposes as well.
+     *
+     * @return Struct that holds the callbacks as well as additional required arguments.
+     */
+    Callbacks getCallbacks() const;
 
    private:
     const Config config_;

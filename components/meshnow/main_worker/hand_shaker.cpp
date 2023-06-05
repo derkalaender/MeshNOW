@@ -216,6 +216,7 @@ void HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept, 
         layout_->root = root_mac_addr;
         // set parent MAC
         layout_->parent = std::make_shared<routing::Neighbor>(mac_addr);
+        layout_->parent->last_seen = xTaskGetTickCount();
 
         // update the state to connected
         state_->setConnected(true);
@@ -289,5 +290,7 @@ void HandShaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
 
     std::scoped_lock lock{layout_->mtx};
     // add child to router
-    insertDirectChild(layout_, mac_addr);
+    routing::DirectChild child{mac_addr};
+    child.last_seen = xTaskGetTickCount();
+    routing::insertDirectChild(layout_, std::move(child));
 }

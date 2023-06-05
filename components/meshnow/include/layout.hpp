@@ -57,6 +57,7 @@ struct Layout : Node, NodeTree<DirectChild> {
 // FUNCTIONS //
 
 inline std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
+    assert(layout);
     std::vector<std::shared_ptr<Neighbor>> neighbors;
     if (layout->parent) {
         neighbors.push_back(layout->parent);
@@ -66,20 +67,24 @@ inline std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr
 }
 
 inline bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
+    assert(layout);
     return std::ranges::any_of(layout->children, [&mac](auto&& child) { return child->mac == mac; });
 }
 
 inline bool hasNeighbor(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
+    assert(layout);
     return (layout->parent && layout->parent->mac == mac) || containsDirectChild(layout, mac);
 }
 
 template <typename T>
 inline bool containsChild(const std::shared_ptr<T>& tree, const MAC_ADDR& mac) {
+    assert(tree);
     return std::ranges::any_of(tree->children,
                                [&mac](auto&& child) { return child->mac == mac || containsChild(child, mac); });
 }
 
-std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest) {
+inline std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest) {
+    assert(layout);
     if (dest == layout->mac || dest == BROADCAST_MAC_ADDR) {
         // don't do anything
         return dest;
@@ -137,6 +142,7 @@ inline auto createChild<IndirectChild>(const MAC_ADDR& mac) {
 
 template <typename T>
 inline bool insertChild(const std::shared_ptr<T>& tree, const MAC_ADDR& parent_mac, const MAC_ADDR& child_mac) {
+    assert(tree);
     if (tree->mac == parent_mac) {
         tree->children.emplace_back(createChild<T>(child_mac));
         return true;
@@ -151,11 +157,13 @@ inline bool insertChild(const std::shared_ptr<T>& tree, const MAC_ADDR& parent_m
     return false;
 }
 
-inline void insertDirectChild(const std::shared_ptr<Layout>& tree, const MAC_ADDR& child_mac) {
-    tree->children.emplace_back(createChild<Layout>(child_mac));
+inline void insertDirectChild(const std::shared_ptr<Layout>& tree, DirectChild&& child) {
+    assert(tree);
+    tree->children.push_back(std::make_shared<DirectChild>(child));
 }
 
 inline bool removeDirectChild(const std::shared_ptr<Layout>& tree, const MAC_ADDR& child_mac) {
+    assert(tree);
     auto child = std::find_if(tree->children.begin(), tree->children.end(),
                               [&child_mac](auto&& child) { return child->mac == child_mac; });
 

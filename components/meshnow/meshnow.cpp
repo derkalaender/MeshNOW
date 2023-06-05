@@ -7,6 +7,7 @@
 
 #include "error.hpp"
 #include "internal.hpp"
+#include "networking.hpp"
 
 static const char *TAG = CREATE_TAG("🦌");
 
@@ -55,7 +56,9 @@ void setupWiFi() {
     ESP_LOGI(TAG, "WiFi set up");
 }
 
-meshnow::Mesh::Mesh(const Config config)
+using meshnow::Mesh;
+
+Mesh::Mesh(const Config config)
     : config_{config}, state_{std::make_shared<NodeState>(config_.root)}, networking_{state_} {
     ESP_LOGI(TAG, "Initializing MeshNOW");
     ESP_LOGI(TAG, "Checking ESP-IDF network stack is properly initialized...");
@@ -66,7 +69,7 @@ meshnow::Mesh::Mesh(const Config config)
     ESP_LOGI(TAG, "MeshNOW initialized. You can started the mesh now 🦌");
 }
 
-meshnow::Mesh::~Mesh() {
+Mesh::~Mesh() {
     ESP_LOGI(TAG, "Deinitializing MeshNOW");
 
     if (state_->isStarted()) {
@@ -83,7 +86,7 @@ meshnow::Mesh::~Mesh() {
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
 }
 
-void meshnow::Mesh::start() {
+void Mesh::start() {
     auto lock = state_->acquireLock();
 
     if (state_->isStarted()) {
@@ -100,7 +103,7 @@ void meshnow::Mesh::start() {
     state_->setStarted(true);
 }
 
-void meshnow::Mesh::stop() {
+void Mesh::stop() {
     auto lock = state_->acquireLock();
 
     if (!state_->isStarted()) {
@@ -115,4 +118,17 @@ void meshnow::Mesh::stop() {
     ESP_LOGI(TAG, "Mesh stopped! 🛑");
 
     state_->setStarted(false);
+}
+
+static void recvCbWrapper(const esp_now_recv_info_t *esp_now_info, const uint8_t *data, int data_len, void *arg) {
+    static_cast<const meshnow::Networking *>(arg)->main_worker_->onReceive(esp_now_info, data, data_len);
+}
+
+static void sendCbWrapper(const uint8_t *mac_addr, esp_now_send_status_t status, void *arg) {
+    static_cast<const meshnow::Networking *>(arg)->send_worker_->onSend(mac_addr, status);
+}
+
+meshnow::Callbacks Mesh::getCallbacks() const {
+    // cast Networking class to void* and pass it along as to retain its data
+    return Callbacks{static_cast<void *>(const_cast<Networking*>(&networking_)), recvCbWrapper, sendCbWrapper};
 }

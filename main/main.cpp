@@ -1,14 +1,14 @@
-#include <driver/gpio.h>
+
+#include <esp_event.h>
 #include <esp_log.h>
 #include <esp_mac.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
+#include <esp_now.h>
+#include <esp_now_multi.h>
+#include <esp_wifi.h>
+#include <nvs_flash.h>
 
 #include <memory>
-
-// #include "espnow_test.h"
-#include "meshnow.hpp"
-#include "networking.hpp"
+#include <meshnow.hpp>
 
 static const char *TAG = "main";
 
@@ -36,15 +36,47 @@ static const meshnow::MAC_ADDR root{0x24, 0x6f, 0x28, 0x4a, 0x63, 0x3c};
 
 static std::unique_ptr<meshnow::Mesh> MeshNOW;
 
+static esp_now_multi_handle_t multi_handle;
+
 extern "C" void app_main(void) {
+    // INIT //
+    {
+        ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+        esp_err_t ret = nvs_flash_init();
+        if (ret == ESP_ERR_NVS_NO_FREE_PAGES) {
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            ret = nvs_flash_init();
+        }
+        ESP_ERROR_CHECK(ret);
+
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+        ESP_ERROR_CHECK(esp_now_init());
+        ESP_ERROR_CHECK(esp_now_multi_init());
+    }
+    // INIT DONE //
+
     meshnow::MAC_ADDR my_mac;
     esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
 
     bool is_root = my_mac == root;
 
-    MeshNOW = std::make_unique<meshnow::Mesh>(meshnow::Config{.root = is_root});
+    ESP_LOGI(TAG, "Initializing MeshNOW");
+    meshnow::Config config{.root = is_root};
+    MeshNOW = std::make_unique<meshnow::Mesh>(config);
     ESP_LOGI(TAG, "MeshNOW initialized");
+
+    ESP_LOGI(TAG, "Setting up Multi ESP-NOW");
+
+    meshnow::Callbacks callbacks{MeshNOW->getCallbacks()};
+    esp_now_multi_reg_t reg{callbacks.recv_cb, callbacks.send_cb, callbacks.arg};
+    esp_now_multi_register(reg, &multi_handle);
+    ESP_LOGI(TAG, "Multi ESP-NOW set up");
+
     ESP_LOGI(TAG, "Starting as %s!", is_root ? "root" : "node");
+
     MeshNOW->start();
 
     //    auto target = meshnow::BROADCAST_MAC_ADDR;

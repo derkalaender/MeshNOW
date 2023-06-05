@@ -7,8 +7,6 @@
 #include <vector>
 
 #include "constants.hpp"
-#include "packet_handler.hpp"
-#include "router.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 #include "waitbits.hpp"
