@@ -7,7 +7,7 @@
 #include "constants.hpp"
 #include "internal.hpp"
 
-const char* TAG = CREATE_TAG("KeepAlive");
+static const char* TAG = CREATE_TAG("KeepAlive");
 
 // send a keep alive beacon every 500ms
 static constexpr auto BEACON_SEND_INTERVAL = pdMS_TO_TICKS(300);
