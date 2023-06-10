@@ -7,6 +7,7 @@
 #include <ranges>
 #include <utility>
 
+#include "fragment.hpp"
 #include "hand_shaker.hpp"
 #include "internal.hpp"
 #include "keep_alive.hpp"
@@ -86,11 +87,15 @@ void MainWorker::runLoop(const std::stop_token &stoken) {
 
     HandShaker hand_shaker{send_worker_, state_, layout_};
 
-    std::array<std::reference_wrapper<WorkerTask>, 4> tasks{beacon_send, neighbors_alive_check, root_reachable_check,
-                                                            hand_shaker};
+    fragment::FragmentTask fragment_task;
 
-    PacketHandler packet_handler{send_worker_,        state_, layout_, hand_shaker, neighbors_alive_check,
-                                 root_reachable_check};
+    std::array<std::reference_wrapper<WorkerTask>, 5> tasks{
+        beacon_send, neighbors_alive_check, root_reachable_check, hand_shaker, fragment_task,
+    };
+
+    PacketHandler packet_handler{
+        send_worker_, state_, layout_, hand_shaker, neighbors_alive_check, root_reachable_check, fragment_task,
+    };
 
     auto lastLoopRun = xTaskGetTickCount();
 

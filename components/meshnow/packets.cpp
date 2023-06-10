@@ -80,28 +80,36 @@ static void serialize(S& s, meshnow::packets::Nack& p) {
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::LwipDataFirst& p) {
+    s.container1b(p.source);
     s.container1b(p.target);
+    s.value4b(p.id);
     s.value2b(p.size);
     s.container1b(p.data, p.size);
 }
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::CustomDataFirst& p) {
+    s.container1b(p.source);
     s.container1b(p.target);
+    s.value4b(p.id);
     s.value2b(p.size);
     s.container1b(p.data, p.data.size());
 }
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::LwipDataNext& p) {
+    s.container1b(p.source);
     s.container1b(p.target);
+    s.value4b(p.id);
     s.value1b(p.frag_num);
     s.container1b(p.data, p.data.size());
 }
 
 template <typename S>
 static void serialize(S& s, meshnow::packets::CustomDataNext& p) {
+    s.container1b(p.source);
     s.container1b(p.target);
+    s.value4b(p.id);
     s.value1b(p.frag_num);
     s.container1b(p.data, p.data.size());
 }

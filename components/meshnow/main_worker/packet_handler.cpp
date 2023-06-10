@@ -14,16 +14,18 @@ using meshnow::PacketHandler;
 PacketHandler::PacketHandler(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
                              std::shared_ptr<routing::Layout> layout, HandShaker& hand_shaker,
                              keepalive::NeighborsAliveCheckTask& neighbors_alive_check_task,
-                             meshnow::keepalive::RootReachableCheckTask& rootReachableCheckTask)
+                             keepalive::RootReachableCheckTask& rootReachableCheckTask,
+                             fragment::FragmentTask& fragment_task)
     : send_worker_(std::move(send_worker)),
       state_(std::move(state)),
       layout_(std::move(layout)),
       hand_shaker_(hand_shaker),
       neighbors_alive_check_task_(neighbors_alive_check_task),
-      root_reachable_check_task_(rootReachableCheckTask) {}
+      root_reachable_check_task_(rootReachableCheckTask),
+      fragment_task_(fragment_task) {}
 
 void PacketHandler::updateRssi(const meshnow::ReceiveMeta& meta) {
-    std::scoped_lock lock(layout_->mtx);
+    std::scoped_lock lock{layout_->mtx};
     auto neighbors = getNeighbors(layout_);
     for (auto& n : neighbors) {
         if (n->mac == meta.src_addr) {
@@ -31,6 +33,12 @@ void PacketHandler::updateRssi(const meshnow::ReceiveMeta& meta) {
             break;
         }
     }
+}
+
+bool PacketHandler::isForMe(const MAC_ADDR& dest_addr) {
+    std::scoped_lock lock{layout_->mtx};
+    return dest_addr == layout_->mac || dest_addr == meshnow::BROADCAST_MAC_ADDR ||
+           (dest_addr == meshnow::ROOT_MAC_ADDR && state_->isRoot());
 }
 
 void PacketHandler::handlePacket(const meshnow::ReceiveMeta& meta, const packets::Payload& p) {
@@ -125,7 +133,12 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Nack
 }
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::LwipDataFirst& p) {
-    // TODO
+    if (isForMe(p.target)) {
+        fragment_task_.newFragmentFirst(p.source, p.id, p.size, p.data);
+    } else {
+        // forward
+        send_worker_->enqueuePayload(p.target, true, p, SendPromise{}, false, QoS::NEXT_HOP);
+    }
 }
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::CustomDataFirst& p) {
@@ -133,7 +146,12 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Cust
 }
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::LwipDataNext& p) {
-    // TODO
+    if (isForMe(p.target)) {
+        fragment_task_.newFragmentNext(p.source, p.id, p.frag_num, p.data);
+    } else {
+        // forward
+        send_worker_->enqueuePayload(p.target, true, p, SendPromise{}, false, QoS::NEXT_HOP);
+    }
 }
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::CustomDataNext& p) {
