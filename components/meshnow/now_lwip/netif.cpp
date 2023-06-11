@@ -7,11 +7,13 @@
 #include <lwip/ip4_addr.h>
 #include <lwip/lwip_napt.h>
 
+#include <memory>
+
 #include "constants.hpp"
 #include "error.hpp"
 #include "internal.hpp"
 
-static const char* TAG = CREATE_TAG("Netif");
+static const char* TAG = CREATE_TAG("LWIP | Netif");
 
 using meshnow::lwip::netif::Netif;
 
@@ -23,11 +25,24 @@ void Netif::init() {
 
 void Netif::start() {
     // TODO rx task
-    // create IO driver TODO
+    // create IO driver
+    ESP_LOGI(TAG, "Creating IO driver");
+    io_driver_ = createIODriver();
 
     ESP_LOGI(TAG, "Attaching driver to network interface");
-    esp_netif_attach(netif_.get(), nullptr);  // TODO
+    esp_netif_attach(netif_.get(), io_driver_.get());
     ESP_LOGI(TAG, "Attached driver to network interface");
+}
+
+std::unique_ptr<meshnow::lwip::io::IODriver> Netif::createIODriver() {
+    return std::make_unique<meshnow::lwip::io::IODriver>();
+}
+
+void Netif::setNetifMac(wifi_interface_t wifi_interface) {
+    MAC_ADDR mac;
+    esp_wifi_get_mac(wifi_interface, mac.data());
+    esp_netif_set_mac(netif_.get(), mac.data());
+    ESP_LOGI(TAG, "Set netif MAC to: " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
 }
 
 using meshnow::lwip::netif::RootNetif;
@@ -63,10 +78,7 @@ void RootNetif::start() {
     set_dhcp_dns();
 
     // set mac
-    MAC_ADDR mac;
-    esp_wifi_get_mac(WIFI_IF_AP, mac.data());
-    esp_netif_set_mac(netif_.get(), mac.data());
-    ESP_LOGI(TAG, "Set netif MAC to: " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+    setNetifMac(WIFI_IF_AP);
 
     // start netif action
     ESP_LOGI(TAG, "Starting network interface for root node (AP)");
@@ -117,10 +129,7 @@ void NodeNetif::start() {
     Netif::start();
 
     // set mac
-    MAC_ADDR mac;
-    esp_wifi_get_mac(WIFI_IF_STA, mac.data());
-    esp_netif_set_mac(netif_.get(), mac.data());
-    ESP_LOGI(TAG, "Set netif MAC to: " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+    setNetifMac(WIFI_IF_STA);
 
     // start netif action
     ESP_LOGI(TAG, "Starting network interface for node (STA)");
