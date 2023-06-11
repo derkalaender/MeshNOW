@@ -13,13 +13,13 @@ using meshnow::Networking;
 
 Networking::Networking(std::shared_ptr<NodeState> state) : state_(std::move(state)) {
     // set root mac in layout
-    if (state->isRoot()) {
+    if (state_->isRoot()) {
         std::scoped_lock lock{layout_->mtx};
         layout_->root = layout_->mac;
     }
 
     // create netif
-    if (state->isRoot()) {
+    if (state_->isRoot()) {
         netif_ = std::make_unique<meshnow::lwip::netif::RootNetif>();
     } else {
         netif_ = std::make_unique<meshnow::lwip::netif::NodeNetif>();
@@ -32,14 +32,14 @@ void Networking::start() {
     // init netif
     netif_->init();
 
+    // start both workers
+    main_worker_->start();
+    send_worker_->start();
+
     // if we are root, we can also start it already
     if (state_->isRoot()) {
         netif_->start();
     }
-
-    // start both workers
-    main_worker_->start();
-    send_worker_->start();
 }
 
 void Networking::stop() {
