@@ -46,7 +46,7 @@ class Networking {
     std::shared_ptr<MainWorker> main_worker_{std::make_shared<MainWorker>(send_worker_, layout_, state_)};
 
    private:
-    std::unique_ptr<lwip::netif::Netif> netif_;
+    std::shared_ptr<lwip::netif::Netif> netif_;
 };
 
 }  // namespace meshnow

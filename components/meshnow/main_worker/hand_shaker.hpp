@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "now_lwip/netif.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
-#include "waitbits.hpp"
 #include "worker_task.hpp"
 
 namespace meshnow {
@@ -21,7 +21,7 @@ namespace meshnow {
 class HandShaker : public WorkerTask {
    public:
     explicit HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                        std::shared_ptr<routing::Layout> layout);
+                        std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif);
 
     TickType_t nextActionAt() const noexcept override;
 
@@ -119,6 +119,8 @@ class HandShaker : public WorkerTask {
     std::shared_ptr<NodeState> state_;
 
     std::shared_ptr<routing::Layout> layout_;
+
+    std::shared_ptr<lwip::netif::Netif> netif_;
 
     bool searching_for_parents_{true};
 

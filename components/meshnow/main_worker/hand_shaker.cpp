@@ -24,8 +24,11 @@ static const auto MAX_PARENTS_TO_CONSIDER = 5;
 using meshnow::HandShaker;
 
 HandShaker::HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                       std::shared_ptr<routing::Layout> layout)
-    : send_worker_{std::move(send_worker)}, state_{std::move(state)}, layout_{std::move(layout)} {
+                       std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif)
+    : send_worker_{std::move(send_worker)},
+      state_{std::move(state)},
+      layout_{std::move(layout)},
+      netif_{std::move(netif)} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
 }
 
@@ -222,6 +225,9 @@ void HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept, 
         state_->setConnected(true);
         // newly connected, we can reach the root
         state_->setRootReachable(true);
+
+        // start netif
+        netif_->start();
 
         // reset everything for the next handshake when we might disconnect
         reset();

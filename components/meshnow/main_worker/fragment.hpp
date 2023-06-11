@@ -6,6 +6,7 @@
 #include <map>
 
 #include "constants.hpp"
+#include "now_lwip/netif.hpp"
 #include "worker_task.hpp"
 
 namespace meshnow::fragment {
@@ -34,6 +35,8 @@ class DataEntry {
  */
 class FragmentTask : public WorkerTask {
    public:
+    explicit FragmentTask(std::shared_ptr<lwip::netif::Netif> netif);
+
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;
 
@@ -45,6 +48,8 @@ class FragmentTask : public WorkerTask {
 
     using DataKey = std::pair<MAC_ADDR, uint16_t>;  // mac + fragment id
     std::map<DataKey, DataEntry> data_entries_;
+
+    std::shared_ptr<lwip::netif::Netif> netif_;
 };
 
 }  // namespace meshnow::fragment

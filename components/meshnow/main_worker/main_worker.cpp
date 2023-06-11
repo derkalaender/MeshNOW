@@ -81,13 +81,16 @@ static inline TickType_t calculateTimeout(const std::array<std::reference_wrappe
 }
 
 void MainWorker::runLoop(const std::stop_token &stoken) {
+    // netif should be initialized by now
+    assert(netif_);
+
     keepalive::BeaconSendTask beacon_send{send_worker_, layout_};
-    keepalive::RootReachableCheckTask root_reachable_check{state_, layout_};
-    keepalive::NeighborsAliveCheckTask neighbors_alive_check{send_worker_, state_, layout_};
+    keepalive::RootReachableCheckTask root_reachable_check{state_, layout_, netif_};
+    keepalive::NeighborsAliveCheckTask neighbors_alive_check{send_worker_, state_, layout_, netif_};
 
-    HandShaker hand_shaker{send_worker_, state_, layout_};
+    HandShaker hand_shaker{send_worker_, state_, layout_, netif_};
 
-    fragment::FragmentTask fragment_task;
+    fragment::FragmentTask fragment_task{netif_};
 
     std::array<std::reference_wrapper<WorkerTask>, 5> tasks{
         beacon_send, neighbors_alive_check, root_reachable_check, hand_shaker, fragment_task,

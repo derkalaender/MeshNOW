@@ -1,11 +1,13 @@
 #include "fragment.hpp"
 
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include <algorithm>
-
 #include "constants.hpp"
+#include "internal.hpp"
+
+static const char* TAG = CREATE_TAG("Fragment");
 
 static constexpr auto FRAGMENT_TIMEOUT = pdMS_TO_TICKS(3000);
 
@@ -32,6 +34,8 @@ void DataEntry::insertFragment(uint8_t frag_num, const Buffer& data) {
 }
 
 using meshnow::fragment::FragmentTask;
+
+FragmentTask::FragmentTask(std::shared_ptr<lwip::netif::Netif> netif) : netif_(std::move(netif)) {}
 
 TickType_t FragmentTask::nextActionAt() const noexcept {
     // return the time when the next fragment will time out
@@ -95,5 +99,6 @@ void FragmentTask::newFragmentNext(const meshnow::MAC_ADDR& src_mac, uint16_t fr
 }
 
 void FragmentTask::dataCompleted(meshnow::Buffer&& data) {
-    // TODO push back to lwip
+    ESP_LOGI(TAG, "Pushing to LWIP");
+    netif_->io_driver_.driver_impl->receivedData(std::move(data));
 }

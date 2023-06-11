@@ -34,6 +34,11 @@ class Netif {
      */
     virtual void stop() = 0;
 
+    /**
+     * IODriver with post-attach callback.
+     */
+    io::IODriver io_driver_;
+
    protected:
     /**
      * Creates the underlying esp netif object and returns a pointer to it
@@ -54,11 +59,6 @@ class Netif {
      * Unique pointer to the interface created by createInterface(). Allows easy destruction.
      */
     std::shared_ptr<esp_netif_t> netif_;
-
-    /**
-     * IODriver with post-attach callback.
-     */
-    io::IODriver io_driver_;
 
     std::shared_ptr<SendWorker> send_worker_;
     std::shared_ptr<routing::Layout> layout_;
