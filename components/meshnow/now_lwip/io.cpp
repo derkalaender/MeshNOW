@@ -3,6 +3,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_netif.h>
+#include <esp_random.h>
 
 #include "constants.hpp"
 #include "internal.hpp"
@@ -52,10 +53,56 @@ void meshnow::lwip::io::IODriverImpl::receivedData(const meshnow::Buffer& buffer
 }
 
 void IODriverImpl::sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t len) {
+    if (len > MAX_DATA_TOTAL_SIZE) {
+        ESP_LOGE(TAG, "Data too large to send via MeshNOW");
+        return;
+    }
+
     ESP_LOGI(TAG, "Sending data of length %d", len);
     ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_INFO);
 
-    // TODO split and send
+    auto buf8 = static_cast<uint8_t*>(buffer);
+    uint16_t remaining = len;
+    uint32_t id{esp_random()};
+
+    // send the first payload
+    {
+        uint16_t size{std::min(remaining, MAX_DATA_FIRST_SIZE)};
+        Buffer payload_buf(size);
+        // copy into payload
+        std::copy(buf8, buf8 + size, payload_buf.begin());
+
+        // send the first fragment
+        packets::LwipDataFirst payload{
+            .source = layout_->mac, .target = mac, .id = id, .size = remaining, .data = std::move(payload_buf)};
+        send_worker_->enqueuePayload(mac, true, payload, SendPromise{}, false, QoS::NEXT_HOP);
+    }
+
+    if (len <= MAX_DATA_FIRST_SIZE) {
+        // no need to send more fragments
+        return;
+    }
+
+    uint16_t offset = MAX_DATA_FIRST_SIZE;
+    remaining -= MAX_DATA_FIRST_SIZE;
+    uint8_t frag_num = 1;
+
+    // send the rest of the payloads
+    while (remaining > 0) {
+        uint16_t size{std::min(remaining, MAX_DATA_NEXT_SIZE)};
+        Buffer payload_buf(size);
+        // copy into payload
+        std::copy(buf8 + offset, buf8 + offset + size, payload_buf.begin());
+
+        // send the payload
+        packets::LwipDataNext payload{
+            .source = layout_->mac, .target = mac, .id = id, .frag_num = frag_num, .data = std::move(payload_buf)};
+        send_worker_->enqueuePayload(mac, true, payload, SendPromise{}, false, QoS::NEXT_HOP);
+
+        offset += size;
+        remaining -= size;
+        frag_num++;
+    }
 }
 
 using meshnow::lwip::io::RootIODriver;

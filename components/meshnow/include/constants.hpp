@@ -19,14 +19,14 @@ using MAC_ADDR = std::array<uint8_t, MAC_ADDR_LEN>;
 constexpr MAC_ADDR BROADCAST_MAC_ADDR{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 constexpr MAC_ADDR ROOT_MAC_ADDR{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-constexpr int MAX_RAW_PACKET_SIZE{ESP_NOW_MAX_DATA_LEN};
-constexpr int MAX_DATA_TOTAL_SIZE{1500};  // MTU of IPv4 by LwIP
+constexpr uint16_t MAX_RAW_PACKET_SIZE{ESP_NOW_MAX_DATA_LEN};
+constexpr uint16_t MAX_DATA_TOTAL_SIZE{1500};  // MTU of IPv4 by LwIP
 
-constexpr int HEADER_SIZE{8};                         // magic + type + id
-constexpr int DATA_FIRST_HEADER_SIZE{6 + 6 + 4 + 2};  // source mac + target mac + id + total size
-constexpr int DATA_NEXT_HEADER_SIZE{6 + 6 + 4 + 1};   // source mac + target mac + id + fragment number
-constexpr int MAX_DATA_FIRST_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_FIRST_HEADER_SIZE};
-constexpr int MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_NEXT_HEADER_SIZE};
+constexpr uint16_t HEADER_SIZE{8};                         // magic + type + id
+constexpr uint16_t DATA_FIRST_HEADER_SIZE{6 + 6 + 4 + 2};  // source mac + target mac + id + total size
+constexpr uint16_t DATA_NEXT_HEADER_SIZE{6 + 6 + 4 + 1};   // source mac + target mac + id + fragment number
+constexpr uint16_t MAX_DATA_FIRST_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_FIRST_HEADER_SIZE};
+constexpr uint16_t MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_NEXT_HEADER_SIZE};
 
 static inline consteval int calcMaxFragments() {
     constexpr int frags_for_data{MAX_DATA_TOTAL_SIZE / 250};
