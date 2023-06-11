@@ -69,6 +69,9 @@ void FragmentTask::performAction() {
 
 void FragmentTask::newFragmentFirst(const meshnow::MAC_ADDR& src_mac, uint16_t fragment_id, uint16_t total_size,
                                     const meshnow::Buffer& data) {
+    ESP_LOGI(TAG, "Received first fragment. SRC: " MAC_FORMAT " ID: %d SIZE: %d", MAC_FORMAT_ARGS(src_mac), fragment_id,
+             total_size);
+
     // assume the combination of fragment_id and mac is completely unique
     // create a new entry
     DataEntry entry{total_size};
@@ -84,6 +87,9 @@ void FragmentTask::newFragmentFirst(const meshnow::MAC_ADDR& src_mac, uint16_t f
 
 void FragmentTask::newFragmentNext(const meshnow::MAC_ADDR& src_mac, uint16_t fragment_id, uint8_t frag_num,
                                    const meshnow::Buffer& data) {
+    ESP_LOGI(TAG, "Received next fragment. SRC: " MAC_FORMAT " ID: %d NUM: %d", MAC_FORMAT_ARGS(src_mac), fragment_id,
+             frag_num);
+
     // find the entry
     auto it = data_entries_.find(std::make_pair(src_mac, fragment_id));
     if (it == data_entries_.end()) {

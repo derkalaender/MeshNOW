@@ -67,6 +67,8 @@ void IODriverImpl::sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t l
 
     // send the first payload
     {
+        ESP_LOGI(TAG, "Sending payload 0");
+
         uint16_t size{std::min(remaining, MAX_DATA_FIRST_SIZE)};
         Buffer payload_buf(size);
         // copy into payload
@@ -89,6 +91,8 @@ void IODriverImpl::sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t l
 
     // send the rest of the payloads
     while (remaining > 0) {
+        ESP_LOGI(TAG, "Sending payload %d", frag_num);
+
         uint16_t size{std::min(remaining, MAX_DATA_NEXT_SIZE)};
         Buffer payload_buf(size);
         // copy into payload

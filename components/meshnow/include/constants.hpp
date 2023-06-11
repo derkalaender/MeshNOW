@@ -22,9 +22,11 @@ constexpr MAC_ADDR ROOT_MAC_ADDR{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 constexpr uint16_t MAX_RAW_PACKET_SIZE{ESP_NOW_MAX_DATA_LEN};
 constexpr uint16_t MAX_DATA_TOTAL_SIZE{1500};  // MTU of IPv4 by LwIP
 
-constexpr uint16_t HEADER_SIZE{8};                         // magic + type + id
-constexpr uint16_t DATA_FIRST_HEADER_SIZE{6 + 6 + 4 + 2};  // source mac + target mac + id + total size
-constexpr uint16_t DATA_NEXT_HEADER_SIZE{6 + 6 + 4 + 1};   // source mac + target mac + id + fragment number
+constexpr uint16_t HEADER_SIZE{8};  // magic + type + id
+constexpr uint16_t DATA_FIRST_HEADER_SIZE{
+    6 + 6 + 4 + 2 + 2};  // source mac + target mac + id + total size TODO plus two remove is for bitsery encoding size
+constexpr uint16_t DATA_NEXT_HEADER_SIZE{6 + 6 + 4 + 1 +
+                                         2};  // source mac + target mac + id + fragment number TODO same as above
 constexpr uint16_t MAX_DATA_FIRST_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_FIRST_HEADER_SIZE};
 constexpr uint16_t MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_NEXT_HEADER_SIZE};
 

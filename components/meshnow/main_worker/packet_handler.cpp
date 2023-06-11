@@ -146,6 +146,7 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Cust
 }
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::LwipDataNext& p) {
+    ESP_LOGI(TAG, "Received fragment %d/%lu", p.frag_num, p.id);
     if (isForMe(p.target)) {
         fragment_task_.newFragmentNext(p.source, p.id, p.frag_num, p.data);
     } else {
