@@ -83,6 +83,15 @@ inline bool containsChild(const std::shared_ptr<T>& tree, const MAC_ADDR& mac) {
                                [&mac](auto&& child) { return child->mac == mac || containsChild(child, mac); });
 }
 
+template <typename T, typename Func>
+inline void forEachChild(const std::shared_ptr<T>& tree, Func&& func) {
+    assert(tree);
+    std::ranges::for_each(tree->children, [&](auto&& child) {
+        func(child);
+        forEachChild(child, func);
+    });
+}
+
 inline std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest) {
     assert(layout);
     if (dest == layout->mac || dest == BROADCAST_MAC_ADDR) {

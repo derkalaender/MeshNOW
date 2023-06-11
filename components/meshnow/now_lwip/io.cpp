@@ -67,13 +67,17 @@ esp_err_t RootIODriver::transmit(void* buffer, size_t len) {
     ESP_LOGI(TAG, "Transmitting packet to node: " MAC_FORMAT, MAC_FORMAT_ARGS(dest_mac));
 
     if (dest_mac == meshnow::BROADCAST_MAC_ADDR) {
-        ESP_LOGI(TAG, "Broadcast not yet implemented");
-        // TODO
-        return ESP_OK;
-    }
+        // broadcast case
 
-    // handle normal mac case
-    sendData(dest_mac, buffer, len);
+        routing::forEachChild(layout_, [&](auto&& node) {
+            auto child_mac = node->mac;
+            ESP_LOGI(TAG, "Sending to child: " MAC_FORMAT, MAC_FORMAT_ARGS(child_mac));
+            sendData(child_mac, buffer, len);
+        });
+    } else {
+        // p2p case
+        sendData(dest_mac, buffer, len);
+    }
 
     return ESP_OK;
 }
