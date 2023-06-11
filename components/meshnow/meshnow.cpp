@@ -33,7 +33,7 @@ static void checkEspNow() {
         ESP_LOGE(TAG, "ESP-NOW is not initialized");
         CHECK_THROW(ret);
     } else {
-        ESP_LOGI(TAG, "WiFi OK!");
+        ESP_LOGI(TAG, "ESP-NOW OK!");
         ESP_LOGI(TAG, "You may register the MeshNow callbacks now...");
     }
 }
@@ -66,7 +66,7 @@ Mesh::Mesh(const Config config)
     checkEspNow();
     ESP_LOGI(TAG, "Check OK!");
     setupWiFi();
-    ESP_LOGI(TAG, "MeshNOW initialized. You can started the mesh now 🦌");
+    ESP_LOGI(TAG, "MeshNOW initialized. You can start the mesh now 🦌");
 }
 
 Mesh::~Mesh() {
@@ -130,5 +130,5 @@ static void sendCbWrapper(const uint8_t *mac_addr, esp_now_send_status_t status,
 
 meshnow::Callbacks Mesh::getCallbacks() const {
     // cast Networking class to void* and pass it along as to retain its data
-    return Callbacks{static_cast<void *>(const_cast<Networking*>(&networking_)), recvCbWrapper, sendCbWrapper};
+    return Callbacks{static_cast<void *>(const_cast<Networking *>(&networking_)), recvCbWrapper, sendCbWrapper};
 }
