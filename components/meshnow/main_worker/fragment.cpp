@@ -57,6 +57,9 @@ void FragmentTask::performAction() {
     auto now = xTaskGetTickCount();
     for (auto it = data_entries_.begin(); it != data_entries_.end();) {
         if (it->second.lastFragmentReceived() + FRAGMENT_TIMEOUT < now) {
+            // timed out, remove
+            ESP_LOGI(TAG, "Fragment from " MAC_FORMAT " with id %d timed out", MAC_FORMAT_ARGS(it->first.first),
+                     it->first.second);
             it = data_entries_.erase(it);
         } else {
             ++it;
@@ -100,5 +103,5 @@ void FragmentTask::newFragmentNext(const meshnow::MAC_ADDR& src_mac, uint16_t fr
 
 void FragmentTask::dataCompleted(meshnow::Buffer&& data) {
     ESP_LOGI(TAG, "Pushing to LWIP");
-    netif_->io_driver_.driver_impl->receivedData(std::move(data));
+    netif_->io_driver_.driver_impl->receivedData(data);
 }

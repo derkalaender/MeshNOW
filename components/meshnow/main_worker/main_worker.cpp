@@ -1,6 +1,7 @@
 #include "main_worker.hpp"
 
 #include <esp_log.h>
+#include <esp_pthread.h>
 #include <freertos/portmacro.h>
 
 #include <array>
@@ -24,7 +25,15 @@ meshnow::MainWorker::MainWorker(std::shared_ptr<SendWorker> send_worker, std::sh
 
 void MainWorker::start() {
     ESP_LOGI(TAG, "Starting!");
+    // increase stack size
+    esp_pthread_cfg_t old_cfg = esp_pthread_get_default_config();
+    esp_pthread_cfg_t cfg = old_cfg;
+    cfg.stack_size += 1024;
+    esp_pthread_set_cfg(&cfg);
+    // start thread
     run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
+    // restore config
+    esp_pthread_set_cfg(&old_cfg);
 }
 
 void MainWorker::stop() {
