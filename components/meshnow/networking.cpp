@@ -20,9 +20,9 @@ Networking::Networking(std::shared_ptr<NodeState> state) : state_(std::move(stat
 
     // create netif
     if (state_->isRoot()) {
-        netif_ = std::make_unique<meshnow::lwip::netif::RootNetif>();
+        netif_ = std::make_unique<meshnow::lwip::netif::RootNetif>(send_worker_, layout_);
     } else {
-        netif_ = std::make_unique<meshnow::lwip::netif::NodeNetif>();
+        netif_ = std::make_unique<meshnow::lwip::netif::NodeNetif>(send_worker_, layout_);
     }
 }
 

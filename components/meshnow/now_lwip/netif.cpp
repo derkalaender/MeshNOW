@@ -12,14 +12,18 @@
 #include "constants.hpp"
 #include "error.hpp"
 #include "internal.hpp"
+#include "now_lwip/io.hpp"
 
 static const char* TAG = CREATE_TAG("LWIP | Netif");
 
 using meshnow::lwip::netif::Netif;
 
+Netif::Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<routing::Layout> layout)
+    : send_worker_(std::move(send_worker)), layout_(std::move(layout)) {}
+
 void Netif::init() {
     ESP_LOGI(TAG, "Initializing");
-    netif_.reset(createInterface());
+    netif_.reset(createInterface(), esp_netif_destroy);
     ESP_LOGI(TAG, "Initialized");
 }
 
@@ -27,15 +31,11 @@ void Netif::start() {
     // TODO rx task
     // create IO driver
     ESP_LOGI(TAG, "Creating IO driver");
-    io_driver_ = createIODriver();
+    io_driver_.driver_impl = createIODriverImpl();
 
     ESP_LOGI(TAG, "Attaching driver to network interface");
-    esp_netif_attach(netif_.get(), io_driver_.get());
+    esp_netif_attach(netif_.get(), &io_driver_);
     ESP_LOGI(TAG, "Attached driver to network interface");
-}
-
-std::unique_ptr<meshnow::lwip::io::IODriver> Netif::createIODriver() {
-    return std::make_unique<meshnow::lwip::io::IODriver>();
 }
 
 void Netif::setNetifMac(wifi_interface_t wifi_interface) {
@@ -71,6 +71,10 @@ esp_netif_t* RootNetif::createInterface() {
     return netif;
 }
 
+std::unique_ptr<meshnow::lwip::io::IODriverImpl> RootNetif::createIODriverImpl() {
+    return std::make_unique<meshnow::lwip::io::RootIODriver>(netif_, send_worker_, layout_);
+}
+
 void RootNetif::start() {
     Netif::start();
 
@@ -86,6 +90,14 @@ void RootNetif::start() {
     ESP_LOGI(TAG, "Started network interface for root node (AP)");
 
     ip_napt_enable(subnet_ip.ip.addr, 1);
+}
+
+void RootNetif::stop() {
+    ESP_LOGI(TAG, "Stopping network interface for root node (AP)");
+    esp_netif_action_stop(netif_.get(), nullptr, 0, nullptr);
+    ESP_LOGI(TAG, "Stopped network interface for root node (AP)");
+
+    ip_napt_enable(subnet_ip.ip.addr, 0);
 }
 
 void RootNetif::set_dhcp_dns() {
@@ -125,6 +137,10 @@ esp_netif_t* NodeNetif::createInterface() {
     return netif;
 }
 
+std::unique_ptr<meshnow::lwip::io::IODriverImpl> NodeNetif::createIODriverImpl() {
+    return std::make_unique<meshnow::lwip::io::NodeIODriver>(netif_, send_worker_, layout_);
+}
+
 void NodeNetif::start() {
     Netif::start();
 
@@ -134,6 +150,13 @@ void NodeNetif::start() {
     // start netif action
     ESP_LOGI(TAG, "Starting network interface for node (STA)");
     esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
-    esp_netif_action_connected(netif_.get(), nullptr, 0, nullptr);  // TODO maybe not here
+    esp_netif_action_connected(netif_.get(), nullptr, 0, nullptr);
     ESP_LOGI(TAG, "Started network interface for node (STA)");
+}
+
+void NodeNetif::stop() {
+    ESP_LOGI(TAG, "Stopping network interface for node (STA)");
+    esp_netif_action_disconnected(netif_.get(), nullptr, 0, nullptr);
+    esp_netif_action_stop(netif_.get(), nullptr, 0, nullptr);
+    ESP_LOGI(TAG, "Stopped network interface for node (STA)");
 }

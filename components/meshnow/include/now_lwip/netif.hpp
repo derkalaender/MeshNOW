@@ -4,6 +4,7 @@
 #include <esp_wifi.h>
 
 #include <memory>
+#include <send_worker.hpp>
 
 #include "now_lwip/io.hpp"
 
@@ -12,10 +13,10 @@ namespace meshnow::lwip::netif {
 // TODO Root also needs the default station netif.
 // this is created automatically, but we should check and create it if missing
 
-// TODO stop functions
-
 class Netif {
    public:
+    Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<routing::Layout> layout);
+
     virtual ~Netif() = default;
 
     /**
@@ -28,6 +29,11 @@ class Netif {
      */
     virtual void start() = 0;
 
+    /**
+     * Stop the network interface.
+     */
+    virtual void stop() = 0;
+
    protected:
     /**
      * Creates the underlying esp netif object and returns a pointer to it
@@ -37,7 +43,7 @@ class Netif {
     /**
      * Creates the IODriver that is then attached to the network interface.
      */
-    std::unique_ptr<io::IODriver> createIODriver();
+    virtual std::unique_ptr<io::IODriverImpl> createIODriverImpl() = 0;
 
     /**
      * Copy the wifi interface mac address to the custom netif.
@@ -47,17 +53,25 @@ class Netif {
     /**
      * Unique pointer to the interface created by createInterface(). Allows easy destruction.
      */
-    std::unique_ptr<esp_netif_t, decltype(&esp_netif_destroy)> netif_{nullptr, esp_netif_destroy};
+    std::shared_ptr<esp_netif_t> netif_;
 
     /**
      * IODriver with post-attach callback.
      */
-    std::unique_ptr<io::IODriver> io_driver_;
+    io::IODriver io_driver_;
+
+    std::shared_ptr<SendWorker> send_worker_;
+    std::shared_ptr<routing::Layout> layout_;
 };
 
 class RootNetif : public Netif {
    public:
+    using Netif::Netif;
+
+    RootNetif() : Netif(std::shared_ptr<SendWorker>(), std::shared_ptr<routing::Layout>()) {}
     void start() override;
+
+    void stop() override;
 
    private:
     // use cloudflare 1.1.1.1 as DNS server
@@ -73,14 +87,23 @@ class RootNetif : public Netif {
     void set_dhcp_dns();
 
     esp_netif_t* createInterface() override;
+
+    std::unique_ptr<io::IODriverImpl> createIODriverImpl() override;
 };
 
 class NodeNetif : public Netif {
    public:
+    using Netif::Netif;
+
+    NodeNetif() : Netif(std::shared_ptr<SendWorker>(), std::shared_ptr<routing::Layout>()) {}
     void start() override;
+
+    void stop() override;
 
    private:
     esp_netif_t* createInterface() override;
+
+    std::unique_ptr<io::IODriverImpl> createIODriverImpl() override;
 };
 
 }  // namespace meshnow::lwip::netif
