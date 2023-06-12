@@ -149,6 +149,8 @@ void SendWorker::runLoop(const std::stop_token& stoken) {
             addr = item.dest_addr;
         }
 
+        ESP_LOGV(TAG, "Sending packet to " MAC_FORMAT, MAC_FORMAT_ARGS(addr));
+
         rawSend(addr, packets::serialize(item.packet));
 
         // wait for callback

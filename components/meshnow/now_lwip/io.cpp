@@ -47,7 +47,8 @@ IODriverImpl::IODriverImpl(std::shared_ptr<esp_netif_t> netif, std::shared_ptr<S
     : layout_(std::move(layout)), send_worker_(std::move(send_worker)), netif_(std::move(netif)) {}
 
 void meshnow::lwip::io::IODriverImpl::receivedData(const meshnow::Buffer& buffer) {
-    ESP_LOGI(TAG, "Received data via MeshNOW. Forwarding to Netif layer");
+    ESP_LOGD(TAG, "Received data via MeshNOW. Forwarding to Netif layer");
+    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_VERBOSE);
     void* data_ptr = const_cast<void*>(reinterpret_cast<const void*>(buffer.data()));
     esp_netif_receive(netif_.get(), data_ptr, buffer.size(), nullptr);
 }
@@ -58,8 +59,8 @@ void IODriverImpl::sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t l
         return;
     }
 
-    ESP_LOGI(TAG, "Sending data of length %d", len);
-    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_INFO);
+    ESP_LOGD(TAG, "Sending data of length %d", len);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_VERBOSE);
 
     auto buf8 = static_cast<uint8_t*>(buffer);
     uint16_t remaining = len;
@@ -67,7 +68,7 @@ void IODriverImpl::sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t l
 
     // send the first payload
     {
-        ESP_LOGI(TAG, "Queueing payload 0");
+        ESP_LOGD(TAG, "Queueing payload 0");
 
         uint16_t size{std::min(remaining, MAX_DATA_FIRST_SIZE)};
         Buffer payload_buf(size);
@@ -91,7 +92,7 @@ void IODriverImpl::sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t l
 
     // send the rest of the payloads
     while (remaining > 0) {
-        ESP_LOGI(TAG, "Queueing payload %d", frag_num);
+        ESP_LOGD(TAG, "Queueing payload %d", frag_num);
 
         uint16_t size{std::min(remaining, MAX_DATA_NEXT_SIZE)};
         Buffer payload_buf(size);
@@ -115,14 +116,14 @@ esp_err_t RootIODriver::transmit(void* buffer, size_t len) {
     meshnow::MAC_ADDR dest_mac;
     std::copy(static_cast<uint8_t*>(buffer), static_cast<uint8_t*>(buffer) + 6, dest_mac.begin());
 
-    ESP_LOGI(TAG, "Transmitting packet to node: " MAC_FORMAT, MAC_FORMAT_ARGS(dest_mac));
+    ESP_LOGD(TAG, "Transmitting packet to node: " MAC_FORMAT, MAC_FORMAT_ARGS(dest_mac));
 
     if (dest_mac == meshnow::BROADCAST_MAC_ADDR) {
         // broadcast case
 
         routing::forEachChild(layout_, [&](auto&& node) {
             auto child_mac = node->mac;
-            ESP_LOGI(TAG, "Sending to child: " MAC_FORMAT, MAC_FORMAT_ARGS(child_mac));
+            ESP_LOGD(TAG, "Sending to child: " MAC_FORMAT, MAC_FORMAT_ARGS(child_mac));
             sendData(child_mac, buffer, len);
         });
     } else {
@@ -139,7 +140,7 @@ esp_err_t NodeIODriver::transmit(void* buffer, size_t len) {
     meshnow::MAC_ADDR dest_mac;
     std::copy(static_cast<uint8_t*>(buffer), static_cast<uint8_t*>(buffer) + 6, dest_mac.begin());
 
-    ESP_LOGI(TAG, "Transmitting packet to root, with dest addr: " MAC_FORMAT, MAC_FORMAT_ARGS(dest_mac));
+    ESP_LOGD(TAG, "Transmitting packet to root, with dest addr: " MAC_FORMAT, MAC_FORMAT_ARGS(dest_mac));
 
     // TODO maybe shortcut if the dest mac is a child or the parent, we can directly send to those without going through
     // the root
