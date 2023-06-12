@@ -38,6 +38,28 @@ static std::unique_ptr<meshnow::Mesh> MeshNOW;
 
 static esp_now_multi_handle_t multi_handle;
 
+static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+    assert(event_base == IP_EVENT);
+
+    switch (event_id) {
+        case IP_EVENT_STA_GOT_IP: {
+            auto *event = static_cast<ip_event_got_ip_t *>(event_data);
+            ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+            break;
+        }
+        case IP_EVENT_STA_LOST_IP: {
+            ESP_LOGI(TAG, "Lost IP");
+            break;
+        }
+        case IP_EVENT_AP_STAIPASSIGNED: {
+            auto *event = static_cast<ip_event_ap_staipassigned_t *>(event_data);
+            ESP_LOGI(TAG, "Assigned IP: " IPSTR " to " MAC_FORMAT, IP2STR(&event->ip), MAC_FORMAT_ARGS(event->mac));
+        }
+        default:
+            break;
+    }
+}
+
 extern "C" void app_main(void) {
     // INIT //
     {
@@ -77,6 +99,9 @@ extern "C" void app_main(void) {
     esp_now_multi_reg_t reg{callbacks.recv_cb, callbacks.send_cb, callbacks.arg};
     esp_now_multi_register(reg, &multi_handle);
     ESP_LOGI(TAG, "Multi ESP-NOW set up");
+
+    ESP_LOGI(TAG, "Registering IP event handler");
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, nullptr));
 
     ESP_LOGI(TAG, "Starting as %s!", is_root ? "root" : "node");
 
