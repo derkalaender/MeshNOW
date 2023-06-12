@@ -112,7 +112,7 @@ inline std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, co
 
     // try to find a suitable child
     auto child = std::find_if(layout->children.begin(), layout->children.end(),
-                              [&dest](auto&& child) { return containsChild(child, dest); });
+                              [&dest](auto&& child) { return child->mac == dest || containsChild(child, dest); });
 
     if (child != layout->children.end()) {
         // found the child

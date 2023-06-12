@@ -17,7 +17,7 @@ static const auto SEARCH_PROBE_FREQ_MS = 500;
 static const auto CONNECT_TIMEOUT_MS = 50;
 
 // Min time to wait for potential other parents after the first parent was found (ms)
-static const auto FIRST_PARENT_WAIT_MS = 5000;
+static const auto FIRST_PARENT_WAIT_MS = 1000;
 
 static const auto MAX_PARENTS_TO_CONSIDER = 5;
 

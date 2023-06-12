@@ -126,6 +126,8 @@ void MainWorker::runLoop(const std::stop_token &stoken) {
                 // if deserialization worked, give packet to packet handler
                 ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->id};
                 packet_handler.handlePacket(meta, packet->payload);
+            } else {
+                ESP_LOGW(TAG, "Failed to deserialize packet");
             }
         }
 

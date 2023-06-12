@@ -38,6 +38,13 @@ static void checkEspNow() {
     }
 }
 
+static void checkNetif() {
+    ESP_LOGW(TAG,
+             "Cannot check if Netif is initialized due to technical limitations.\n"
+             "Please make sure to have called esp_netif_init() exactly once before initializing MeshNOW.\n"
+             "Otherwise, the device might crash due to Netif/LWIP errors.");
+}
+
 void setupWiFi() {
     ESP_LOGI(TAG, "Setting WiFi configuration");
 
@@ -64,6 +71,7 @@ Mesh::Mesh(const Config config)
     ESP_LOGI(TAG, "Checking ESP-IDF network stack is properly initialized...");
     checkWiFi();
     checkEspNow();
+    checkNetif();
     ESP_LOGI(TAG, "Check OK!");
     setupWiFi();
     ESP_LOGI(TAG, "MeshNOW initialized. You can start the mesh now 🦌");

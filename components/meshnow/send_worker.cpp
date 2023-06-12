@@ -140,7 +140,7 @@ void SendWorker::runLoop(const std::stop_token& stoken) {
             auto next_hop_mac = routing::resolve(layout_, item.dest_addr);
             if (!next_hop_mac) {
                 // couldn't resolve next hop mac
-                ESP_LOGD(TAG, "Couldn't resolve next hop mac");
+                ESP_LOGD(TAG, "Couldn't resolve next hop mac: " MAC_FORMAT, MAC_FORMAT_ARGS(item.dest_addr));
                 item.result_promise.set_value(SendResult{false});
                 continue;
             }
