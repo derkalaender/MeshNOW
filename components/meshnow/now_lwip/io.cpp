@@ -145,7 +145,7 @@ esp_err_t NodeIODriver::transmit(void* buffer, size_t len) {
     // TODO maybe shortcut if the dest mac is a child or the parent, we can directly send to those without going through
     // the root
 
-    assert(layout_->root);
+    sendData(meshnow::ROOT_MAC_ADDR, buffer, len);
     sendData(*layout_->root, buffer, len);
 
     return ESP_OK;

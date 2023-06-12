@@ -58,7 +58,7 @@ void FragmentTask::performAction() {
     for (auto it = data_entries_.begin(); it != data_entries_.end();) {
         if (it->second.lastFragmentReceived() + FRAGMENT_TIMEOUT < now) {
             // timed out, remove
-            ESP_LOGI(TAG, "Fragment from " MAC_FORMAT " with id %d timed out", MAC_FORMAT_ARGS(it->first.first),
+            ESP_LOGW(TAG, "Fragment from " MAC_FORMAT " with id %d timed out", MAC_FORMAT_ARGS(it->first.first),
                      it->first.second);
             it = data_entries_.erase(it);
         } else {
@@ -69,7 +69,7 @@ void FragmentTask::performAction() {
 
 void FragmentTask::newFragmentFirst(const meshnow::MAC_ADDR& src_mac, uint16_t fragment_id, uint16_t total_size,
                                     const meshnow::Buffer& data) {
-    ESP_LOGI(TAG, "Received first fragment. SRC: " MAC_FORMAT " ID: %d SIZE: %d", MAC_FORMAT_ARGS(src_mac), fragment_id,
+    ESP_LOGD(TAG, "Received first fragment. SRC: " MAC_FORMAT " ID: %d SIZE: %d", MAC_FORMAT_ARGS(src_mac), fragment_id,
              total_size);
 
     // assume the combination of fragment_id and mac is completely unique
@@ -87,7 +87,7 @@ void FragmentTask::newFragmentFirst(const meshnow::MAC_ADDR& src_mac, uint16_t f
 
 void FragmentTask::newFragmentNext(const meshnow::MAC_ADDR& src_mac, uint16_t fragment_id, uint8_t frag_num,
                                    const meshnow::Buffer& data) {
-    ESP_LOGI(TAG, "Received next fragment. SRC: " MAC_FORMAT " ID: %d NUM: %d", MAC_FORMAT_ARGS(src_mac), fragment_id,
+    ESP_LOGD(TAG, "Received next fragment. SRC: " MAC_FORMAT " ID: %d NUM: %d", MAC_FORMAT_ARGS(src_mac), fragment_id,
              frag_num);
 
     // find the entry
@@ -108,6 +108,6 @@ void FragmentTask::newFragmentNext(const meshnow::MAC_ADDR& src_mac, uint16_t fr
 }
 
 void FragmentTask::dataCompleted(meshnow::Buffer&& data) {
-    ESP_LOGI(TAG, "Pushing to LWIP");
+    ESP_LOGD(TAG, "Fragment completed. Pushing to IO Driver");
     netif_->io_driver_.driver_impl->receivedData(data);
 }

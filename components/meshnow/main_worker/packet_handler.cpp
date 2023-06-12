@@ -83,8 +83,14 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Verd
 void PacketHandler::handle(const meshnow::ReceiveMeta&, const packets::NodeConnected& p) {
     std::scoped_lock lock(layout_->mtx);
 
+    ESP_LOGI(TAG, "Node connected: " MAC_FORMAT " -> " MAC_FORMAT, MAC_FORMAT_ARGS(p.child_mac),
+             MAC_FORMAT_ARGS(p.parent_mac));
+
     // add node
-    insertChild(layout_, p.child_mac, p.parent_mac);
+    if(!insertChild(layout_, p.parent_mac, p.child_mac)) {
+        ESP_LOGW(TAG, "Node already connected, ignoring");
+        return;
+    }
     // forward upwards
     if (!state_->isRoot()) {
         send_worker_->enqueuePayload(meshnow::ROOT_MAC_ADDR, true, p, SendPromise{}, true, QoS::NEXT_HOP);
@@ -134,9 +140,11 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Nack
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::LwipDataFirst& p) {
     if (isForMe(p.target)) {
+        ESP_LOGD(TAG, "Received LwipDataFirst from " MAC_FORMAT, MAC_FORMAT_ARGS(p.source));
         fragment_task_.newFragmentFirst(p.source, p.id, p.size, p.data);
     } else {
         // forward
+        ESP_LOGI(TAG, "Forwarding LwipDataFirst to " MAC_FORMAT, MAC_FORMAT_ARGS(p.target));
         send_worker_->enqueuePayload(p.target, true, p, SendPromise{}, false, QoS::NEXT_HOP);
     }
 }
@@ -147,9 +155,11 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Cust
 
 void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::LwipDataNext& p) {
     if (isForMe(p.target)) {
+        ESP_LOGD(TAG, "Received LwipDataNext from " MAC_FORMAT, MAC_FORMAT_ARGS(p.source));
         fragment_task_.newFragmentNext(p.source, p.id, p.frag_num, p.data);
     } else {
         // forward
+        ESP_LOGI(TAG, "Forwarding LwipDataNext to " MAC_FORMAT, MAC_FORMAT_ARGS(p.target));
         send_worker_->enqueuePayload(p.target, true, p, SendPromise{}, false, QoS::NEXT_HOP);
     }
 }
