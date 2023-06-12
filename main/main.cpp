@@ -55,6 +55,9 @@ extern "C" void app_main(void) {
 
         ESP_ERROR_CHECK(esp_now_init());
         ESP_ERROR_CHECK(esp_now_multi_init());
+
+        // init netif
+        ESP_ERROR_CHECK(esp_netif_init());
     }
     // INIT DONE //
 
