@@ -9,9 +9,9 @@
 
 #include <memory>
 #include <meshnow.hpp>
+#include <thread>
 
 #include "mqtt_demo.hpp"
-#include <thread>
 
 static const char *TAG = "main";
 
@@ -103,9 +103,7 @@ extern "C" void app_main(void) {
     meshnow::MAC_ADDR my_mac;
     esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
 
-    wifi_sta_config_t sta_config{
-        .ssid = "yas"
-    };
+    wifi_sta_config_t sta_config{.ssid = "marvin-hotspot"};
 
     bool is_root = my_mac == root;
 
@@ -128,7 +126,7 @@ extern "C" void app_main(void) {
 
     MeshNOW->start();
 
-    if(!is_root) {
+    if (!is_root) {
         ESP_LOGI(TAG, "Starting MQTT thread");
         std::thread mqtt(mqtt_thread, nullptr);
         mqtt.detach();

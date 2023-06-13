@@ -245,9 +245,9 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
         return;
     }
     esp_now_peer_info_t peer_info{};
-    peer_info.channel = 0;
+    peer_info.channel = 11;
     peer_info.encrypt = false;
-    peer_info.ifidx = WIFI_IF_STA;
+    peer_info.ifidx = WIFI_IF_AP;
     std::copy(mac_addr.begin(), mac_addr.end(), peer_info.peer_addr);
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }

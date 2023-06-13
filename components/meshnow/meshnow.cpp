@@ -49,8 +49,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     if ((event_base == WIFI_EVENT) && (event_id == WIFI_EVENT_STA_START)) {
         esp_wifi_connect();
         ESP_LOGI(TAG, "Connecting to WiFi...");
-    }
-    else if ((event_base == WIFI_EVENT) && (event_id == WIFI_EVENT_STA_DISCONNECTED)) {
+    } else if ((event_base == WIFI_EVENT) && (event_id == WIFI_EVENT_STA_DISCONNECTED)) {
+        auto event = static_cast<wifi_event_sta_disconnected_t *>(event_data);
+        ESP_LOGW(TAG, "WiFi disconnected: %d", event->reason);
         esp_wifi_connect();
         ESP_LOGW(TAG, "Retrying to connect...");
 
@@ -63,32 +64,41 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 static void setupWiFi(meshnow::Config config) {
     ESP_LOGI(TAG, "Setting WiFi configuration");
 
-    CHECK_THROW(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_STA));
     if (config.root) {
+        // need to create default sta to connect to router
         esp_netif_create_default_wifi_sta();
+
+        // set mode to both sta and ap
+        // root<->router: sta
+        // root<->node: ap
+        CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_APSTA));
+
+        // set router config
         wifi_config_t wifi_config = {.sta = config.sta_config};
         esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
 
-        CHECK_THROW(esp_event_handler_instance_register(WIFI_EVENT,
-                                                  ESP_EVENT_ANY_ID,
-                                                  &wifi_event_handler,
-                                                  nullptr,
-                                                  nullptr));
-        CHECK_THROW(esp_event_handler_instance_register(IP_EVENT,
-                                                  IP_EVENT_STA_GOT_IP,
-                                                  &wifi_event_handler,
-                                                  nullptr,
-                                                  nullptr));
+        // register event handlers
+        CHECK_THROW(
+            esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, nullptr, nullptr));
+        CHECK_THROW(
+            esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr, nullptr));
+    } else {
+        // nodes only communicate via STA
+        CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_AP));
     }
+
+    // don't save config to flash
+    CHECK_THROW(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    // no powersaving
+    CHECK_THROW(esp_wifi_set_ps(WIFI_PS_NONE));
+
     CHECK_THROW(esp_wifi_start());
 
-    // no powersaving
     // TODO maybe turn this on actually?
-    CHECK_THROW(esp_wifi_set_ps(WIFI_PS_NONE));
+
     // use long range mode -> up to 1km according to espressif
     // TODO this also needs to be different for root (LR + BGN)
-//    CHECK_THROW(esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR));
+    //    CHECK_THROW(esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_LR));
 
     ESP_LOGI(TAG, "WiFi set up");
 }
