@@ -10,7 +10,12 @@
 #include <memory>
 #include <meshnow.hpp>
 
+#include "mqtt_demo.hpp"
+#include <thread>
+
 static const char *TAG = "main";
+
+static constexpr auto IP_BIT = BIT0;
 
 // void perform_range_test() {
 //     espnow_test_init();
@@ -32,6 +37,8 @@ static const char *TAG = "main";
 //     }
 // }
 
+static util::WaitBits wait_bits;
+
 static const meshnow::MAC_ADDR root{0x24, 0x6f, 0x28, 0x4a, 0x63, 0x3c};
 
 static std::unique_ptr<meshnow::Mesh> MeshNOW;
@@ -45,6 +52,7 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         case IP_EVENT_STA_GOT_IP: {
             auto *event = static_cast<ip_event_got_ip_t *>(event_data);
             ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+            wait_bits.setBits(IP_BIT);
             break;
         }
         case IP_EVENT_STA_LOST_IP: {
@@ -60,6 +68,16 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
     }
 }
 
+void mqtt_thread(void *arg) {
+    // wait until we got IP
+    auto bits = wait_bits.waitFor(IP_BIT, true, true, portMAX_DELAY);
+    assert(bits == IP_BIT);
+
+    ESP_LOGI(TAG, "Starting MQTT Demo");
+    MQTTDemo mqtt_demo;
+    mqtt_demo.run();
+}
+
 extern "C" void app_main(void) {
     // INIT //
     {
@@ -71,7 +89,6 @@ extern "C" void app_main(void) {
             ret = nvs_flash_init();
         }
         ESP_ERROR_CHECK(ret);
-
         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
         ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
@@ -86,10 +103,14 @@ extern "C" void app_main(void) {
     meshnow::MAC_ADDR my_mac;
     esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
 
+    wifi_sta_config_t sta_config{
+        .ssid = "yas"
+    };
+
     bool is_root = my_mac == root;
 
     ESP_LOGI(TAG, "Initializing MeshNOW");
-    meshnow::Config config{.root = is_root};
+    meshnow::Config config{.root = is_root, .sta_config = sta_config};
     MeshNOW = std::make_unique<meshnow::Mesh>(config);
     ESP_LOGI(TAG, "MeshNOW initialized");
 
@@ -107,10 +128,9 @@ extern "C" void app_main(void) {
 
     MeshNOW->start();
 
-    //    auto target = meshnow::BROADCAST_MAC_ADDR;
-    //    std::string s{"Creative test message"};
-    //    std::vector<uint8_t> data{s.begin(), s.end()};
-    //    auto payload = meshnow::packets::DataFirstPayload(target, 30, 1500, false, data);
-    //    auto buffer = meshnow::packets::Packet(payload).serialize();
-    //    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_INFO);
+    if(!is_root) {
+        ESP_LOGI(TAG, "Starting MQTT thread");
+        std::thread mqtt(mqtt_thread, nullptr);
+        mqtt.detach();
+    }
 }

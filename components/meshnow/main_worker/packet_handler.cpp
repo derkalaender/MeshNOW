@@ -144,7 +144,7 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Lwip
         fragment_task_.newFragmentFirst(p.source, p.id, p.size, p.data);
     } else {
         // forward
-        ESP_LOGI(TAG, "Forwarding LwipDataFirst to " MAC_FORMAT, MAC_FORMAT_ARGS(p.target));
+        ESP_LOGD(TAG, "Forwarding LwipDataFirst to " MAC_FORMAT, MAC_FORMAT_ARGS(p.target));
         send_worker_->enqueuePayload(p.target, true, p, SendPromise{}, false, QoS::NEXT_HOP);
     }
 }
@@ -159,7 +159,7 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Lwip
         fragment_task_.newFragmentNext(p.source, p.id, p.frag_num, p.data);
     } else {
         // forward
-        ESP_LOGI(TAG, "Forwarding LwipDataNext to " MAC_FORMAT, MAC_FORMAT_ARGS(p.target));
+        ESP_LOGD(TAG, "Forwarding LwipDataNext to " MAC_FORMAT, MAC_FORMAT_ARGS(p.target));
         send_worker_->enqueuePayload(p.target, true, p, SendPromise{}, false, QoS::NEXT_HOP);
     }
 }

@@ -17,6 +17,8 @@ struct Config {
      * @note The root node can establish a connection to a router if configured.
      */
     bool root{false};
+
+    wifi_sta_config_t sta_config;
 };
 
 /**
