@@ -1,0 +1,16 @@
+dependencies:
+  bitsery:
+    component_hash: 11dda19c73d2ec555c862fa2a6cf6853125d1715d69face6bd05350ddbfcbf8e
+    source:
+      git: https://github.com/derkalaender/bitsery-esp.git
+      path: .
+      type: git
+    version: 4d7bb9bdfd85ea2beb44e9bd8655c64f26a53f9c
+  idf:
+    component_hash: null
+    source:
+      type: idf
+    version: 5.0.1
+manifest_hash: b13ec463ce102eb86e69cc426284c40702383d1d71c9ca483e15ba3f0a17d6dc
+target: esp32
+version: 1.0.0

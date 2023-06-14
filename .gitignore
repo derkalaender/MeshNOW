@@ -11,3 +11,6 @@ sdkconfig.old
 
 # IntelliJ
 .idea
+
+# IDF Component Manager
+/managed_components
