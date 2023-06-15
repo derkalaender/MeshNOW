@@ -71,7 +71,7 @@ static void setupWiFi(meshnow::Config config) {
         // set mode to both sta and ap
         // root<->router: sta
         // root<->node: ap
-        CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_STA));
 
         // set router config
         wifi_config_t wifi_config = {.sta = config.sta_config};
