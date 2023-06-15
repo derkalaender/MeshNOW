@@ -95,21 +95,21 @@ void HandShaker::reset() {
 
 void HandShaker::sendSearchProbe() {
     // set new channel, only if we haven't found any parents yet
-    //    if (parent_infos_.empty()) {
-    //        current_channel_++;
-    //        if (current_channel_ > max_channel_) current_channel_ = min_channel_;
-    //        CHECK_THROW(esp_wifi_set_channel(current_channel_, WIFI_SECOND_CHAN_NONE));
-    //    }
+    if (parent_infos_.empty()) {
+        current_channel_++;
+        if (current_channel_ > max_channel_) current_channel_ = min_channel_;
+        CHECK_THROW(esp_wifi_set_channel(current_channel_, WIFI_SECOND_CHAN_NONE));
+    }
 
     ESP_LOGI(TAG, "Sending anyone there on channel %d", current_channel_);
-    // do this 3 times just to be sure we are heard
-    //    for (int i = 0; i < 3; i++) {
-    //        SendPromise promise{};
-    //        auto future = promise.get_future();
-    send_worker_->enqueuePayload(meshnow::BROADCAST_MAC_ADDR, false, meshnow::packets::AnyoneThere{}, SendPromise{},
-                                 true, QoS::SINGLE_TRY);
-    //        future.wait();
-    //    }
+    //     do this 3 times just to be sure we are heard
+    for (int i = 0; i < 3; i++) {
+        SendPromise promise{};
+        auto future = promise.get_future();
+        send_worker_->enqueuePayload(meshnow::BROADCAST_MAC_ADDR, false, meshnow::packets::AnyoneThere{},
+                                     std::move(promise), true, QoS::SINGLE_TRY);
+        future.wait();
+    }
 
     // update the last time we sent a search probe
     last_search_probe_time_ = xTaskGetTickCount();

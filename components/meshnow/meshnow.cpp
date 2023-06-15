@@ -94,10 +94,10 @@ static void setupWiFi(meshnow::Config config) {
 
     CHECK_THROW(esp_wifi_start());
 
-    if (!config.root) {
-        // set to channel 9
-        esp_wifi_set_channel(9, WIFI_SECOND_CHAN_NONE);
-    }
+    //    if (!config.root) {
+    //        // set to channel 9
+    //        esp_wifi_set_channel(9, WIFI_SECOND_CHAN_NONE);
+    //    }
 
     // TODO maybe turn this on actually?
 
