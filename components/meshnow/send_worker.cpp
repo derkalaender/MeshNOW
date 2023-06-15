@@ -2,7 +2,6 @@
 
 #include <esp_log.h>
 #include <esp_random.h>
-#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 

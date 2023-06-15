@@ -56,25 +56,11 @@ struct Layout : Node, NodeTree<DirectChild> {
 
 // FUNCTIONS //
 
-inline std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
-    assert(layout);
-    std::vector<std::shared_ptr<Neighbor>> neighbors;
-    if (layout->parent) {
-        neighbors.push_back(layout->parent);
-    }
-    neighbors.insert(neighbors.end(), layout->children.begin(), layout->children.end());
-    return neighbors;
-}
+std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout);
 
-inline bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
-    assert(layout);
-    return std::ranges::any_of(layout->children, [&mac](auto&& child) { return child->mac == mac; });
-}
+bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac);
 
-inline bool hasNeighbor(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
-    assert(layout);
-    return (layout->parent && layout->parent->mac == mac) || containsDirectChild(layout, mac);
-}
+bool hasNeighbor(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac);
 
 template <typename T>
 inline bool containsChild(const std::shared_ptr<T>& tree, const MAC_ADDR& mac) {
@@ -92,45 +78,12 @@ inline void forEachChild(const std::shared_ptr<T>& tree, Func&& func) {
     });
 }
 
-inline std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest) {
-    assert(layout);
-    if (dest == layout->mac || dest == BROADCAST_MAC_ADDR) {
-        // don't do anything
-        return dest;
-    } else if (dest == ROOT_MAC_ADDR) {
-        // if we are the root, then return ourselves
-        if (layout->mac == ROOT_MAC_ADDR) return layout->mac;
-        // try to resolve the parent
-        if (layout->parent) {
-            return layout->parent->mac;
-        } else {
-            return std::nullopt;
-        }
-    } else if (layout->parent && dest == layout->parent->mac) {
-        return layout->parent->mac;
-    }
-
-    // try to find a suitable child
-    auto child = std::find_if(layout->children.begin(), layout->children.end(),
-                              [&dest](auto&& child) { return child->mac == dest || containsChild(child, dest); });
-
-    if (child != layout->children.end()) {
-        // found the child
-        return (*child)->mac;
-    } else {
-        // did not find the child, return the parent per default
-        if (layout->parent) {
-            return layout->parent->mac;
-        } else {
-            return std::nullopt;
-        }
-    }
-}
+std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest);
 
 // Wrappers for creating a child //
 
 template <typename T>
-inline auto createChild(const MAC_ADDR& mac);
+static inline auto createChild(const MAC_ADDR& mac);
 
 template <>
 inline auto createChild<Layout>(const MAC_ADDR& mac) {
@@ -166,22 +119,8 @@ inline bool insertChild(const std::shared_ptr<T>& tree, const MAC_ADDR& parent_m
     return false;
 }
 
-inline void insertDirectChild(const std::shared_ptr<Layout>& tree, DirectChild&& child) {
-    assert(tree);
-    tree->children.push_back(std::make_shared<DirectChild>(child));
-}
+void insertDirectChild(const std::shared_ptr<Layout>& tree, DirectChild&& child);
 
-inline bool removeDirectChild(const std::shared_ptr<Layout>& tree, const MAC_ADDR& child_mac) {
-    assert(tree);
-    auto child = std::find_if(tree->children.begin(), tree->children.end(),
-                              [&child_mac](auto&& child) { return child->mac == child_mac; });
-
-    if (child != tree->children.end()) {
-        tree->children.erase(child);
-        return true;
-    } else {
-        return false;
-    }
-}
+bool removeDirectChild(const std::shared_ptr<Layout>& tree, const MAC_ADDR& child_mac);
 
 }  // namespace meshnow::routing
