@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "now_lwip/netif.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
-#include "waitbits.hpp"
 #include "worker_task.hpp"
 
 namespace meshnow {
@@ -21,7 +21,7 @@ namespace meshnow {
 class HandShaker : public WorkerTask {
    public:
     explicit HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                        std::shared_ptr<routing::Layout> layout);
+                        std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif);
 
     TickType_t nextActionAt() const noexcept override;
 
@@ -31,11 +31,6 @@ class HandShaker : public WorkerTask {
      * Remove all found parents, prepare to start searching for parents again.
      */
     void reset();
-
-    /**
-     * @return the time at which the next action should be performed
-     */
-    TickType_t nextActionIn(TickType_t now) const;
 
     // Connection requesting methods //
 
@@ -120,7 +115,13 @@ class HandShaker : public WorkerTask {
 
     std::shared_ptr<routing::Layout> layout_;
 
+    std::shared_ptr<lwip::netif::Netif> netif_;
+
     bool searching_for_parents_{true};
+
+    uint8_t min_channel_;
+    uint8_t max_channel_;
+    uint8_t current_channel_;
 
     std::vector<ParentInfo> parent_infos_{};
 

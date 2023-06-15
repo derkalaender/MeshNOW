@@ -11,24 +11,42 @@ static const char* TAG = CREATE_TAG("Networking");
 
 using meshnow::Networking;
 
-Networking::Networking(const std::shared_ptr<NodeState>& state)
-    : send_worker_(std::make_shared<SendWorker>(layout_)),
-      main_worker_(std::make_shared<MainWorker>(send_worker_, layout_, state)) {
+Networking::Networking(std::shared_ptr<NodeState> state) : state_(std::move(state)) {
     // set root mac in layout
-    if (state->isRoot()) {
+    if (state_->isRoot()) {
         std::scoped_lock lock{layout_->mtx};
         layout_->root = layout_->mac;
     }
+
+    // create netif
+    if (state_->isRoot()) {
+        netif_ = std::make_shared<meshnow::lwip::netif::RootNetif>(send_worker_, layout_);
+    } else {
+        netif_ = std::make_shared<meshnow::lwip::netif::NodeNetif>(send_worker_, layout_);
+    }
+
+    // set netif for main_worker. This is ugly
+    main_worker_->netif_ = netif_;
 }
 
 void Networking::start() {
+    ESP_LOGI(TAG, "Starting");
+
+    // init netif
+    netif_->init();
+
     // start both workers
     main_worker_->start();
     send_worker_->start();
+
+    // if we are root, we can also start it already
+    if (state_->isRoot()) {
+        netif_->start();
+    }
 }
 
 void Networking::stop() {
-    ESP_LOGI(TAG, "Stopping main run loop!");
+    ESP_LOGI(TAG, "Stopping");
 
     // TODO this will fail an assert (and crash) because of https://github.com/espressif/esp-idf/issues/10664
     // TODO maybe wrap all of networking in yet another thread which we can safely stop ourselves (no jthread)

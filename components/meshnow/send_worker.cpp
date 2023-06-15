@@ -2,6 +2,7 @@
 
 #include <esp_log.h>
 #include <esp_random.h>
+#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
@@ -17,7 +18,7 @@ static const auto SEND_SUCCESS_BIT = BIT0;
 static const auto SEND_FAILED_BIT = BIT1;
 
 // timeout for sending a packet (ms)
-static const auto SEND_TIMEOUT = 10 * 1000;
+static const auto SEND_TIMEOUT = 1000;
 // maximum number of retries for sending a packet
 static const uint8_t MAX_RETRIES = 5;
 // timeout for waiting for an ack (ms)
@@ -140,7 +141,7 @@ void SendWorker::runLoop(const std::stop_token& stoken) {
             auto next_hop_mac = routing::resolve(layout_, item.dest_addr);
             if (!next_hop_mac) {
                 // couldn't resolve next hop mac
-                ESP_LOGD(TAG, "Couldn't resolve next hop mac");
+                ESP_LOGD(TAG, "Couldn't resolve next hop mac: " MAC_FORMAT, MAC_FORMAT_ARGS(item.dest_addr));
                 item.result_promise.set_value(SendResult{false});
                 continue;
             }
@@ -148,6 +149,8 @@ void SendWorker::runLoop(const std::stop_token& stoken) {
         } else {
             addr = item.dest_addr;
         }
+
+        ESP_LOGV(TAG, "Sending packet to " MAC_FORMAT, MAC_FORMAT_ARGS(addr));
 
         rawSend(addr, packets::serialize(item.packet));
 
@@ -167,6 +170,7 @@ void SendWorker::runLoop(const std::stop_token& stoken) {
                      "or the rest of your code.\n"
                      "To avoid any potential deadlocks, the packet that was tried to be sent will be dropped "
                      "regardless of QoS.");
+            item.result_promise.set_value(SendResult{false});
         }
     }
 }
@@ -256,8 +260,9 @@ static void rawSend(const meshnow::MAC_ADDR& mac_addr, const std::vector<uint8_t
         throw meshnow::PayloadTooLargeException();
     }
 
-    // TODO delete unused peers first
+    // add peer, send, remove peer
     add_peer(mac_addr);
     ESP_LOGV(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
+    esp_now_del_peer(mac_addr.data());
 }

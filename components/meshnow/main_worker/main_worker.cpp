@@ -1,12 +1,14 @@
 #include "main_worker.hpp"
 
 #include <esp_log.h>
+#include <esp_pthread.h>
 #include <freertos/portmacro.h>
 
 #include <array>
 #include <ranges>
 #include <utility>
 
+#include "fragment.hpp"
 #include "hand_shaker.hpp"
 #include "internal.hpp"
 #include "keep_alive.hpp"
@@ -23,7 +25,15 @@ meshnow::MainWorker::MainWorker(std::shared_ptr<SendWorker> send_worker, std::sh
 
 void MainWorker::start() {
     ESP_LOGI(TAG, "Starting!");
+    // increase stack size
+    esp_pthread_cfg_t old_cfg = esp_pthread_get_default_config();
+    esp_pthread_cfg_t cfg = old_cfg;
+    cfg.stack_size += 1024;
+    esp_pthread_set_cfg(&cfg);
+    // start thread
     run_thread_ = std::jthread{[this](std::stop_token stoken) { runLoop(stoken); }};
+    // restore config
+    esp_pthread_set_cfg(&old_cfg);
 }
 
 void MainWorker::stop() {
@@ -48,7 +58,7 @@ void MainWorker::onReceive(const esp_now_recv_info_t *esp_now_info, const uint8_
 template <std::size_t N>
 static inline TickType_t calculateTimeout(const std::array<std::reference_wrapper<meshnow::WorkerTask>, N> &tasks) {
     // we want to at least check every 500ms, if not for the stop request
-    auto timeout = pdMS_TO_TICKS(500);
+    auto timeout = pdMS_TO_TICKS(5000);
 
     auto now = xTaskGetTickCount();
     // go through every task and check if it has a sooner timeout
@@ -80,17 +90,24 @@ static inline TickType_t calculateTimeout(const std::array<std::reference_wrappe
 }
 
 void MainWorker::runLoop(const std::stop_token &stoken) {
+    // netif should be initialized by now
+    assert(netif_);
+
     keepalive::BeaconSendTask beacon_send{send_worker_, layout_};
-    keepalive::RootReachableCheckTask root_reachable_check{state_, layout_};
-    keepalive::NeighborsAliveCheckTask neighbors_alive_check{send_worker_, state_, layout_};
+    keepalive::RootReachableCheckTask root_reachable_check{state_, layout_, netif_};
+    keepalive::NeighborsAliveCheckTask neighbors_alive_check{send_worker_, state_, layout_, netif_};
 
-    HandShaker hand_shaker{send_worker_, state_, layout_};
+    HandShaker hand_shaker{send_worker_, state_, layout_, netif_};
 
-    std::array<std::reference_wrapper<WorkerTask>, 4> tasks{beacon_send, neighbors_alive_check, root_reachable_check,
-                                                            hand_shaker};
+    fragment::FragmentTask fragment_task{netif_};
 
-    PacketHandler packet_handler{send_worker_,        state_, layout_, hand_shaker, neighbors_alive_check,
-                                 root_reachable_check};
+    std::array<std::reference_wrapper<WorkerTask>, 5> tasks{
+        beacon_send, neighbors_alive_check, root_reachable_check, hand_shaker, fragment_task,
+    };
+
+    PacketHandler packet_handler{
+        send_worker_, state_, layout_, hand_shaker, neighbors_alive_check, root_reachable_check, fragment_task,
+    };
 
     auto lastLoopRun = xTaskGetTickCount();
 
@@ -109,6 +126,8 @@ void MainWorker::runLoop(const std::stop_token &stoken) {
                 // if deserialization worked, give packet to packet handler
                 ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->id};
                 packet_handler.handlePacket(meta, packet->payload);
+            } else {
+                ESP_LOGW(TAG, "Failed to deserialize packet");
             }
         }
 

@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "main_worker.hpp"
+#include "now_lwip/netif.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 
@@ -21,7 +22,7 @@ namespace meshnow {
  */
 class Networking {
    public:
-    explicit Networking(const std::shared_ptr<NodeState>& state);
+    explicit Networking(std::shared_ptr<NodeState> state);
 
     Networking(const Networking&) = delete;
     Networking& operator=(const Networking&) = delete;
@@ -37,11 +38,15 @@ class Networking {
     void stop();
 
    private:
+    std::shared_ptr<NodeState> state_;
     std::shared_ptr<routing::Layout> layout_{std::make_shared<routing::Layout>()};
 
    public:
-    std::shared_ptr<SendWorker> send_worker_;
-    std::shared_ptr<MainWorker> main_worker_;
+    std::shared_ptr<SendWorker> send_worker_{std::make_shared<SendWorker>(layout_)};
+    std::shared_ptr<MainWorker> main_worker_{std::make_shared<MainWorker>(send_worker_, layout_, state_)};
+
+   private:
+    std::shared_ptr<lwip::netif::Netif> netif_;
 };
 
 }  // namespace meshnow

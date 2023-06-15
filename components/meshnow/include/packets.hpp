@@ -101,7 +101,9 @@ template <bool is_lwip>
 struct DataFirst {
     static constexpr Type type{is_lwip ? Type::DATA_LWIP_FIRST : Type::DATA_CUSTOM_FIRST};
 
+    meshnow::MAC_ADDR source;
     meshnow::MAC_ADDR target;
+    uint32_t id;
     uint16_t size;
     meshnow::Buffer data;
 };
@@ -113,7 +115,9 @@ template <bool is_lwip>
 struct DataNext {
     static constexpr Type type{is_lwip ? Type::DATA_LWIP_NEXT : Type::DATA_CUSTOM_NEXT};
 
+    meshnow::MAC_ADDR source;
     meshnow::MAC_ADDR target;
+    uint32_t id;
     uint8_t frag_num;
     meshnow::Buffer data;
 };

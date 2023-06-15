@@ -5,6 +5,7 @@
 
 #include "constants.hpp"
 #include "layout.hpp"
+#include "now_lwip/netif.hpp"
 #include "queue.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
@@ -33,6 +34,12 @@ class MainWorker {
      * Pushes items to the queue.
      */
     void onReceive(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len);
+
+    /**
+     * This is set later so we expose it publicly.
+     * TODO: ugly
+     */
+    std::shared_ptr<lwip::netif::Netif> netif_;
 
    private:
     struct ReceiveQueueItem {

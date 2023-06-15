@@ -6,6 +6,7 @@
 
 #include "constants.hpp"
 #include "layout.hpp"
+#include "now_lwip/netif.hpp"
 #include "send_worker.hpp"
 #include "state.hpp"
 #include "worker_task.hpp"
@@ -28,7 +29,8 @@ class BeaconSendTask : public WorkerTask {
 
 class RootReachableCheckTask : public WorkerTask {
    public:
-    RootReachableCheckTask(std::shared_ptr<NodeState> state, std::shared_ptr<routing::Layout> layout);
+    RootReachableCheckTask(std::shared_ptr<NodeState> state, std::shared_ptr<routing::Layout> layout,
+                           std::shared_ptr<lwip::netif::Netif> netif);
 
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;
@@ -46,6 +48,7 @@ class RootReachableCheckTask : public WorkerTask {
    private:
     std::shared_ptr<NodeState> state_;
     std::shared_ptr<routing::Layout> layout_;
+    std::shared_ptr<lwip::netif::Netif> netif_;
 
     TickType_t mesh_unreachable_since_{0};
     bool awaiting_reachable{false};
@@ -54,7 +57,7 @@ class RootReachableCheckTask : public WorkerTask {
 class NeighborsAliveCheckTask : public WorkerTask {
    public:
     NeighborsAliveCheckTask(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                            std::shared_ptr<routing::Layout> layout);
+                            std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif);
 
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;
@@ -80,5 +83,6 @@ class NeighborsAliveCheckTask : public WorkerTask {
     std::shared_ptr<SendWorker> send_worker_;
     std::shared_ptr<NodeState> state_;
     std::shared_ptr<routing::Layout> layout_;
+    std::shared_ptr<lwip::netif::Netif> netif_;
 };
 }  // namespace meshnow::keepalive

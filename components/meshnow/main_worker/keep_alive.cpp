@@ -7,12 +7,12 @@
 #include "constants.hpp"
 #include "internal.hpp"
 
-const char* TAG = CREATE_TAG("KeepAlive");
+static const char* TAG = CREATE_TAG("KeepAlive");
 
-// send a keep alive beacon every 500ms
-static constexpr auto BEACON_SEND_INTERVAL = pdMS_TO_TICKS(300);
+// send a keep alive beacon every 1s
+static constexpr auto BEACON_SEND_INTERVAL = pdMS_TO_TICKS(1000);
 
-// consider a neighbor dead if no beacon was received for 2s
+// consider a neighbor dead if no beacon was received for 3s
 static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
 // disconnect from parent if the root was unreachable for 10s
@@ -54,8 +54,9 @@ void BeaconSendTask::performAction() {
 using meshnow::keepalive::RootReachableCheckTask;
 
 RootReachableCheckTask::RootReachableCheckTask(std::shared_ptr<NodeState> state,
-                                               std::shared_ptr<routing::Layout> layout)
-    : state_(std::move(state)), layout_(std::move(layout)) {}
+                                               std::shared_ptr<routing::Layout> layout,
+                                               std::shared_ptr<lwip::netif::Netif> netif)
+    : state_(std::move(state)), layout_(std::move(layout)), netif_(std::move(netif)) {}
 
 TickType_t RootReachableCheckTask::nextActionAt() const noexcept {
     return awaiting_reachable ? mesh_unreachable_since_ + ROOT_UNREACHABLE_TIMEOUT : portMAX_DELAY;
@@ -83,6 +84,9 @@ void RootReachableCheckTask::receivedRootUnreachable() {
     state_->setRootReachable(false);
     mesh_unreachable_since_ = xTaskGetTickCount();
     awaiting_reachable = true;
+
+    // stop netif
+    netif_->stop();
 }
 
 void RootReachableCheckTask::receivedRootReachable() {
@@ -93,6 +97,9 @@ void RootReachableCheckTask::receivedRootReachable() {
     state_->setRootReachable(true);
     mesh_unreachable_since_ = 0;
     awaiting_reachable = false;
+
+    // start netif again
+    netif_->start();
 }
 
 // NeighborsAliveCheckTask //
@@ -101,8 +108,12 @@ using meshnow::keepalive::NeighborsAliveCheckTask;
 
 NeighborsAliveCheckTask::NeighborsAliveCheckTask(std::shared_ptr<SendWorker> send_worker,
                                                  std::shared_ptr<NodeState> state,
-                                                 std::shared_ptr<routing::Layout> layout)
-    : send_worker_(std::move(send_worker)), state_(std::move(state)), layout_(std::move(layout)) {}
+                                                 std::shared_ptr<routing::Layout> layout,
+                                                 std::shared_ptr<lwip::netif::Netif> netif)
+    : send_worker_(std::move(send_worker)),
+      state_(std::move(state)),
+      layout_(std::move(layout)),
+      netif_(std::move(netif)) {}
 
 TickType_t NeighborsAliveCheckTask::nextActionAt() const noexcept {
     std::scoped_lock lock(layout_->mtx);
@@ -143,6 +154,9 @@ void NeighborsAliveCheckTask::performAction() {
             state_->setConnected(false);
             // send root unreachable to children
             sendRootUnreachable();
+
+            // stop netif
+            netif_->stop();
         } else {
             // child timed out
             ESP_LOGW(TAG, "Direct child " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(timed_out_mac));

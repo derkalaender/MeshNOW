@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "fragment.hpp"
 #include "hand_shaker.hpp"
 #include "keep_alive.hpp"
 #include "layout.hpp"
@@ -22,7 +23,7 @@ class PacketHandler {
     PacketHandler(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
                   std::shared_ptr<routing::Layout> layout, HandShaker& hand_shaker,
                   keepalive::NeighborsAliveCheckTask& neighbors_alive_check_task,
-                  meshnow::keepalive::RootReachableCheckTask& rootReachableCheckTask);
+                  keepalive::RootReachableCheckTask& rootReachableCheckTask, fragment::FragmentTask& fragment_task);
 
     /**
      * Handle a packet. Calls the corresponding private methods.
@@ -37,6 +38,11 @@ class PacketHandler {
      * @param meta the meta data of the packet
      */
     void updateRssi(const meshnow::ReceiveMeta& meta);
+
+    /**
+     * @return true iff the mac corresponds to this node
+     */
+    bool isForMe(const MAC_ADDR& dest_addr);
 
     // HANDLERS for each payload type //
 
@@ -62,6 +68,7 @@ class PacketHandler {
     HandShaker& hand_shaker_;
     keepalive::NeighborsAliveCheckTask& neighbors_alive_check_task_;
     keepalive::RootReachableCheckTask& root_reachable_check_task_;
+    fragment::FragmentTask& fragment_task_;
 
     std::map<MAC_ADDR, uint32_t> last_id;
 };

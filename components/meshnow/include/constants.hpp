@@ -19,19 +19,27 @@ using MAC_ADDR = std::array<uint8_t, MAC_ADDR_LEN>;
 constexpr MAC_ADDR BROADCAST_MAC_ADDR{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 constexpr MAC_ADDR ROOT_MAC_ADDR{0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-constexpr int MAX_RAW_PACKET_SIZE{ESP_NOW_MAX_DATA_LEN};
-constexpr int MAX_DATA_TOTAL_SIZE{1500};  // MTU of IPv4 by LwIP
+constexpr uint16_t MAX_RAW_PACKET_SIZE{ESP_NOW_MAX_DATA_LEN};
+constexpr uint16_t MAX_DATA_TOTAL_SIZE{1500};  // MTU of IPv4 by LwIP
 
-constexpr int MAX_FRAG_NUM{7};    // 1500/250=6 + possible additional fragment because of header space
-constexpr int MAX_SEQ_NUM{8191};  // 13 bits for the sequence number is 2^13 - 1 (should be enough)
-constexpr int DATA_HEADER_FIRST_SIZE{3 + 1 + 6 + 3};  // magic + type + target mac + seq&len
-constexpr int MAX_DATA_FIRST_SIZE{MAX_RAW_PACKET_SIZE - DATA_HEADER_FIRST_SIZE};
-constexpr int DATA_HEADER_NEXT_SIZE{DATA_HEADER_FIRST_SIZE - 1};  // only two bytes for seq&frag
-constexpr int MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - DATA_HEADER_NEXT_SIZE};
+constexpr uint16_t HEADER_SIZE{8};  // magic + type + id
+constexpr uint16_t DATA_FIRST_HEADER_SIZE{
+    6 + 6 + 4 + 2 + 2};  // source mac + target mac + id + total size TODO plus two remove is for bitsery encoding size
+constexpr uint16_t DATA_NEXT_HEADER_SIZE{6 + 6 + 4 + 1 +
+                                         2};  // source mac + target mac + id + fragment number TODO same as above
+constexpr uint16_t MAX_DATA_FIRST_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_FIRST_HEADER_SIZE};
+constexpr uint16_t MAX_DATA_NEXT_SIZE{MAX_RAW_PACKET_SIZE - HEADER_SIZE - DATA_NEXT_HEADER_SIZE};
+
+static inline consteval int calcMaxFragments() {
+    constexpr int frags_for_data{MAX_DATA_TOTAL_SIZE / 250};
+    constexpr int header_overhead{DATA_FIRST_HEADER_SIZE + (frags_for_data - 1) * DATA_NEXT_HEADER_SIZE};
+
+    return frags_for_data + 1 + (header_overhead - 1) / MAX_DATA_NEXT_SIZE;
+}
+
+constexpr int MAX_FRAGMENTS{calcMaxFragments()};
 
 constexpr int RECEIVE_QUEUE_SIZE{10};
-
-constexpr int HEADER_SIZE{8};
 
 using Buffer = std::vector<uint8_t>;
 }  // namespace meshnow
