@@ -142,8 +142,8 @@ esp_err_t NodeIODriver::transmit(void* buffer, size_t len) {
 
     ESP_LOGD(TAG, "Transmitting packet to root, with dest addr: " MAC_FORMAT, MAC_FORMAT_ARGS(dest_mac));
 
-    // TODO maybe shortcut if the dest mac is a child or the parent, we can directly send to those without going through
-    // the root
+    // TODO maybe shortcut if the dest mac is a child or the parent, we can directly send to those without going
+    // through the root
 
     sendData(meshnow::ROOT_MAC_ADDR, buffer, len);
     sendData(*layout_->root, buffer, len);

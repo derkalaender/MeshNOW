@@ -19,6 +19,14 @@ class MQTTDemo {
 
     void mqtt_event_handler(void* handler_args, esp_event_base_t base, int32_t event_id, void* event_data);
 
+    void run_root();
+
+    void run_temphum();
+
+    void run_lux();
+
+    void run_camera();
+
    private:
     static constexpr auto MQTT_BROKER_URI = "mqtt://test.mosquitto.org";
 

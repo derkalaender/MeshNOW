@@ -4,7 +4,10 @@
 #include <esp_log.h>
 #include <esp_mac.h>
 
-#include "waitbits.hpp"
+#include <cstdio>
+#include <map>
+
+#include "constants.hpp"
 
 static const char *TAG = "mqtt_demo";
 
@@ -29,7 +32,7 @@ MQTTDemo::MQTTDemo() {
 }
 
 void MQTTDemo::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
-    ESP_LOGI(TAG, "Event dispatched from event loop base=%s, event_id=%ld", base, event_id);
+    ESP_LOGV(TAG, "Event dispatched from event loop base=%s, event_id=%ld", base, event_id);
 
     auto event = static_cast<esp_mqtt_event_handle_t>(event_data);
 
@@ -42,7 +45,7 @@ void MQTTDemo::mqtt_event_handler(void *handler_args, esp_event_base_t base, int
             ESP_LOGI(TAG, "Disconnected from MQTT broker");
             break;
         case MQTT_EVENT_PUBLISHED:
-            ESP_LOGI(TAG, "Broker acknowledged publish, msg_id=%d", event->msg_id);
+            ESP_LOGV(TAG, "Broker acknowledged publish, msg_id=%d", event->msg_id);
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "Error in MQTT");
@@ -53,37 +56,50 @@ void MQTTDemo::mqtt_event_handler(void *handler_args, esp_event_base_t base, int
     }
 }
 
-static std::string macToStr(std::array<uint8_t, 6> mac) {
-    std::string result;
-    for (auto i = 0; i < 6; i++) {
-        result += std::to_string(mac[i]);
-        if (i != 5) {
-            result += ":";
-        }
-    }
-    return result;
-}
+static meshnow::MAC_ADDR my_mac;
+
+static constexpr auto topic = "random/hgasvdhgauztdzuasgdjhbahm";
 
 void MQTTDemo::run() {
     wait_bits.waitFor(CONNECT_BIT, true, true, portMAX_DELAY);
 
-    std::array<uint8_t, 6> mac = {0};
-    esp_read_mac(mac.data(), ESP_MAC_WIFI_STA);
+    esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
 
-    auto topic = "random/hgasvdhgauztdzuasgdjhbahm";
-    auto message = "[" + macToStr(mac) + "]: hello world";
+    // send ready message
+    publish(topic, "Ready");
 
-    ESP_LOGI(TAG, "Publishing to topic %s: %s", topic, message.c_str());
-    while (true) {
-        publish(topic, message.c_str());
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
+    std::map<meshnow::MAC_ADDR, decltype(&MQTTDemo::run_root)> run_map{
+        {{0x24, 0x6F, 0x28, 0x4A, 0x63, 0x3C}, &MQTTDemo::run_root},
+        {{0xBC, 0xDD, 0xC2, 0xCC, 0xC3, 0x0C}, &MQTTDemo::run_temphum},
+        {{0xBC, 0xDD, 0xC2, 0xCF, 0xFE, 0xAC}, &MQTTDemo::run_lux},
+        {{0x24, 0x6F, 0x28, 0x4A, 0x66, 0xCC}, &MQTTDemo::run_camera},
+    };
+
+    // run specific function
+    auto fnc = run_map[my_mac];
+    (this->*fnc)();
+
+    ESP_LOGI(TAG, "Finished!");
 }
 
 void MQTTDemo::publish(const char *topic, const char *message) {
-    if (esp_mqtt_client_publish(client.get(), topic, message, 0, 1, 0)) {
-        ESP_LOGI(TAG, "Published message");
+    // asprintf "[mac as hex][message]"
+    char *data;
+    asprintf(&data, "[" MAC_FORMAT "][%s]", MAC_FORMAT_ARGS(my_mac), message);
+
+    if (esp_mqtt_client_publish(client.get(), topic, data, 0, 0, 0) >= 0) {
+        ESP_LOGD(TAG, "Published message");
     } else {
         ESP_LOGE(TAG, "Failed to publish message");
     }
+    free(data);
 }
+
+void MQTTDemo::run_root() {
+    ESP_LOGI(TAG, "Running as root");
+    publish(topic, "I am (g)root!");
+    ESP_LOGI(TAG, "Nothing more do do");
+}
+void MQTTDemo::run_temphum() { ESP_LOGI(TAG, "Running as temphum"); }
+void MQTTDemo::run_lux() { ESP_LOGI(TAG, "Running as lux"); }
+void MQTTDemo::run_camera() { ESP_LOGI(TAG, "Running as camera"); }
