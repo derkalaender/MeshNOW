@@ -1,13 +1,16 @@
 #include "mqtt_demo.hpp"
 
-#include <esp_event.h>
 #include <esp_log.h>
 #include <esp_mac.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <cstdio>
 #include <map>
 
+#include "bh1750_handler.h"
 #include "constants.hpp"
+#include "dht11.h"
 
 static const char *TAG = "mqtt_demo";
 
@@ -100,6 +103,58 @@ void MQTTDemo::run_root() {
     publish(topic, "I am (g)root!");
     ESP_LOGI(TAG, "Nothing more do do");
 }
-void MQTTDemo::run_temphum() { ESP_LOGI(TAG, "Running as temphum"); }
-void MQTTDemo::run_lux() { ESP_LOGI(TAG, "Running as lux"); }
-void MQTTDemo::run_camera() { ESP_LOGI(TAG, "Running as camera"); }
+
+void MQTTDemo::run_temphum() {
+    ESP_LOGI(TAG, "Running as temphum");
+
+    ESP_LOGI(TAG, "Initializing DHT11");
+    DHT11_init(GPIO_NUM_27);
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    while (true) {
+        auto value = DHT11_read();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        ESP_LOGI(TAG, "Temp: %d, Hum: %d", value.temperature, value.humidity);
+        char *text;
+        asprintf(&text, "Temperature: %d°C | Humidity: %d%%", value.temperature, value.humidity);
+        publish(topic, text);
+        free(text);
+    }
+
+    ESP_LOGI(TAG, "Starting measure");
+}
+
+void MQTTDemo::run_lux() {
+    ESP_LOGI(TAG, "Running as lux");
+
+    ESP_LOGI(TAG, "Initializing BH1750");
+    caps_bh1750_i2c_init();
+    caps_bh1750_init();
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    ESP_LOGI(TAG, "Starting measure");
+
+    while (true) {
+        uint16_t value = caps_bh1750_measure();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        ESP_LOGI(TAG, "Lux: %d", value);
+        char *text;
+        asprintf(&text, "Luminance: %dlx", value);
+        publish(topic, text);
+        free(text);
+    }
+}
+
+void MQTTDemo::run_camera() {
+    ESP_LOGI(TAG, "Running as camera");
+    vTaskDelay(pdMS_TO_TICKS(3000));
+
+    // TODO camera
+
+    while (true) {
+        publish(topic, "Taking fabulous pictures...");
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
