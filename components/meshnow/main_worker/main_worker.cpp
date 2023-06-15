@@ -58,7 +58,7 @@ void MainWorker::onReceive(const esp_now_recv_info_t *esp_now_info, const uint8_
 template <std::size_t N>
 static inline TickType_t calculateTimeout(const std::array<std::reference_wrapper<meshnow::WorkerTask>, N> &tasks) {
     // we want to at least check every 500ms, if not for the stop request
-    auto timeout = pdMS_TO_TICKS(500);
+    auto timeout = pdMS_TO_TICKS(5000);
 
     auto now = xTaskGetTickCount();
     // go through every task and check if it has a sooner timeout

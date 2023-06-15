@@ -9,10 +9,10 @@
 
 static const char* TAG = CREATE_TAG("KeepAlive");
 
-// send a keep alive beacon every 500ms
-static constexpr auto BEACON_SEND_INTERVAL = pdMS_TO_TICKS(300);
+// send a keep alive beacon every 1s
+static constexpr auto BEACON_SEND_INTERVAL = pdMS_TO_TICKS(1000);
 
-// consider a neighbor dead if no beacon was received for 2s
+// consider a neighbor dead if no beacon was received for 3s
 static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
 // disconnect from parent if the root was unreachable for 10s

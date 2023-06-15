@@ -32,11 +32,6 @@ class HandShaker : public WorkerTask {
      */
     void reset();
 
-    /**
-     * @return the time at which the next action should be performed
-     */
-    TickType_t nextActionIn(TickType_t now) const;
-
     // Connection requesting methods //
 
     /**
@@ -123,6 +118,10 @@ class HandShaker : public WorkerTask {
     std::shared_ptr<lwip::netif::Netif> netif_;
 
     bool searching_for_parents_{true};
+
+    uint8_t min_channel_;
+    uint8_t max_channel_;
+    uint8_t current_channel_;
 
     std::vector<ParentInfo> parent_infos_{};
 

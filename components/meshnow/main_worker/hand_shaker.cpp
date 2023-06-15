@@ -5,21 +5,22 @@
 
 #include <utility>
 
+#include "error.hpp"
 #include "internal.hpp"
 #include "send_worker.hpp"
 
 static const char* TAG = CREATE_TAG("HandShaker");
 
-// Frequency at which to send search probe (ms)
-static const auto SEARCH_PROBE_FREQ_MS = 500;
+// we stay on a single channel for 120ms
+static constexpr auto CHANNEL_STAY_TIME = pdMS_TO_TICKS(500);
 
 // Time to wait for a connection reply (ms)
-static const auto CONNECT_TIMEOUT_MS = 50;
+static constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(50);
 
 // Min time to wait for potential other parents after the first parent was found (ms)
-static const auto FIRST_PARENT_WAIT_MS = 1000;
+static constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(1000);
 
-static const auto MAX_PARENTS_TO_CONSIDER = 5;
+static constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
 
 using meshnow::HandShaker;
 
@@ -30,6 +31,13 @@ HandShaker::HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<
       layout_{std::move(layout)},
       netif_{std::move(netif)} {
     parent_infos_.reserve(MAX_PARENTS_TO_CONSIDER);
+
+    // get wifi country and set min and max channel
+    wifi_country_t country;
+    CHECK_THROW(esp_wifi_get_country(&country));
+    min_channel_ = country.schan;
+    max_channel_ = min_channel_ + country.nchan - 1;
+    current_channel_ = min_channel_;
 }
 
 TickType_t HandShaker::nextActionAt() const noexcept {
@@ -38,10 +46,10 @@ TickType_t HandShaker::nextActionAt() const noexcept {
 
     if (searching_for_parents_) {
         // next time until we need to send a search probe
-        return last_search_probe_time_ + pdMS_TO_TICKS(SEARCH_PROBE_FREQ_MS);
+        return last_search_probe_time_ + CHANNEL_STAY_TIME;
     } else {
         // next time until we need to send a connect request
-        return last_connect_request_time_ + pdMS_TO_TICKS(CONNECT_TIMEOUT_MS);
+        return last_connect_request_time_ + CONNECT_TIMEOUT;
     }
 }
 
@@ -51,7 +59,7 @@ void HandShaker::performAction() {
 
     // check if we have found enough parents in case we were searching, so we can stop
     if (searching_for_parents_ && !parent_infos_.empty()) {
-        if (xTaskGetTickCount() - first_parent_found_time_ >= pdMS_TO_TICKS(FIRST_PARENT_WAIT_MS)) {
+        if (xTaskGetTickCount() - first_parent_found_time_ >= FIRST_PARENT_WAIT) {
             ESP_LOGI(TAG, "Found enough parents");
             searching_for_parents_ = false;
         }
@@ -66,11 +74,11 @@ void HandShaker::performAction() {
 
     if (searching_for_parents_) {
         // check that we should send a search probe again
-        if (xTaskGetTickCount() - last_search_probe_time_ < pdMS_TO_TICKS(SEARCH_PROBE_FREQ_MS)) return;
+        if (xTaskGetTickCount() - last_search_probe_time_ < CHANNEL_STAY_TIME) return;
         sendSearchProbe();
     } else {
         // check that the last connect request timed out, otherwise return and keep waiting
-        if (xTaskGetTickCount() - last_connect_request_time_ < pdMS_TO_TICKS(CONNECT_TIMEOUT_MS)) return;
+        if (xTaskGetTickCount() - last_connect_request_time_ < CONNECT_TIMEOUT) return;
 
         // try to connect to the best parent
         tryConnect();
@@ -86,9 +94,23 @@ void HandShaker::reset() {
 }
 
 void HandShaker::sendSearchProbe() {
-    ESP_LOGI(TAG, "Sending anyone there");
+    // set new channel, only if we haven't found any parents yet
+    //    if (parent_infos_.empty()) {
+    //        current_channel_++;
+    //        if (current_channel_ > max_channel_) current_channel_ = min_channel_;
+    //        CHECK_THROW(esp_wifi_set_channel(current_channel_, WIFI_SECOND_CHAN_NONE));
+    //    }
+
+    ESP_LOGI(TAG, "Sending anyone there on channel %d", current_channel_);
+    // do this 3 times just to be sure we are heard
+    //    for (int i = 0; i < 3; i++) {
+    //        SendPromise promise{};
+    //        auto future = promise.get_future();
     send_worker_->enqueuePayload(meshnow::BROADCAST_MAC_ADDR, false, meshnow::packets::AnyoneThere{}, SendPromise{},
                                  true, QoS::SINGLE_TRY);
+    //        future.wait();
+    //    }
+
     // update the last time we sent a search probe
     last_search_probe_time_ = xTaskGetTickCount();
 }

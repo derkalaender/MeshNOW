@@ -2,9 +2,9 @@
 
 #include <esp_log.h>
 #include <esp_random.h>
+#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <esp_wifi.h>
 
 #include <utility>
 
@@ -18,7 +18,7 @@ static const auto SEND_SUCCESS_BIT = BIT0;
 static const auto SEND_FAILED_BIT = BIT1;
 
 // timeout for sending a packet (ms)
-static const auto SEND_TIMEOUT = 10 * 1000;
+static const auto SEND_TIMEOUT = 1000;
 // maximum number of retries for sending a packet
 static const uint8_t MAX_RETRIES = 5;
 // timeout for waiting for an ack (ms)
@@ -170,6 +170,7 @@ void SendWorker::runLoop(const std::stop_token& stoken) {
                      "or the rest of your code.\n"
                      "To avoid any potential deadlocks, the packet that was tried to be sent will be dropped "
                      "regardless of QoS.");
+            item.result_promise.set_value(SendResult{false});
         }
     }
 }
@@ -239,8 +240,6 @@ void SendWorker::qosChecker(const std::stop_token& stoken) {
 
 // INTERNAL //
 
-static wifi_second_chan_t unused_second_chan;
-
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     ESP_LOGV(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
@@ -248,9 +247,9 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
         return;
     }
     esp_now_peer_info_t peer_info{};
-    CHECK_THROW(esp_wifi_get_channel(&peer_info.channel, &unused_second_chan));
+    peer_info.channel = 0;
     peer_info.encrypt = false;
-    peer_info.ifidx = WIFI_IF_AP;
+    peer_info.ifidx = WIFI_IF_STA;
     std::copy(mac_addr.begin(), mac_addr.end(), peer_info.peer_addr);
     CHECK_THROW(esp_now_add_peer(&peer_info));
 }

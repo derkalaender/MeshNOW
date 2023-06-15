@@ -103,7 +103,7 @@ extern "C" void app_main(void) {
     meshnow::MAC_ADDR my_mac;
     esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
 
-    wifi_sta_config_t sta_config{.ssid = "marvin-hotspot"};
+    wifi_sta_config_t sta_config{.ssid = "marvin-hotspot", .password="atleast8characters"};
 
     bool is_root = my_mac == root;
 

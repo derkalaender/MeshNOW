@@ -4,7 +4,11 @@
 #include <esp_log.h>
 #include <esp_mac.h>
 
+#include "waitbits.hpp"
+
 static const char *TAG = "mqtt_demo";
+
+static constexpr auto CONNECT_BIT = BIT0;
 
 static void mqtt_event_handler_wrap(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     static_cast<MQTTDemo *>(handler_args)->mqtt_event_handler(handler_args, base, event_id, event_data);
@@ -20,6 +24,8 @@ MQTTDemo::MQTTDemo() {
 
     esp_mqtt_client_register_event(client.get(), static_cast<esp_mqtt_event_id_t>(ESP_EVENT_ANY_ID),
                                    &mqtt_event_handler_wrap, this);
+
+    esp_mqtt_client_start(client.get());
 }
 
 void MQTTDemo::mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
@@ -30,6 +36,7 @@ void MQTTDemo::mqtt_event_handler(void *handler_args, esp_event_base_t base, int
     switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "Connected to MQTT broker with URI %s", MQTT_BROKER_URI);
+            wait_bits.setBits(CONNECT_BIT);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "Disconnected from MQTT broker");
@@ -58,6 +65,8 @@ static std::string macToStr(std::array<uint8_t, 6> mac) {
 }
 
 void MQTTDemo::run() {
+    wait_bits.waitFor(CONNECT_BIT, true, true, portMAX_DELAY);
+
     std::array<uint8_t, 6> mac = {0};
     esp_read_mac(mac.data(), ESP_MAC_WIFI_STA);
 
@@ -65,11 +74,14 @@ void MQTTDemo::run() {
     auto message = "[" + macToStr(mac) + "]: hello world";
 
     ESP_LOGI(TAG, "Publishing to topic %s: %s", topic, message.c_str());
-    publish(topic, message.c_str());
+    while (true) {
+        publish(topic, message.c_str());
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 }
 
 void MQTTDemo::publish(const char *topic, const char *message) {
-    if (esp_mqtt_client_publish(client.get(), topic, message, 0, 0, 0)) {
+    if (esp_mqtt_client_publish(client.get(), topic, message, 0, 1, 0)) {
         ESP_LOGI(TAG, "Published message");
     } else {
         ESP_LOGE(TAG, "Failed to publish message");

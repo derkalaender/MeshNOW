@@ -84,7 +84,7 @@ static void setupWiFi(meshnow::Config config) {
             esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, nullptr, nullptr));
     } else {
         // nodes only communicate via STA
-        CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_AP));
+        CHECK_THROW(esp_wifi_set_mode(WIFI_MODE_STA));
     }
 
     // don't save config to flash
@@ -93,6 +93,11 @@ static void setupWiFi(meshnow::Config config) {
     CHECK_THROW(esp_wifi_set_ps(WIFI_PS_NONE));
 
     CHECK_THROW(esp_wifi_start());
+
+    if (!config.root) {
+        // set to channel 9
+        esp_wifi_set_channel(9, WIFI_SECOND_CHAN_NONE);
+    }
 
     // TODO maybe turn this on actually?
 
