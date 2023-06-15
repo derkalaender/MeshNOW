@@ -10,7 +10,7 @@
 
 #include "bh1750_handler.h"
 #include "constants.hpp"
-#include "dht11.h"
+#include "dht.h"
 
 static const char *TAG = "mqtt_demo";
 
@@ -108,16 +108,16 @@ void MQTTDemo::run_temphum() {
     ESP_LOGI(TAG, "Running as temphum");
 
     ESP_LOGI(TAG, "Initializing DHT11");
-    DHT11_init(GPIO_NUM_27);
 
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     while (true) {
-        auto value = DHT11_read();
+        float temperature, humidity;
+        dht_read_float_data(DHT_TYPE_DHT11, GPIO_NUM_25, &humidity, &temperature);
         vTaskDelay(pdMS_TO_TICKS(1000));
-        ESP_LOGI(TAG, "Temp: %d, Hum: %d", value.temperature, value.humidity);
+        ESP_LOGI(TAG, "Temp: %f, Hum: %f", temperature, humidity);
         char *text;
-        asprintf(&text, "Temperature: %d°C | Humidity: %d%%", value.temperature, value.humidity);
+        asprintf(&text, "Temperature: %.1f°C | Humidity: %.1f%%", temperature, humidity);
         publish(topic, text);
         free(text);
     }
