@@ -4,6 +4,7 @@
 #include <esp_random.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_wifi.h>
 
 #include <utility>
 
@@ -238,6 +239,8 @@ void SendWorker::qosChecker(const std::stop_token& stoken) {
 
 // INTERNAL //
 
+static wifi_second_chan_t unused_second_chan;
+
 // TODO handle list of peers full
 static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
     ESP_LOGV(TAG, "Adding peer " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
@@ -245,7 +248,7 @@ static void add_peer(const meshnow::MAC_ADDR& mac_addr) {
         return;
     }
     esp_now_peer_info_t peer_info{};
-    peer_info.channel = 11;
+    CHECK_THROW(esp_wifi_get_channel(&peer_info.channel, &unused_second_chan));
     peer_info.encrypt = false;
     peer_info.ifidx = WIFI_IF_AP;
     std::copy(mac_addr.begin(), mac_addr.end(), peer_info.peer_addr);
@@ -258,8 +261,9 @@ static void rawSend(const meshnow::MAC_ADDR& mac_addr, const std::vector<uint8_t
         throw meshnow::PayloadTooLargeException();
     }
 
-    // TODO delete unused peers first
+    // add peer, send, remove peer
     add_peer(mac_addr);
     ESP_LOGV(TAG, "Sending raw data to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     CHECK_THROW(esp_now_send(mac_addr.data(), data.data(), data.size()));
+    esp_now_del_peer(mac_addr.data());
 }
