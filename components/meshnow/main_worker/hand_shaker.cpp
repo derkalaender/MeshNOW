@@ -11,14 +11,14 @@
 
 static const char* TAG = CREATE_TAG("HandShaker");
 
-// we stay on a single channel for 120ms
-static constexpr auto CHANNEL_STAY_TIME = pdMS_TO_TICKS(500);
+// we stay on a single channel for 250ms
+static constexpr auto CHANNEL_STAY_TIME = pdMS_TO_TICKS(250);
 
 // Time to wait for a connection reply (ms)
 static constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(50);
 
 // Min time to wait for potential other parents after the first parent was found (ms)
-static constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(1000);
+static constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(3000);
 
 static constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
 
