@@ -8,8 +8,8 @@
 #include <cstdio>
 #include <map>
 
+#include "../components/meshnow/constants.hpp"
 #include "bh1750_handler.h"
-#include "constants.hpp"
 #include "dht.h"
 
 static const char *TAG = "mqtt_demo";
@@ -42,7 +42,7 @@ void MQTTDemo::mqtt_event_handler(void *handler_args, esp_event_base_t base, int
     switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "Connected to MQTT broker with URI %s", MQTT_BROKER_URI);
-            wait_bits.setBits(CONNECT_BIT);
+            wait_bits.set(CONNECT_BIT);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "Disconnected from MQTT broker");
@@ -64,7 +64,7 @@ static meshnow::MAC_ADDR my_mac;
 static constexpr auto topic = "random/hgasvdhgauztdzuasgdjhbahm";
 
 void MQTTDemo::run() {
-    wait_bits.waitFor(CONNECT_BIT, true, true, portMAX_DELAY);
+    wait_bits.wait(CONNECT_BIT, true, true, portMAX_DELAY);
 
     esp_read_mac(my_mac.data(), ESP_MAC_WIFI_STA);
 

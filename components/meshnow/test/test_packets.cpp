@@ -6,9 +6,9 @@
 #include <numeric>
 #include <vector>
 
-#include "constants.hpp"
-#include "networking.hpp"
-#include "packets.hpp"
+#include "../constants.hpp"
+#include "../networking.hpp"
+#include "../packets.hpp"
 
 const char* TAG = "test_packets";
 

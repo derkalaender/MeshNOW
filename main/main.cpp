@@ -8,9 +8,9 @@
 #include <nvs_flash.h>
 
 #include <memory>
-#include <meshnow.hpp>
 #include <thread>
 
+#include "../components/meshnow/meshnow.hpp"
 #include "mqtt_demo.hpp"
 
 static const char *TAG = "main";
@@ -52,7 +52,7 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         case IP_EVENT_STA_GOT_IP: {
             auto *event = static_cast<ip_event_got_ip_t *>(event_data);
             ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
-            wait_bits.setBits(IP_BIT);
+            wait_bits.set(IP_BIT);
             break;
         }
         case IP_EVENT_STA_LOST_IP: {
@@ -70,7 +70,7 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 
 void mqtt_thread(void *arg) {
     // wait until we got IP
-    auto bits = wait_bits.waitFor(IP_BIT, true, true, portMAX_DELAY);
+    auto bits = wait_bits.wait(IP_BIT, true, true, portMAX_DELAY);
     assert(bits == IP_BIT);
 
     ESP_LOGI(TAG, "Starting MQTT Demo");
