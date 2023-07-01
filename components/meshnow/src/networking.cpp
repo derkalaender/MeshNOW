@@ -9,7 +9,7 @@
 #include "job/runner.hpp"
 #include "receive/queue.hpp"
 #include "send/queue.hpp"
-#include "send/worker_new.hpp"
+#include "send/worker.hpp"
 #include "util/util.hpp"
 #include "util/waitbits.hpp"
 
