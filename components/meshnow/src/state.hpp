@@ -1,81 +1,36 @@
 #pragma once
 
-#include <condition_variable>
-#include <mutex>
+#include <esp_event.h>
 
-namespace meshnow {
+#include "util/mac.hpp"
 
-class NodeState {
-   public:
-    explicit NodeState(bool is_root) : root_{is_root} {}
+namespace meshnow::state {
 
-    [[nodiscard]] std::unique_lock<std::mutex> acquireLock() { return std::unique_lock{mtx_}; }
+/**
+ * Initializes internal event loop for state updates.
+ */
+esp_err_t init();
 
-    void setStarted(bool started) {
-        started_ = started;
-        if (!started_) {
-            connected_ = false;
-            root_reachable_ = false;
-        }
-        cv_.notify_all();
-    }
+/**
+ * Deinitializes everything.
+ */
+void deinit();
 
-    bool isStarted() const { return started_; }
+esp_event_loop_handle_t getEventHandle();
 
-    void waitForStarted(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return started_; });
-    }
+/**
+ * Set if this device is the root node of the mesh.
+ */
+void setRoot(bool is_root);
 
-    void setConnected(bool connected) {
-        if (root_) return;
+/**
+ * Returns if this device is the root node of the mesh.
+ */
+bool isRoot();
 
-        connected_ = connected;
-        if (connected_) {
-            started_ = true;
-        } else {
-            root_reachable_ = false;
-        }
-        cv_.notify_all();
-    }
+/**
+ * Returns the MAC address of this device.
+ */
+util::MacAddr getThisMac();
 
-    bool isConnected() const { return root_ || connected_; }
-
-    void waitForConnected(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return connected_; });
-    }
-
-    void waitForDisconnected(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return started_ && !connected_; });
-    }
-
-    void setRootReachable(bool reachable) {
-        if (root_) return;
-
-        root_reachable_ = reachable;
-        if (root_reachable_) {
-            started_ = true;
-            connected_ = true;
-        }
-        cv_.notify_all();
-    }
-
-    bool isRootReachable() const { return root_ || root_reachable_; }
-
-    void waitForRootReachable(std::unique_lock<std::mutex>& lock) {
-        cv_.wait(lock, [&] { return root_reachable_; });
-    }
-
-    bool isRoot() const { return root_; }
-
-   private:
-    bool root_;
-    bool started_{false};
-    bool connected_{false};
-    bool root_reachable_{false};
-
-    std::mutex mtx_{};
-
-    std::condition_variable cv_{};
-};
-
-}  // namespace meshnow
+}  // namespace meshnow::state

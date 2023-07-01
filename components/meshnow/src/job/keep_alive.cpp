@@ -4,13 +4,14 @@
 
 #include <utility>
 
-#include "constants.hpp"
-#include "internal.hpp"
+#include "state.hpp"
+
+namespace meshnow::job {
 
 static const char* TAG = CREATE_TAG("KeepAlive");
 
-// send a keep alive beacon every 1s
-static constexpr auto BEACON_SEND_INTERVAL = pdMS_TO_TICKS(500);
+// send a keep alive status every 1s
+static constexpr auto STATUS_SEND_INTERVAL = pdMS_TO_TICKS(500);
 
 // consider a neighbor dead if no beacon was received for 3s
 static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(2000);
@@ -18,23 +19,18 @@ static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(2000);
 // disconnect from parent if the root was unreachable for 10s
 static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
 
-// BeaconSendTask //
+// StatusSendJob //
 
-using meshnow::keepalive::BeaconSendTask;
-
-BeaconSendTask::BeaconSendTask(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<routing::Layout> layout)
-    : send_worker_(std::move(send_worker)), layout_(std::move(layout)) {}
-
-TickType_t BeaconSendTask::nextActionAt() const noexcept {
+TickType_t StatusSendJob::nextActionAt() const noexcept {
     if (getNeighbors(layout_).empty()) return portMAX_DELAY;
 
-    return last_beacon_sent_ + BEACON_SEND_INTERVAL;
+    return last_status_sent_ + BEACON_SEND_INTERVAL;
 }
 
-void BeaconSendTask::performAction() {
+void StatusSendJob::performAction() {
     auto now = xTaskGetTickCount();
 
-    if (now - last_beacon_sent_ < BEACON_SEND_INTERVAL) return;
+    if (now - last_status_sent_ < BEACON_SEND_INTERVAL) return;
 
     std::scoped_lock lock(layout_->mtx);
 
@@ -46,23 +42,16 @@ void BeaconSendTask::performAction() {
         send_worker_->enqueuePayload(neighbor->mac, false, packets::KeepAlive{}, SendPromise{}, true, QoS::SINGLE_TRY);
     }
 
-    last_beacon_sent_ = now;
+    last_status_sent_ = now;
 }
 
-// RootReachableCheckTask //
+// UnreachableTimeoutJob //
 
-using meshnow::keepalive::RootReachableCheckTask;
-
-RootReachableCheckTask::RootReachableCheckTask(std::shared_ptr<NodeState> state,
-                                               std::shared_ptr<routing::Layout> layout,
-                                               std::shared_ptr<lwip::netif::Netif> netif)
-    : state_(std::move(state)), layout_(std::move(layout)), netif_(std::move(netif)) {}
-
-TickType_t RootReachableCheckTask::nextActionAt() const noexcept {
+TickType_t UnreachableTimeoutJob::nextActionAt() const noexcept {
     return awaiting_reachable ? mesh_unreachable_since_ + ROOT_UNREACHABLE_TIMEOUT : portMAX_DELAY;
 }
 
-void RootReachableCheckTask::performAction() {
+void UnreachableTimeoutJob::performAction() {
     auto now = xTaskGetTickCount();
 
     std::scoped_lock lock(layout_->mtx);
@@ -77,7 +66,7 @@ void RootReachableCheckTask::performAction() {
     }
 }
 
-void RootReachableCheckTask::receivedRootUnreachable() {
+void UnreachableTimeoutJob::receivedRootUnreachable() {
     if (state_->isRoot() || !state_->isConnected() || awaiting_reachable) return;
 
     ESP_LOGI(TAG, "Received root unreachable event, waiting for reachable event");
@@ -89,7 +78,7 @@ void RootReachableCheckTask::receivedRootUnreachable() {
     netif_->stop();
 }
 
-void RootReachableCheckTask::receivedRootReachable() {
+void UnreachableTimeoutJob::receivedRootReachable() {
     if (state_->isRoot() || !state_->isConnected() || !awaiting_reachable) return;
 
     ESP_LOGI(TAG, "Received root reachable event, sending child connected event");
@@ -104,18 +93,16 @@ void RootReachableCheckTask::receivedRootReachable() {
 
 // NeighborsAliveCheckTask //
 
-using meshnow::keepalive::NeighborsAliveCheckTask;
+using meshnow::keepalive::NeighborCheckJob;
 
-NeighborsAliveCheckTask::NeighborsAliveCheckTask(std::shared_ptr<SendWorker> send_worker,
-                                                 std::shared_ptr<NodeState> state,
-                                                 std::shared_ptr<routing::Layout> layout,
-                                                 std::shared_ptr<lwip::netif::Netif> netif)
+NeighborCheckJob::NeighborCheckJob(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
+                                   std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif)
     : send_worker_(std::move(send_worker)),
       state_(std::move(state)),
       layout_(std::move(layout)),
       netif_(std::move(netif)) {}
 
-TickType_t NeighborsAliveCheckTask::nextActionAt() const noexcept {
+TickType_t NeighborCheckJob::nextActionAt() const noexcept {
     std::scoped_lock lock(layout_->mtx);
 
     // get the neighbor with the lowest last_seen timestamp
@@ -129,7 +116,7 @@ TickType_t NeighborsAliveCheckTask::nextActionAt() const noexcept {
     return (*n)->last_seen + KEEP_ALIVE_TIMEOUT;
 }
 
-void NeighborsAliveCheckTask::performAction() {
+void NeighborCheckJob::performAction() {
     std::scoped_lock lock(layout_->mtx);
 
     auto neighbors = getNeighbors(layout_);
@@ -170,7 +157,7 @@ void NeighborsAliveCheckTask::performAction() {
     }
 }
 
-void NeighborsAliveCheckTask::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr) {
+void NeighborCheckJob::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr) {
     if (state_->isRoot()) return;
     ESP_LOGI(TAG, "Sending child disconnected event");
 
@@ -179,7 +166,7 @@ void NeighborsAliveCheckTask::sendChildDisconnected(const meshnow::MAC_ADDR& mac
                                  QoS::NEXT_HOP);
 }
 
-void NeighborsAliveCheckTask::sendRootUnreachable() {
+void NeighborCheckJob::sendRootUnreachable() {
     if (layout_->children.empty()) return;
     ESP_LOGI(TAG, "Sending root unreachable event to %d children", layout_->children.size());
 
@@ -189,7 +176,7 @@ void NeighborsAliveCheckTask::sendRootUnreachable() {
     }
 }
 
-void NeighborsAliveCheckTask::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& from_mac) {
+void NeighborCheckJob::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& from_mac) {
     std::scoped_lock lock(layout_->mtx);
     auto neighbors = getNeighbors(layout_);
 
@@ -204,3 +191,5 @@ void NeighborsAliveCheckTask::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& f
     // update timestamp
     (*n)->last_seen = xTaskGetTickCount();
 }
+
+}  // namespace meshnow::job

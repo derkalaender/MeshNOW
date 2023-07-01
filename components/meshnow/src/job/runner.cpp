@@ -7,6 +7,8 @@
 #include "hand_shaker.hpp"
 #include "job.hpp"
 #include "keep_alive.hpp"
+#include "packet_handler_new.hpp"
+#include "receive/queue.hpp"
 #include "util/util.hpp"
 #include "util/waitbits.hpp"
 
@@ -23,8 +25,8 @@ static TickType_t calculateTimeout(JobList jobs) {
 
     auto now = xTaskGetTickCount();
     // go through every task and check if it has a sooner timeout
-    for (auto task : jobs) {
-        auto next_action = task.get().nextActionAt();
+    for (auto job : jobs) {
+        auto next_action = job.get().nextActionAt();
         TickType_t this_timeout;
         if (next_action == portMAX_DELAY) {
             // in case of the maximum delay, we don't want to subtract now, as it is assumed the task never wants to run
@@ -53,15 +55,15 @@ static TickType_t calculateTimeout(JobList jobs) {
 void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runner_finished_bit) {
     ESP_LOGI(TAG, "Starting!");
 
-    keepalive::BeaconSendTask beacon_send{};
-    keepalive::RootReachableCheckTask root_reachable_check{};
-    keepalive::NeighborsAliveCheckTask neighbors_alive_check{};
-
-    HandShaker hand_shaker{};
-
+    HandShaker hand_shaker;
     FragmentGCJob fragment_gc;
+    keepalive::StatusSendJob beacon_send;
+    keepalive::UnreachableTimeoutJob root_reachable_check;
+    keepalive::NeighborCheckJob neighbors_alive_check;
 
     JobList jobs{beacon_send, root_reachable_check, neighbors_alive_check, hand_shaker, fragment_gc};
+
+    PacketHandler packet_handler;
 
     auto lastLoopRun = xTaskGetTickCount();
 
@@ -72,22 +74,15 @@ void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_
         ESP_LOGV(TAG, "Next action in at most %lu ticks", timeout);
 
         // get next packet from receive queue
-        auto receive_item = receive_queue_.popPacket(timeout);
+        auto receive_item = receive::pop(timeout);
         if (receive_item) {
-            // if valid, try to parse
-            auto packet = packets::deserialize(receive_item->data);
-            if (packet) {
-                // if deserialization worked, give packet to packet handler
-                ReceiveMeta meta{receive_item->from, receive_item->to, receive_item->rssi, packet->id};
-                packet_handler.handlePacket(meta, packet->payload);
-            } else {
-                ESP_LOGW(TAG, "Failed to deserialize packet");
-            }
+            // handle packet
+            packet_handler.handlePacket(receive_item->from, receive_item->packet);
         }
 
         // perform tasks
-        for (auto&& task : tasks) {
-            task.get().performAction();
+        for (auto job : jobs) {
+            job.get().performAction();
         }
 
         // wait at least one tick to avoid triggering the watchdog

@@ -21,8 +21,8 @@ class PacketHandler {
    public:
     PacketHandler(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
                   std::shared_ptr<routing::Layout> layout, HandShaker& hand_shaker,
-                  keepalive::NeighborsAliveCheckTask& neighbors_alive_check_task,
-                  keepalive::RootReachableCheckTask& rootReachableCheckTask, fragment::FragmentTask& fragment_task);
+                  keepalive::NeighborCheckJob& neighbors_alive_check_task,
+                  keepalive::UnreachableTimeoutJob& rootReachableCheckTask, fragment::FragmentTask& fragment_task);
 
     /**
      * Handle a packet. Calls the corresponding private methods.
@@ -65,8 +65,8 @@ class PacketHandler {
     std::shared_ptr<NodeState> state_;
     std::shared_ptr<routing::Layout> layout_;
     HandShaker& hand_shaker_;
-    keepalive::NeighborsAliveCheckTask& neighbors_alive_check_task_;
-    keepalive::RootReachableCheckTask& root_reachable_check_task_;
+    keepalive::NeighborCheckJob& neighbors_alive_check_task_;
+    keepalive::UnreachableTimeoutJob& root_reachable_check_task_;
     fragment::FragmentTask& fragment_task_;
 
     std::map<MAC_ADDR, uint32_t> last_id;

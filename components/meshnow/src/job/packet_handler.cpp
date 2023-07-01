@@ -5,7 +5,7 @@
 
 #include <mutex>
 
-#include "internal.hpp"
+#include "state.hpp"
 
 static const char* TAG = CREATE_TAG("PacketHandler");
 
@@ -13,8 +13,8 @@ using meshnow::PacketHandler;
 
 PacketHandler::PacketHandler(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
                              std::shared_ptr<routing::Layout> layout, HandShaker& hand_shaker,
-                             keepalive::NeighborsAliveCheckTask& neighbors_alive_check_task,
-                             keepalive::RootReachableCheckTask& rootReachableCheckTask,
+                             keepalive::NeighborCheckJob& neighbors_alive_check_task,
+                             keepalive::UnreachableTimeoutJob& rootReachableCheckTask,
                              fragment::FragmentTask& fragment_task)
     : send_worker_(std::move(send_worker)),
       state_(std::move(state)),

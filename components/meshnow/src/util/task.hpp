@@ -74,7 +74,7 @@ class Task {
         auto params = new TaskFunctionParams<Fn, Args...>{std::forward<Fn>(task_function),
                                                           std::forward_as_tuple(std::forward<Args>(args)...)};
 
-        BaseType_t affinity;
+        BaseType_t affinity = tskNO_AFFINITY;
         switch (settings.cpu) {
             case CPU::PRO_CPU:
                 affinity = PRO_CPU_NUM;

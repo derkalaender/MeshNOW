@@ -6,8 +6,8 @@
 #include <utility>
 
 #include "error.hpp"
-#include "internal.hpp"
 #include "send/worker.hpp"
+#include "state.hpp"
 
 static const char* TAG = CREATE_TAG("HandShaker");
 

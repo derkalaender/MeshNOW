@@ -6,8 +6,8 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
-#include "internal.hpp"
 #include "networking.hpp"
+#include "state.hpp"
 #include "util/util.hpp"
 #include "wifi.hpp"
 
@@ -81,7 +81,7 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
     }
 
     // call internal setup
-    meshnow::internal::setRoot(config->root);
+    meshnow::state::setRoot(config->root);
 
     if (config->root && config->router_config.should_connect) {
         // save Wi-Fi config
@@ -90,6 +90,9 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
     } else {
         meshnow::wifi::setShouldConnect(false);
     }
+
+    // init state
+    ESP_RETURN_ON_ERROR(meshnow::state::init(), TAG, "Initializing state failed");
 
     // init networking
     ESP_RETURN_ON_ERROR(networking.init(), TAG, "Initializing networking failed");
@@ -115,8 +118,9 @@ esp_err_t meshnow_deinit() {
     ESP_LOGI(TAG, "Deinitializing MeshNOW");
 
     networking.deinit();
+    meshnow::state::deinit()
 
-    initialized = false;
+        initialized = false;
 
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
     return ESP_OK;
@@ -133,7 +137,7 @@ esp_err_t meshnow_start() {
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Starting MeshNOW as '%s'", meshnow::internal::isRoot() ? "root" : "node");
+    ESP_LOGI(TAG, "Starting MeshNOW as '%s'", meshnow::state::isRoot() ? "root" : "node");
 
     // start Wi-Fi
     ESP_RETURN_ON_ERROR(meshnow::wifi::start(), TAG, "Starting Wi-Fi failed");

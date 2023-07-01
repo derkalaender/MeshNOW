@@ -6,7 +6,7 @@
 #include <esp_log.h>
 #include <esp_wifi.h>
 
-#include "internal.hpp"
+#include "state.hpp"
 
 static constexpr auto TAG = CREATE_TAG("Wi-Fi");
 
@@ -56,7 +56,7 @@ esp_err_t start() {
     ESP_RETURN_ON_ERROR(esp_wifi_set_ps(WIFI_PS_NONE), TAG, "Could not set Wi-Fi powersave mode");
 
     // root may should_connect to a router
-    if (internal::isRoot() && should_connect_) {
+    if (state::isRoot() && should_connect_) {
         // need to create default sta to should_connect to router
         wifi_sta_netif_obj_ = esp_netif_create_default_wifi_sta();
 

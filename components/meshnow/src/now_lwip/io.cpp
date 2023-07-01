@@ -5,7 +5,7 @@
 #include <esp_netif.h>
 #include <esp_random.h>
 
-#include "internal.hpp"
+#include "state.hpp"
 #include "util/util.hpp"
 
 const char* TAG = CREATE_TAG("LWIP | IO");

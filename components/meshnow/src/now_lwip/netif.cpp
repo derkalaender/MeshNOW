@@ -11,8 +11,8 @@
 
 #include "constants.hpp"
 #include "error.hpp"
-#include "internal.hpp"
 #include "now_lwip/io.hpp"
+#include "state.hpp"
 
 static const char* TAG = CREATE_TAG("LWIP | Netif");
 
