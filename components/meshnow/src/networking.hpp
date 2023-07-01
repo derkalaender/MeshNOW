@@ -36,7 +36,6 @@ class Networking {
     bool stop_tasks_{false};
     util::Task job_runner_task_;
     util::Task send_worker_task_;
-    receive::ReceiveWorker receive_worker_;
 
     //    std::unique_ptr<lwip::netif::Netif> netif_;
 };

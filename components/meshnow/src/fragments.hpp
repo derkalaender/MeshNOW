@@ -1,6 +1,9 @@
 #pragma once
 
+#include <freertos/portmacro.h>
+
 #include <cstdint>
+#include <optional>
 
 #include "util/mac.hpp"
 #include "util/util.hpp"
@@ -10,7 +13,7 @@ namespace meshnow::fragments {
 /**
  * Initializes fragment handling.
  */
-void init();
+esp_err_t init();
 
 /**
  * Deinitializes fragment handling.
@@ -29,6 +32,22 @@ void deinit();
 void addFragment(const util::MacAddr& src_mac, uint16_t fragment_id, uint16_t fragment_number, uint16_t total_size,
                  util::Buffer data);
 
-void popReassembledData();
+/**
+ * Return the next reassembled data.
+ * @param timeout Timeout to wait for data
+ * @return Reassembled data or std::nullopt if no data was received
+ */
+std::optional<util::Buffer> popReassembledData(TickType_t timeout);
+
+/**
+ * Return the time of the youngest fragment.
+ * @return Time of the youngest fragment, or portMAX_DELAY if no fragments exist
+ */
+TickType_t youngestFragmentTime();
+
+/**
+ * Remove all fragments that are older than the given time.
+ */
+void removeOlderThan(TickType_t time);
 
 }  // namespace meshnow::fragments

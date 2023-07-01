@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "fragments.hpp"
 #include "job/runner.hpp"
 #include "receive/queue.hpp"
 #include "send/queue.hpp"
@@ -25,6 +26,7 @@ esp_err_t Networking::init() {
     ESP_RETURN_ON_ERROR(send::init(), TAG, "Failed to initialize send queue");
     ESP_RETURN_ON_ERROR(receive::init(), TAG, "Failed to initialize receive queue");
     ESP_RETURN_ON_ERROR(task_waitbits_.init(), TAG, "Failed to initialize task waitbits");
+    ESP_RETURN_ON_ERROR(fragments::init(), TAG, "Failed to initialize fragment reassembly");
 
     //    // create netif
     //    if (state_->isRoot()) {
@@ -39,6 +41,8 @@ esp_err_t Networking::init() {
 void Networking::deinit() {
     ESP_LOGI(TAG, "Deinitializing");
 
+    // reverse order of init
+    fragments::deinit();
     receive::deinit();
     send::deinit();
 }

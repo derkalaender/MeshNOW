@@ -26,8 +26,11 @@ class ReassemblyData {
           num_fragments((total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE) {}
 
     void insert(uint8_t frag_num, const util::Buffer& data) {
+        // set bit to indicate this fragment was received
         fragment_mask |= 1 << frag_num;
+        // copy to the correct position
         std::copy(data.begin(), data.end(), data_.begin() + MAX_FRAG_PAYLOAD_SIZE * frag_num);
+        // update time
         last_fragment_received_ = xTaskGetTickCount();
     }
 
@@ -58,7 +61,7 @@ using ReassemblyKey = std::pair<util::MacAddr, uint16_t>;
 
 static std::map<ReassemblyKey, ReassemblyData> reassembly_map;
 
-void init() { finished_queue.init(QUEUE_SIZE); }
+esp_err_t init() { return finished_queue.init(QUEUE_SIZE); }
 
 void deinit() {
     reassembly_map.clear();
@@ -90,8 +93,33 @@ void addFragment(const util::MacAddr& src_mac, uint16_t fragment_id, uint16_t fr
     // check if the data is complete
     if (it->second.isComplete()) {
         // data is complete, move it to the finished queue
-        finished_queue.push_back(std::move(it->second.getData()));
+        finished_queue.push_back(it->second.getData(), portMAX_DELAY);
         reassembly_map.erase(it);
+    }
+}
+
+std::optional<util::Buffer> popReassembledData(TickType_t timeout) { return finished_queue.pop(timeout); }
+
+TickType_t youngestFragmentTime() {
+    // if empty return max time
+    if (reassembly_map.empty()) {
+        return portMAX_DELAY;
+    }
+
+    // find the youngest fragment and return its time
+    auto youngest = std::min_element(reassembly_map.begin(), reassembly_map.end(), [](const auto& a, const auto& b) {
+        return a.second.lastFragmentReceived() < b.second.lastFragmentReceived();
+    });
+    return youngest->second.lastFragmentReceived();
+}
+
+void removeOlderThan(TickType_t time) {
+    for (auto it = reassembly_map.begin(); it != reassembly_map.end();) {
+        if (it->second.lastFragmentReceived() < time) {
+            it = reassembly_map.erase(it);
+        } else {
+            ++it;
+        }
     }
 }
 

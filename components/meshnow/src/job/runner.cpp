@@ -59,9 +59,9 @@ void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_
 
     HandShaker hand_shaker{};
 
-    fragment::FragmentTask fragment_task{netif_};
+    FragmentGCJob fragment_gc;
 
-    JobList jobs{beacon_send, root_reachable_check, neighbors_alive_check, hand_shaker};
+    JobList jobs{beacon_send, root_reachable_check, neighbors_alive_check, hand_shaker, fragment_gc};
 
     auto lastLoopRun = xTaskGetTickCount();
 
