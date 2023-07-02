@@ -12,10 +12,14 @@ class Lock {
    public:
     explicit Lock(SemaphoreHandle_t handle) : handle_(handle) { xSemaphoreTake(handle_, portMAX_DELAY); }
 
+    Lock(const Lock&) = delete;
+
+    Lock& operator=(const Lock&) = delete;
+
     ~Lock() { xSemaphoreGive(handle_); }
 
    private:
-    SemaphoreHandle_t handle_{};
+    SemaphoreHandle_t handle_;
 };
 
 }  // namespace meshnow::util

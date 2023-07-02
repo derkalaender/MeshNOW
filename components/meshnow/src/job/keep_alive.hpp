@@ -10,6 +10,7 @@
 #include "now_lwip/netif.hpp"
 #include "send/worker.hpp"
 #include "state.hpp"
+#include "util/event.hpp"
 
 namespace meshnow::job {
 
@@ -31,14 +32,13 @@ class UnreachableTimeoutJob : public Job {
    public:
     static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
-    UnreachableTimeoutJob();
-    ~UnreachableTimeoutJob() override;
-
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;
 
    private:
-    esp_event_handler_instance_t event_handler_instance_{nullptr};
+    util::EventHandlerInstance event_handler_instance_{state::getEventHandle(), state::MESHNOW_INTERNAL,
+                                                       state::MeshNOWInternalEvent::STATE_CHANGED,
+                                                       &UnreachableTimeoutJob::event_handler, this};
     TickType_t mesh_unreachable_since_{0};
     bool awaiting_reachable{false};
 };

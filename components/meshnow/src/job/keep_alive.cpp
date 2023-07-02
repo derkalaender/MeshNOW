@@ -5,6 +5,7 @@
 #include "layout.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
+#include "util/event.hpp"
 #include "util/lock.hpp"
 #include "util/util.hpp"
 
@@ -49,29 +50,16 @@ void StatusSendJob::performAction() {
 void StatusSendJob::sendStatus() {
     ESP_LOGD(TAG, "Sending status beacons to neighborsSingleTry");
     auto state = state::getState();
-    packets::Status status{
+
+    packets::Status payload{
         .state = state,
         .root_mac = state == state::State::REACHES_ROOT ? std::make_optional(state::getRootMac()) : std::nullopt,
     };
 
-    send::enqueuePayload(status, send::SendBehavior::neighborsSingleTry(), true);
+    send::enqueuePayload(payload, send::SendBehavior::neighborsSingleTry(), true);
 }
 
 // UnreachableTimeoutJob //
-
-UnreachableTimeoutJob::UnreachableTimeoutJob() {
-    // register internal event handler for state changes
-    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
-        state::getEventHandle(), state::MESHNOW_INTERNAL, state::MeshNOWInternalEvent::STATE_CHANGED,
-        &UnreachableTimeoutJob::event_handler, this, &event_handler_instance_));
-}
-
-UnreachableTimeoutJob::~UnreachableTimeoutJob() {
-    // unregister internal event handler
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister_with(state::getEventHandle(), state::MESHNOW_INTERNAL,
-                                                               state::MeshNOWInternalEvent::STATE_CHANGED,
-                                                               event_handler_instance_));
-}
 
 TickType_t UnreachableTimeoutJob::nextActionAt() const noexcept {
     return awaiting_reachable ? mesh_unreachable_since_ + ROOT_UNREACHABLE_TIMEOUT : portMAX_DELAY;
