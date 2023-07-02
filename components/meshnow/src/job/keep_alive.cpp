@@ -54,6 +54,14 @@ void StatusSendJob::performAction() {
 
 // UnreachableTimeoutJob //
 
+UnreachableTimeoutJob::UnreachableTimeoutJob() {
+    // TODO
+}
+
+UnreachableTimeoutJob::~UnreachableTimeoutJob() {
+    // TODO
+}
+
 TickType_t UnreachableTimeoutJob::nextActionAt() const noexcept {
     return awaiting_reachable ? mesh_unreachable_since_ + ROOT_UNREACHABLE_TIMEOUT : portMAX_DELAY;
 }
@@ -61,15 +69,15 @@ TickType_t UnreachableTimeoutJob::nextActionAt() const noexcept {
 void UnreachableTimeoutJob::performAction() {
     auto now = xTaskGetTickCount();
 
-    std::scoped_lock lock(layout_->mtx);
-
     if (awaiting_reachable && now - mesh_unreachable_since_ > ROOT_UNREACHABLE_TIMEOUT) {
         // timeout from waiting for a path to the root
 
         awaiting_reachable = false;
-        assert(layout_->parent);    // parent still has to be there
-        layout_->parent = nullptr;  // remove parent
-        state_->setConnected(false);
+        util::Lock lock{routing::getMtx()};
+        auto layout = routing::getLayout();
+        assert(layout.parent.has_value());                        // parent still has to be there
+        layout.parent = std::nullopt;                             // remove parent
+        state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
     }
 }
 

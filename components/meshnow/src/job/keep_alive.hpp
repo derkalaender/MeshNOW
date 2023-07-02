@@ -23,6 +23,9 @@ class StatusSendJob : public meshnow::job::Job {
 
 class UnreachableTimeoutJob : public meshnow::job::Job {
    public:
+    UnreachableTimeoutJob();
+    ~UnreachableTimeoutJob() override;
+
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;
 
