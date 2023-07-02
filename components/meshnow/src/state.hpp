@@ -8,7 +8,7 @@ namespace meshnow::state {
 
 ESP_EVENT_DECLARE_BASE(MESHNOW_INTERNAL);
 
-enum class InternalEvent {
+enum MeshNOWInternalEvent {
     STATE_CHANGED,
 };
 

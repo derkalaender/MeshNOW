@@ -1,5 +1,6 @@
 #pragma once
 
+#include <esp_event.h>
 #include <freertos/portmacro.h>
 
 #include <memory>
@@ -23,6 +24,8 @@ class StatusSendJob : public meshnow::job::Job {
 
 class UnreachableTimeoutJob : public meshnow::job::Job {
    public:
+    static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
     UnreachableTimeoutJob();
     ~UnreachableTimeoutJob() override;
 
@@ -30,6 +33,7 @@ class UnreachableTimeoutJob : public meshnow::job::Job {
     void performAction() override;
 
    private:
+    esp_event_handler_instance_t event_handler_instance_{nullptr};
     TickType_t mesh_unreachable_since_{0};
     bool awaiting_reachable{false};
 };

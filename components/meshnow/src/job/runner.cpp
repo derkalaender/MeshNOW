@@ -58,10 +58,10 @@ void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_
     HandShaker hand_shaker;
     FragmentGCJob fragment_gc;
     StatusSendJob status_send;
-    keepalive::UnreachableTimeoutJob root_reachable_check;
-    keepalive::NeighborCheckJob neighbors_alive_check;
+    UnreachableTimeoutJob unreachable_timeout;
+    NeighborCheckJob neighbor_check;
 
-    JobList jobs{status_send, root_reachable_check, neighbors_alive_check, hand_shaker, fragment_gc};
+    JobList jobs{hand_shaker, fragment_gc, status_send, unreachable_timeout, neighbor_check};
 
     PacketHandler packet_handler;
 

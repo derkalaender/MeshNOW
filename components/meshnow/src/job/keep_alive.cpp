@@ -55,11 +55,17 @@ void StatusSendJob::performAction() {
 // UnreachableTimeoutJob //
 
 UnreachableTimeoutJob::UnreachableTimeoutJob() {
-    // TODO
+    // register internal event handler for state changes
+    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
+        state::getEventHandle(), state::MESHNOW_INTERNAL, state::MeshNOWInternalEvent::STATE_CHANGED,
+        &UnreachableTimeoutJob::event_handler, this, &event_handler_instance_));
 }
 
 UnreachableTimeoutJob::~UnreachableTimeoutJob() {
-    // TODO
+    // unregister internal event handler
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister_with(state::getEventHandle(), state::MESHNOW_INTERNAL,
+                                                               state::MeshNOWInternalEvent::STATE_CHANGED,
+                                                               event_handler_instance_));
 }
 
 TickType_t UnreachableTimeoutJob::nextActionAt() const noexcept {
@@ -73,37 +79,32 @@ void UnreachableTimeoutJob::performAction() {
         // timeout from waiting for a path to the root
 
         awaiting_reachable = false;
-        util::Lock lock{routing::getMtx()};
-        auto layout = routing::getLayout();
-        assert(layout.parent.has_value());                        // parent still has to be there
-        layout.parent = std::nullopt;                             // remove parent
+        {
+            util::Lock lock{routing::getMtx()};
+            auto layout = routing::getLayout();
+            assert(layout.parent.has_value());  // parent still has to be there
+            layout.parent = std::nullopt;       // remove parent
+        }
         state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
     }
 }
+void UnreachableTimeoutJob::event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_base != state::MESHNOW_INTERNAL || event_id != state::MeshNOWInternalEvent::STATE_CHANGED) return;
 
-void UnreachableTimeoutJob::receivedRootUnreachable() {
-    if (state_->isRoot() || !state_->isConnected() || awaiting_reachable) return;
+    auto* job = static_cast<UnreachableTimeoutJob*>(arg);
+    auto* new_state = static_cast<state::State*>(event_data);
 
-    ESP_LOGI(TAG, "Received root unreachable event, waiting for reachable event");
-    state_->setRootReachable(false);
-    mesh_unreachable_since_ = xTaskGetTickCount();
-    awaiting_reachable = true;
-
-    // stop netif
-    netif_->stop();
-}
-
-void UnreachableTimeoutJob::receivedRootReachable() {
-    if (state_->isRoot() || !state_->isConnected() || !awaiting_reachable) return;
-
-    ESP_LOGI(TAG, "Received root reachable event, sending child connected event");
-    // TODO send child connected event
-    state_->setRootReachable(true);
-    mesh_unreachable_since_ = 0;
-    awaiting_reachable = false;
-
-    // start netif again
-    netif_->start();
+    if (job->awaiting_reachable && *new_state == state::State::REACHES_ROOT) {
+        // root is reachable again
+        ESP_LOGI(TAG, "Root is reachable again");
+        job->awaiting_reachable = false;
+        job->mesh_unreachable_since_ = 0;
+    } else if (!job->awaiting_reachable && *new_state != state::State::REACHES_ROOT) {
+        // root became unreachable
+        ESP_LOGI(TAG, "Root became unreachable");
+        job->awaiting_reachable = true;
+        job->mesh_unreachable_since_ = xTaskGetTickCount();
+    }
 }
 
 // NeighborsAliveCheckTask //
