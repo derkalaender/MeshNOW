@@ -28,6 +28,10 @@ void setRoot(bool is_root);
  */
 bool isRoot();
 
+void setRootMac(util::MacAddr mac);
+
+util::MacAddr getRootMac();
+
 /**
  * Returns the MAC address of this device.
  */

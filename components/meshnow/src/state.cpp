@@ -9,6 +9,8 @@ namespace meshnow::state {
 
 static bool root{false};
 
+static util::MacAddr root_mac;
+
 esp_event_loop_handle_t event_handle{nullptr};
 
 esp_err_t init() {
@@ -35,6 +37,10 @@ static void fireEvent(esp_event_base_t base, int32_t id, void* data) {
 void setRoot(bool is_root) { root = is_root; }
 
 bool isRoot() { return root; }
+
+void setRootMac(util::MacAddr mac) { root_mac = mac; }
+
+util::MacAddr getRootMac() { return root_mac; }
 
 util::MacAddr getThisMac() {
     // read once in the first call and cache the result

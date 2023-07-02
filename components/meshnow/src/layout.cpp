@@ -1,6 +1,38 @@
 #include "layout.hpp"
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
 namespace meshnow::routing {
+
+static SemaphoreHandle_t mtx{nullptr};
+static Layout layout;
+
+esp_err_t init() {
+    mtx = xSemaphoreCreateMutex();
+    if (mtx == nullptr) return ESP_ERR_NO_MEM;
+
+    return ESP_OK;
+}
+
+void deinit() {
+    layout = Layout{};
+    assert(mtx);
+    vSemaphoreDelete(mtx);
+    mtx = nullptr;
+}
+
+void lockMtx() {
+    assert(mtx);
+    xSemaphoreTake(mtx, portMAX_DELAY);
+}
+
+void unlockMtx() {
+    assert(mtx);
+    xSemaphoreGive(mtx);
+}
+
+Layout& getLayout() { return layout; }
 
 std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
     assert(layout);

@@ -1,40 +1,28 @@
 #pragma once
 
-#include <esp_mac.h>
 #include <freertos/portmacro.h>
 
 #include <algorithm>
-#include <list>
-#include <memory>
-#include <mutex>
-#include <optional>
+#include <vector>
 
-#include "constants.hpp"
+#include "state.hpp"
+#include "util/mac.hpp"
 
 namespace meshnow::routing {
 
-static MAC_ADDR queryThisMac() {
-    meshnow::MAC_ADDR mac;
-    esp_read_mac(mac.data(), ESP_MAC_WIFI_STA);
-    return mac;
-}
-
 struct Node {
-    explicit Node(const MAC_ADDR& mac) : mac(mac) {}
-
-    MAC_ADDR mac;
+    util::MacAddr mac;
 };
 
 struct Neighbor : Node {
     using Node::Node;
 
-    int rssi{0};
     TickType_t last_seen{0};
 };
 
 template <typename T>
 struct NodeTree {
-    std::list<std::shared_ptr<T>> children;
+    std::vector<std::shared_ptr<T>> children;
 };
 
 struct IndirectChild : Node, NodeTree<IndirectChild> {
@@ -46,13 +34,18 @@ struct DirectChild : Neighbor, NodeTree<IndirectChild> {
 };
 
 struct Layout : Node, NodeTree<DirectChild> {
-    Layout() : Node(queryThisMac()), NodeTree() {}
+    Layout() : Node(state::getThisMac()), NodeTree() {}
 
-    std::shared_ptr<Neighbor> parent;
-    std::optional<MAC_ADDR> root;
-
-    std::mutex mtx;
+    Neighbor parent;
 };
+
+esp_err_t init();
+void deinit();
+
+void lockMtx();
+void unlockMtx();
+
+Layout& getLayout();
 
 // FUNCTIONS //
 
