@@ -1,4 +1,4 @@
-#include "hand_shaker.hpp"
+#include "connect.hpp"
 
 #include <esp_log.h>
 #include <freertos/portmacro.h>
@@ -22,9 +22,9 @@ static constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(3000);
 
 static constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
 
-using meshnow::HandShaker;
+using meshnow::ConnectJob;
 
-HandShaker::HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
+ConnectJob::ConnectJob(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
                        std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif)
     : send_worker_{std::move(send_worker)},
       state_{std::move(state)},
@@ -40,7 +40,7 @@ HandShaker::HandShaker(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<
     current_channel_ = min_channel_;
 }
 
-TickType_t HandShaker::nextActionAt() const noexcept {
+TickType_t ConnectJob::nextActionAt() const noexcept {
     // if connected we don't need to do anything
     if (state_->isConnected()) return portMAX_DELAY;
 
@@ -53,7 +53,7 @@ TickType_t HandShaker::nextActionAt() const noexcept {
     }
 }
 
-void HandShaker::performAction() {
+void ConnectJob::performAction() {
     // don't do anything if already connected
     if (state_->isConnected()) return;
 
@@ -85,7 +85,7 @@ void HandShaker::performAction() {
     }
 }
 
-void HandShaker::reset() {
+void ConnectJob::reset() {
     searching_for_parents_ = true;
     parent_infos_.clear();
     first_parent_found_time_ = 0;
@@ -93,7 +93,7 @@ void HandShaker::reset() {
     last_search_probe_time_ = 0;
 }
 
-void HandShaker::sendSearchProbe() {
+void ConnectJob::sendSearchProbe() {
     // set new channel, only if we haven't found any parents yet
     if (parent_infos_.empty()) {
         current_channel_++;
@@ -115,18 +115,18 @@ void HandShaker::sendSearchProbe() {
     last_search_probe_time_ = xTaskGetTickCount();
 }
 
-void HandShaker::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
+void ConnectJob::sendSearchProbeReply(const MAC_ADDR& mac_addr) {
     ESP_LOGI(TAG, "Sending i am here");
     send_worker_->enqueuePayload(mac_addr, false, meshnow::packets::IAmHere{}, SendPromise{}, true, QoS::SINGLE_TRY);
 }
 
-void HandShaker::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
+void ConnectJob::sendConnectRequest(const MAC_ADDR& mac_addr, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending should_connect request to " MAC_FORMAT, MAC_FORMAT_ARGS(mac_addr));
     send_worker_->enqueuePayload(mac_addr, false, meshnow::packets::PlsConnect{}, std::move(result_promise), true,
                                  QoS::SINGLE_TRY);
 }
 
-void HandShaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
+void ConnectJob::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending verdict to " MAC_FORMAT ": %s", MAC_FORMAT_ARGS(mac_addr),
              accept ? "accept" : "rejectParent");
     std::scoped_lock lock{layout_->mtx};
@@ -137,13 +137,13 @@ void HandShaker::sendConnectReply(const MAC_ADDR& mac_addr, bool accept, SendPro
                                  std::move(result_promise), true, QoS::SINGLE_TRY);
 }
 
-void HandShaker::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac, meshnow::SendPromise&& result_promise) {
+void ConnectJob::sendChildConnectEvent(const meshnow::MAC_ADDR& child_mac, meshnow::SendPromise&& result_promise) {
     ESP_LOGI(TAG, "Sending child should_connect event");
     send_worker_->enqueuePayload(meshnow::ROOT_MAC_ADDR, true, meshnow::packets::NodeConnected{layout_->mac, child_mac},
                                  std::move(result_promise), true, QoS::NEXT_HOP);
 }
 
-void HandShaker::tryConnect() {
+void ConnectJob::tryConnect() {
     assert(!parent_infos_.empty());
 
     // find the best parent
@@ -171,7 +171,7 @@ void HandShaker::tryConnect() {
     parent_infos_.erase(best_parent);
 }
 
-void HandShaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
+void ConnectJob::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
     // ignore when already connected or not searching anymore (this packet came in late, we already chose a parent)
     if (state_->isConnected() || !searching_for_parents_) return;
 
@@ -210,7 +210,7 @@ void HandShaker::foundPotentialParent(const MAC_ADDR& mac_addr, int rssi) {
     }
 }
 
-void HandShaker::rejectParent(MAC_ADDR mac_addr) {
+void ConnectJob::rejectParent(MAC_ADDR mac_addr) {
     // remove parent from list
     auto it = std::find_if(parent_infos_.begin(), parent_infos_.end(),
                            [&mac_addr](const auto& parent_info) { return parent_info.mac_addr == mac_addr; });
@@ -220,7 +220,7 @@ void HandShaker::rejectParent(MAC_ADDR mac_addr) {
     }
 }
 
-void HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept, std::optional<MAC_ADDR> root_mac_addr) {
+void ConnectJob::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept, std::optional<MAC_ADDR> root_mac_addr) {
     // ignore if root or already connected (should actually never happen)
     if (state_->isRoot() || state_->isConnected()) return;
 
@@ -263,7 +263,7 @@ void HandShaker::receivedConnectResponse(const MAC_ADDR& mac_addr, bool accept, 
     }
 }
 
-void HandShaker::receivedSearchProbe(const MAC_ADDR& mac_addr) {
+void ConnectJob::receivedSearchProbe(const MAC_ADDR& mac_addr) {
     // TODO check if cannot accept any more children
     // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
     if (!state_->isRootReachable()) return;
@@ -278,7 +278,7 @@ void HandShaker::receivedSearchProbe(const MAC_ADDR& mac_addr) {
     sendSearchProbeReply(mac_addr);
 }
 
-void HandShaker::receivedConnectRequest(const MAC_ADDR& mac_addr) {
+void ConnectJob::receivedConnectRequest(const MAC_ADDR& mac_addr) {
     // only accept if we can reach the root
     // this is necessary because we may have disconnected since we answered the search probe
     if (!state_->isRootReachable()) return;

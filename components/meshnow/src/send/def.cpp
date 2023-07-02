@@ -59,4 +59,17 @@ class Children : public SendBehavior {
 
 std::unique_ptr<SendBehavior> SendBehavior::children() { return std::make_unique<Children>(); }
 
+class Direct : public SendBehavior {
+   public:
+    explicit Direct(const util::MacAddr& dest_addr) : dest_addr_{dest_addr} {}
+
+    void send(const SendSink& sink, const packets::Payload& payload) override { sink.accept(dest_addr_, payload); }
+
+   private:
+    const util::MacAddr dest_addr_;
+};
+
+std::unique_ptr<SendBehavior> SendBehavior::direct(const util::MacAddr& dest_addr) {
+    return std::make_unique<Direct>(dest_addr);
+
 }  // namespace meshnow::send

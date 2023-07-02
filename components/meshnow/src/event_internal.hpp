@@ -11,11 +11,17 @@ ESP_EVENT_DECLARE_BASE(MESHNOW_INTERNAL);
 
 enum InternalEvent {
     STATE_CHANGED,
+    PARENT_FOUND,
 };
 
 struct StateChangedData {
-    state::State old_state;
-    state::State new_state;
+    const state::State old_state;
+    const state::State new_state;
+};
+
+struct ParentFoundData {
+    const int rssi;
+    const util::MacAddr* mac;
 };
 
 /**

@@ -3,12 +3,9 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
-#include <memory>
-
 namespace meshnow::routing {
 
 static SemaphoreHandle_t mtx{nullptr};
-static Layout layout;
 
 esp_err_t init() {
     mtx = xSemaphoreCreateMutex();
@@ -29,7 +26,34 @@ SemaphoreHandle_t getMtx() {
     return mtx;
 }
 
-Layout& getLayout() { return layout; }
+Layout& getLayout() {
+    static Layout layout;
+    return layout;
+}
+
+// FUNCTIONS //
+bool hasNeighbors() {
+    const auto& layout = getLayout();
+    return layout.parent || !layout.children.empty();
+}
+
+static bool containsChild(const auto& tree, const util::MacAddr& mac) {
+    if (tree.mac == mac) return true;
+    for (const auto& child : tree.children) {
+        if (containsChild(child, mac)) return true;
+    }
+}
+
+bool contains(const util::MacAddr& mac) {
+    const auto& layout = getLayout();
+    if (layout.parent && layout.parent->mac == mac) return true;
+
+    for (const auto& child : layout.children) {
+        if (containsChild(child, mac)) return true;
+    }
+}
+
+/////// unused
 
 std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
     assert(layout);

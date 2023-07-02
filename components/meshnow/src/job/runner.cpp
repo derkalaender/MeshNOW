@@ -2,9 +2,9 @@
 
 #include <esp_log.h>
 
+#include "connect.hpp"
 #include "fragment_gc.hpp"
 #include "freertos/portmacro.h"
-#include "hand_shaker.hpp"
 #include "job.hpp"
 #include "keep_alive.hpp"
 #include "packet_handler_new.hpp"
@@ -55,7 +55,7 @@ static TickType_t calculateTimeout(JobList jobs) {
 void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runner_finished_bit) {
     ESP_LOGI(TAG, "Starting!");
 
-    HandShaker hand_shaker;
+    ConnectJob hand_shaker;
     FragmentGCJob fragment_gc;
     StatusSendJob status_send;
     UnreachableTimeoutJob unreachable_timeout;

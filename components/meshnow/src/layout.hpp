@@ -49,21 +49,9 @@ Layout& getLayout();
 
 // FUNCTIONS //
 
-bool hasNeighbors() {
-    const auto& layout = getLayout();
-    return layout.parent || !layout.children.empty();
-}
+bool hasNeighbors();
 
-bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac);
-
-bool hasNeighbor(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac);
-
-template <typename T>
-inline bool containsChild(const std::shared_ptr<T>& tree, const MAC_ADDR& mac) {
-    assert(tree);
-    return std::ranges::any_of(tree->children,
-                               [&mac](auto&& child) { return child->mac == mac || containsChild(child, mac); });
-}
+bool contains(const util::MacAddr& mac);
 
 template <typename T, typename Func>
 inline void forEachChild(const std::shared_ptr<T>& tree, Func&& func) {
