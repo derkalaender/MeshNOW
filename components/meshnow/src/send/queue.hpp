@@ -3,8 +3,10 @@
 #include <esp_err.h>
 #include <freertos/portmacro.h>
 
+#include <memory>
 #include <optional>
 
+#include "def.hpp"
 #include "packets.hpp"
 #include "util/mac.hpp"
 #include "util/util.hpp"
@@ -12,10 +14,8 @@
 namespace meshnow::send {
 
 struct Item {
-    util::MacAddr dest_addr;
     packets::Packet packet;
-    bool resolve;
-    bool one_shot;
+    std::unique_ptr<SendBehavior> behavior;
 };
 
 /**
