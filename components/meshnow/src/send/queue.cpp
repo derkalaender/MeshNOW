@@ -12,15 +12,14 @@ esp_err_t init() { return queue.init(QUEUE_SIZE); }
 
 void deinit() { queue = util::Queue<Item>{}; }
 
-void enqueuePacket(util::MacAddr dest_addr, packets::Packet packet, bool resolve, bool one_shot, bool priority) {
+void enqueuePayload(const packets::Payload& payload, std::unique_ptr<SendBehavior> behavior, bool priority) {
     if (priority) {
-        queue.push_front(Item{dest_addr, packet, resolve, one_shot}, portMAX_DELAY);
-
+        queue.push_front(Item{payload, std::move(behavior)}, portMAX_DELAY);
     } else {
-        queue.push_back(Item{dest_addr, packet, resolve, one_shot}, portMAX_DELAY);
+        queue.push_back(Item{payload, std::move(behavior)}, portMAX_DELAY);
     }
 }
 
-std::optional<Item> popPacket(TickType_t timeout) { return queue.pop(timeout); }
+std::optional<Item> popItem(TickType_t timeout) { return queue.pop(timeout); }
 
 }  // namespace meshnow::send

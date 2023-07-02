@@ -80,9 +80,19 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    // call internal setup
+    // init state
+    ESP_RETURN_ON_ERROR(meshnow::state::init(), TAG, "Initializing state failed");
+
+    // setup state
     meshnow::state::setRoot(config->root);
 
+    // if root, we can always reach the root and know the root mac
+    if (config->root) {
+        meshnow::state::setRootMac(meshnow::state::getThisMac());
+        meshnow::state::setState(meshnow::state::State::REACHES_ROOT);
+    }
+
+    // set router config if root
     if (config->root && config->router_config.should_connect) {
         // save Wi-Fi config
         meshnow::wifi::setConfig(config->router_config.sta_config);
@@ -90,9 +100,6 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
     } else {
         meshnow::wifi::setShouldConnect(false);
     }
-
-    // init state
-    ESP_RETURN_ON_ERROR(meshnow::state::init(), TAG, "Initializing state failed");
 
     // init networking
     ESP_RETURN_ON_ERROR(networking.init(), TAG, "Initializing networking failed");

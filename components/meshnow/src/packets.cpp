@@ -37,8 +37,11 @@ constexpr auto MAX_FRAG_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE - 19};
 namespace meshnow::packets {
 
 template <typename S>
-static void serialize(S&, KeepAlive&) {
-    // no data
+static void serialize(S& s, Status& p) {
+    s.value1b(p.state);
+    if (p.state == state::State::REACHES_ROOT) {
+        s.object(*p.root_mac);
+    }
 }
 
 template <typename S>
@@ -52,14 +55,16 @@ static void serialize(S&, IAmHere&) {
 }
 
 template <typename S>
-static void serialize(S&, PlsConnect&) {
+static void serialize(S&, ConnectRequest&) {
     // no data
 }
 
 template <typename S>
-static void serialize(S& s, Verdict& p) {
-    s.object(p.root_mac);
+static void serialize(S& s, ConnectResponse& p) {
     s.boolValue(p.accept);
+    if (p.accept) {
+        s.object(*p.root_mac);
+    }
 }
 
 template <typename S>
@@ -79,8 +84,8 @@ static void serialize(S&, RootUnreachable&) {
 }
 
 template <typename S>
-static void serialize(S&, RootReachable&) {
-    // no data
+static void serialize(S& s, RootReachable& p) {
+    s.object(p.root_mac);
 }
 
 template <typename S>

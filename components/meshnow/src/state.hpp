@@ -6,6 +6,14 @@
 
 namespace meshnow::state {
 
+ESP_EVENT_DECLARE_BASE(MESHNOW_INTERNAL);
+
+enum class InternalEvent {
+    STATE_CHANGED,
+};
+
+enum class State : std::uint8_t { DISCONNECTED_FROM_PARENT, CONNECTED_TO_PARENT, REACHES_ROOT };
+
 /**
  * Initializes internal event loop for state updates.
  */
@@ -15,6 +23,16 @@ esp_err_t init();
  * Deinitializes everything.
  */
 void deinit();
+
+/**
+ * Sets the current state.
+ */
+void setState(State state);
+
+/**
+ * Returns the current state.
+ */
+State getState();
 
 esp_event_loop_handle_t getEventHandle();
 

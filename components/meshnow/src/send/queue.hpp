@@ -14,7 +14,7 @@
 namespace meshnow::send {
 
 struct Item {
-    packets::Packet packet;
+    packets::Payload payload;
     std::unique_ptr<SendBehavior> behavior;
 };
 
@@ -29,17 +29,13 @@ esp_err_t init();
 void deinit();
 
 /**
- * Enqueues a new packet to be sent.
- * @param dest_addr Where to send the packet
- * @param packet The packet to send
- * @param resolve If true, resolves the packet using the internal routing logic, otherwise sends it directly via native
- * ESP-NOW API
- * @param one_shot If true, only tries to send the packet once, otherwise tries as until success or the next hop node is
- * no longer reachable
- * @param priority If true, the packet is sent before all other packets in the queue
+ * Enqueues a new payload to be sent.
+ * @param packet The payload to send
+ * @param behavior The behavior to use for sending
+ * @param priority If true, the payload is sent before all others in the queue
  */
-void enqueuePacket(util::MacAddr dest_addr, packets::Packet packet, bool resolve, bool one_shot, bool priority);
+void enqueuePayload(const packets::Payload& payload, std::unique_ptr<SendBehavior> behavior, bool priority);
 
-std::optional<Item> popPacket(TickType_t timeout);
+std::optional<Item> popItem(TickType_t timeout);
 
 }  // namespace meshnow::send

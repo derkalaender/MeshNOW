@@ -37,7 +37,7 @@ void push(const Item& item);
 /**
  * Pops an item from the receive queue.
  *
- * @param item Item to popPacket.
+ * @param item Item to pop.
  * @param timeout Timeout in ticks.
  */
 std::optional<Item> pop(TickType_t timeout);

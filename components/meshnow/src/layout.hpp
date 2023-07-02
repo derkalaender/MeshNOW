@@ -1,8 +1,10 @@
 #pragma once
 
-#include <freertos/portmacro.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #include <algorithm>
+#include <optional>
 #include <vector>
 
 #include "state.hpp"
@@ -22,7 +24,7 @@ struct Neighbor : Node {
 
 template <typename T>
 struct NodeTree {
-    std::vector<std::shared_ptr<T>> children;
+    std::vector<T> children;
 };
 
 struct IndirectChild : Node, NodeTree<IndirectChild> {
@@ -36,20 +38,22 @@ struct DirectChild : Neighbor, NodeTree<IndirectChild> {
 struct Layout : Node, NodeTree<DirectChild> {
     Layout() : Node(state::getThisMac()), NodeTree() {}
 
-    Neighbor parent;
+    std::optional<Neighbor> parent;
 };
 
 esp_err_t init();
 void deinit();
 
-void lockMtx();
-void unlockMtx();
+SemaphoreHandle_t getMtx();
 
 Layout& getLayout();
 
 // FUNCTIONS //
 
-std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout);
+bool hasNeighbors() {
+    auto layout = getLayout();
+    return layout.parent || !layout.children.empty();
+}
 
 bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac);
 

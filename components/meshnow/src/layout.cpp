@@ -3,6 +3,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
+#include <memory>
+
 namespace meshnow::routing {
 
 static SemaphoreHandle_t mtx{nullptr};
@@ -22,14 +24,9 @@ void deinit() {
     mtx = nullptr;
 }
 
-void lockMtx() {
+SemaphoreHandle_t getMtx() {
     assert(mtx);
-    xSemaphoreTake(mtx, portMAX_DELAY);
-}
-
-void unlockMtx() {
-    assert(mtx);
-    xSemaphoreGive(mtx);
+    return mtx;
 }
 
 Layout& getLayout() { return layout; }

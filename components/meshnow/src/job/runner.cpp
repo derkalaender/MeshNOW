@@ -57,11 +57,11 @@ void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_
 
     HandShaker hand_shaker;
     FragmentGCJob fragment_gc;
-    keepalive::StatusSendJob beacon_send;
+    StatusSendJob status_send;
     keepalive::UnreachableTimeoutJob root_reachable_check;
     keepalive::NeighborCheckJob neighbors_alive_check;
 
-    JobList jobs{beacon_send, root_reachable_check, neighbors_alive_check, hand_shaker, fragment_gc};
+    JobList jobs{status_send, root_reachable_check, neighbors_alive_check, hand_shaker, fragment_gc};
 
     PacketHandler packet_handler;
 

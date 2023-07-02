@@ -2,9 +2,11 @@
 
 #include <esp_log.h>
 
-#include <utility>
-
+#include "layout.hpp"
+#include "send/queue.hpp"
 #include "state.hpp"
+#include "util/lock.hpp"
+#include "util/util.hpp"
 
 namespace meshnow::job {
 
@@ -22,25 +24,30 @@ static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
 // StatusSendJob //
 
 TickType_t StatusSendJob::nextActionAt() const noexcept {
-    if (getNeighbors(layout_).empty()) return portMAX_DELAY;
-
-    return last_status_sent_ + BEACON_SEND_INTERVAL;
+    util::Lock lock{routing::getMtx()};
+    if (routing::hasNeighbors()) {
+        return last_status_sent_ + STATUS_SEND_INTERVAL;
+    } else {
+        return portMAX_DELAY;
+    }
 }
 
 void StatusSendJob::performAction() {
     auto now = xTaskGetTickCount();
+    if (now - last_status_sent_ < STATUS_SEND_INTERVAL) return;
 
-    if (now - last_status_sent_ < BEACON_SEND_INTERVAL) return;
+    util::Lock lock{routing::getMtx()};
 
-    std::scoped_lock lock(layout_->mtx);
+    if (!routing::hasNeighbors()) return;
 
-    auto neighbors = getNeighbors(layout_);
-    if (neighbors.empty()) return;
-    ESP_LOGD(TAG, "Sending keep alive beacons to %d neighbors", neighbors.size());
-    // enqueue packet for each neighbor
-    for (auto&& neighbor : neighbors) {
-        send_worker_->enqueuePayload(neighbor->mac, false, packets::KeepAlive{}, SendPromise{}, true, QoS::SINGLE_TRY);
-    }
+    ESP_LOGD(TAG, "Sending status beacons to neighbors");
+    auto state = state::getState();
+    packets::Status status{
+        .state = state,
+        .root_mac = state == state::State::REACHES_ROOT ? std::make_optional(state::getRootMac()) : std::nullopt,
+    };
+
+    send::enqueuePayload(status, send::SendBehavior::allNeighbors(), true);
 
     last_status_sent_ = now;
 }

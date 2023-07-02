@@ -17,7 +17,7 @@ static constexpr auto MIN_TIMEOUT = pdMS_TO_TICKS(500);
  */
 class SendSinkImpl : public SendSink {
    public:
-    bool accept(const util::MacAddr& dest_addr, const packets::Packet& packet) override {
+    bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) override {
         // TODO implement
         return true;
     }
@@ -29,14 +29,14 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
     SendSinkImpl sink;
 
     while (!should_stop) {
-        auto item = popPacket(MIN_TIMEOUT);
+        auto item = popItem(MIN_TIMEOUT);
         if (!item.has_value()) {
             // no packet in time
             continue;
         }
 
         // delegate sending to send behavior
-        item->behavior->send(sink, item->packet);
+        item->behavior->send(sink, item->payload);
     }
 
     ESP_LOGI(TAG, "Stopping!");

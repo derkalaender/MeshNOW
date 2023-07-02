@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "packets.hpp"
 #include "util/mac.hpp"
 
@@ -13,12 +15,12 @@ class SendSink {
     virtual ~SendSink() = default;
 
     /**
-     * "Consumes" a packet for sending.
+     * "Consumes" a payload for sending.
      * @param dest_addr Where to send the packet to.
-     * @param packet The packet to send.
+     * @param payload The payload to send.
      * @return True, iff sending was successful.
      */
-    virtual bool accept(const util::MacAddr& dest_addr, const packets::Packet& packet) = 0;
+    virtual bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) const = 0;
 };
 
 /**
@@ -26,9 +28,16 @@ class SendSink {
  */
 class SendBehavior {
    public:
+    static std::unique_ptr<SendBehavior> allNeighbors();
+
     virtual ~SendBehavior() = default;
 
-    virtual void send(const SendSink& sink, const packets::Packet& packet) = 0;
+    /**
+     * Sends the given payload by calling the sink.
+     * @param sink The sink to send the payload to.
+     * @param payload The payload to send.
+     */
+    virtual void send(const SendSink& sink, const packets::Payload& payload) = 0;
 };
 
 }  // namespace meshnow::send
