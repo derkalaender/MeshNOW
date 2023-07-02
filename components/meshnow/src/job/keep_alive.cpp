@@ -10,7 +10,7 @@
 
 namespace meshnow::job {
 
-static const char* TAG = CREATE_TAG("KeepAlive");
+static constexpr auto TAG = CREATE_TAG("KeepAlive");
 
 // send a keep alive status every 1s
 static constexpr auto STATUS_SEND_INTERVAL = pdMS_TO_TICKS(500);

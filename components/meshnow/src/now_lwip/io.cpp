@@ -8,7 +8,7 @@
 #include "state.hpp"
 #include "util/util.hpp"
 
-const char* TAG = CREATE_TAG("LWIP | IO");
+static constexpr auto TAG = CREATE_TAG("LWIP | IO");
 
 // STATIC IMPLS FOR DRIVER CONFIG
 

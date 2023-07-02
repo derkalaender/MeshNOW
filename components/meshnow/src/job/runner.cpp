@@ -14,7 +14,7 @@
 
 namespace meshnow::job {
 
-static const char* TAG = CREATE_TAG("JobRunner");
+static constexpr auto TAG = CREATE_TAG("JobRunner");
 static constexpr auto MIN_TIMEOUT = pdMS_TO_TICKS(5000);
 
 using JobList = std::initializer_list<std::reference_wrapper<Job>>;

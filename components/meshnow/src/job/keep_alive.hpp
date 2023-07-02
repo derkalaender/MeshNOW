@@ -13,7 +13,7 @@
 
 namespace meshnow::job {
 
-class StatusSendJob : public meshnow::job::Job {
+class StatusSendJob : public Job {
    public:
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;
@@ -27,7 +27,7 @@ class StatusSendJob : public meshnow::job::Job {
     TickType_t last_status_sent_{0};
 };
 
-class UnreachableTimeoutJob : public meshnow::job::Job {
+class UnreachableTimeoutJob : public Job {
    public:
     static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
@@ -43,7 +43,7 @@ class UnreachableTimeoutJob : public meshnow::job::Job {
     bool awaiting_reachable{false};
 };
 
-class NeighborCheckJob : public meshnow::job::Job {
+class NeighborCheckJob : public Job {
    public:
     TickType_t nextActionAt() const noexcept override;
     void performAction() override;

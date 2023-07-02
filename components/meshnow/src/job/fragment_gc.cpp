@@ -9,7 +9,7 @@
 
 namespace meshnow::job {
 
-static const char* TAG = CREATE_TAG("FragmentGC");
+static constexpr auto TAG = CREATE_TAG("FragmentGC");
 
 // each reassembly process can have its last fragment received up to 3 seconds ago
 static constexpr auto FRAGMENT_TIMEOUT = pdMS_TO_TICKS(3000);

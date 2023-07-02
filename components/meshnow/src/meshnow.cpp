@@ -11,7 +11,7 @@
 #include "util/util.hpp"
 #include "wifi.hpp"
 
-static const char *TAG = CREATE_TAG("🦌");
+static constexpr auto *TAG = CREATE_TAG("🦌");
 
 static bool initialized = false;
 static bool started = false;

@@ -13,7 +13,7 @@
 #include "util/util.hpp"
 #include "util/waitbits.hpp"
 
-static const char* TAG = CREATE_TAG("Networking");
+static constexpr auto TAG = CREATE_TAG("Networking");
 
 namespace meshnow {
 
