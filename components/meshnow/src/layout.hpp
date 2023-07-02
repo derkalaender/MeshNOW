@@ -3,7 +3,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
-#include <algorithm>
 #include <optional>
 #include <vector>
 
@@ -51,7 +50,7 @@ Layout& getLayout();
 // FUNCTIONS //
 
 bool hasNeighbors() {
-    auto layout = getLayout();
+    const auto& layout = getLayout();
     return layout.parent || !layout.children.empty();
 }
 

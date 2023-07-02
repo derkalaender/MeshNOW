@@ -5,11 +5,11 @@
 
 namespace meshnow::send {
 
-class AllNeighbors : public SendBehavior {
+class NeighborsSingleTry : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
         util::Lock lock{routing::getMtx()};
 
-        auto layout = routing::getLayout();
+        const auto& layout = routing::getLayout();
 
         // send to children
         for (const auto& child : layout.children) {
@@ -23,6 +23,40 @@ class AllNeighbors : public SendBehavior {
     }
 };
 
-std::unique_ptr<SendBehavior> meshnow::send::SendBehavior::allNeighbors() { return std::make_unique<AllNeighbors>(); }
+std::unique_ptr<SendBehavior> meshnow::send::SendBehavior::neighborsSingleTry() {
+    return std::make_unique<NeighborsSingleTry>();
+}
+
+class Parent : public SendBehavior {
+    void send(const SendSink& sink, const packets::Payload& payload) override {
+        // TODO retry until success
+        util::Lock lock{routing::getMtx()};
+
+        const auto& layout = routing::getLayout();
+
+        // send to parent
+        if (layout.parent) {
+            sink.accept(layout.parent->mac, payload);
+        }
+    }
+};
+
+std::unique_ptr<SendBehavior> SendBehavior::parent() { return std::make_unique<Parent>(); }
+
+class Children : public SendBehavior {
+    void send(const SendSink& sink, const packets::Payload& payload) override {
+        // TODO retry until success
+        util::Lock lock{routing::getMtx()};
+
+        const auto& layout = routing::getLayout();
+
+        // send to children
+        for (const auto& child : layout.children) {
+            sink.accept(child.mac, payload);
+        }
+    }
+};
+
+std::unique_ptr<SendBehavior> SendBehavior::children() { return std::make_unique<Children>(); }
 
 }  // namespace meshnow::send

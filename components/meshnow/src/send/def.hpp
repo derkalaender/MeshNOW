@@ -28,7 +28,9 @@ class SendSink {
  */
 class SendBehavior {
    public:
-    static std::unique_ptr<SendBehavior> allNeighbors();
+    static std::unique_ptr<SendBehavior> neighborsSingleTry();
+    static std::unique_ptr<SendBehavior> parent();
+    static std::unique_ptr<SendBehavior> children();
 
     virtual ~SendBehavior() = default;
 

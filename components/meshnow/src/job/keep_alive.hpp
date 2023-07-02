@@ -19,6 +19,11 @@ class StatusSendJob : public meshnow::job::Job {
     void performAction() override;
 
    private:
+    /**
+     * Sends status beacons to all neighborsSingleTry.
+     */
+    static void sendStatus();
+
     TickType_t last_status_sent_{0};
 };
 
@@ -45,14 +50,14 @@ class NeighborCheckJob : public meshnow::job::Job {
 
    private:
     /**
-     * Sends a child disconnected message to the parent.
+     * Sends a child disconnected message upstream if possible.
      * @param mac_addr the MAC address of the child that disconnected
      */
-    void sendChildDisconnected(const util::MacAddr& mac_addr);
+    static void sendChildDisconnected(const util::MacAddr& mac);
 
     /**
-     * Sends a root unreachable message to all neighbors.
+     * Sends a root unreachable message downstream to all children if possible.
      */
-    void sendRootUnreachable();
+    static void sendRootUnreachable();
 };
 }  // namespace meshnow::job

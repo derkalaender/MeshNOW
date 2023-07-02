@@ -36,20 +36,25 @@ void StatusSendJob::performAction() {
     auto now = xTaskGetTickCount();
     if (now - last_status_sent_ < STATUS_SEND_INTERVAL) return;
 
-    util::Lock lock{routing::getMtx()};
+    {
+        util::Lock lock{routing::getMtx()};
+        if (!routing::hasNeighbors()) return;
+    }
 
-    if (!routing::hasNeighbors()) return;
+    sendStatus();
 
-    ESP_LOGD(TAG, "Sending status beacons to neighbors");
+    last_status_sent_ = now;
+}
+
+void StatusSendJob::sendStatus() {
+    ESP_LOGD(TAG, "Sending status beacons to neighborsSingleTry");
     auto state = state::getState();
     packets::Status status{
         .state = state,
         .root_mac = state == state::State::REACHES_ROOT ? std::make_optional(state::getRootMac()) : std::nullopt,
     };
 
-    send::enqueuePayload(status, send::SendBehavior::allNeighbors(), true);
-
-    last_status_sent_ = now;
+    send::enqueuePayload(status, send::SendBehavior::neighborsSingleTry(), true);
 }
 
 // UnreachableTimeoutJob //
@@ -81,13 +86,14 @@ void UnreachableTimeoutJob::performAction() {
         awaiting_reachable = false;
         {
             util::Lock lock{routing::getMtx()};
-            auto layout = routing::getLayout();
+            auto& layout = routing::getLayout();
             assert(layout.parent.has_value());  // parent still has to be there
             layout.parent = std::nullopt;       // remove parent
         }
         state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
     }
 }
+
 void UnreachableTimeoutJob::event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_base != state::MESHNOW_INTERNAL || event_id != state::MeshNOWInternalEvent::STATE_CHANGED) return;
 
@@ -107,105 +113,106 @@ void UnreachableTimeoutJob::event_handler(void* arg, esp_event_base_t event_base
     }
 }
 
-// NeighborsAliveCheckTask //
-
-using meshnow::keepalive::NeighborCheckJob;
-
-NeighborCheckJob::NeighborCheckJob(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                                   std::shared_ptr<routing::Layout> layout, std::shared_ptr<lwip::netif::Netif> netif)
-    : send_worker_(std::move(send_worker)),
-      state_(std::move(state)),
-      layout_(std::move(layout)),
-      netif_(std::move(netif)) {}
+// NeighborsCheckJob //
 
 TickType_t NeighborCheckJob::nextActionAt() const noexcept {
-    std::scoped_lock lock(layout_->mtx);
-
     // get the neighbor with the lowest last_seen timestamp
+    auto min_last_seen = portMAX_DELAY;
 
-    auto neighbors = getNeighbors(layout_);
-    if (neighbors.empty()) return portMAX_DELAY;
+    {
+        util::Lock lock{routing::getMtx()};
+        const auto& layout = routing::getLayout();
 
-    auto n = std::min_element(neighbors.cbegin(), neighbors.cend(),
-                              [](auto&& a, auto&& b) { return a->last_seen < b->last_seen; });
-    assert(n != neighbors.cend());
-    return (*n)->last_seen + KEEP_ALIVE_TIMEOUT;
+        for (const auto& child : layout.children) {
+            min_last_seen = std::min(min_last_seen, child.last_seen);
+        }
+
+        if (layout.parent) min_last_seen = std::min(min_last_seen, layout.parent->last_seen);
+    }
+
+    if (min_last_seen == portMAX_DELAY) {
+        // no neighbors
+        return portMAX_DELAY;
+    } else {
+        return min_last_seen + KEEP_ALIVE_TIMEOUT;
+    }
 }
 
 void NeighborCheckJob::performAction() {
-    std::scoped_lock lock(layout_->mtx);
+    util::Lock lock{routing::getMtx()};
 
-    auto neighbors = getNeighbors(layout_);
-    if (neighbors.empty()) return;
-
+    auto& layout = routing::getLayout();
     auto now = xTaskGetTickCount();
 
-    // go through every neighbor and check if they have timed out
-    for (auto&& n : neighbors) {
-        if (now - n->last_seen <= KEEP_ALIVE_TIMEOUT) continue;
+    // check for timeouts in all neighbors and remove from the layout if necessary
 
-        auto timed_out_mac = n->mac;
-
-        // neighbor timed out
-        if (layout_->parent && layout_->parent->mac == timed_out_mac) {
-            // parent timed out
-            ESP_LOGW(TAG, "Parent " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(timed_out_mac));
-            // parent should still be here
-            assert(layout_->parent);
-            // disconnect from parent
-            layout_->parent = nullptr;
-            state_->setConnected(false);
-            // send root unreachable to children
-            sendRootUnreachable();
-
-            // stop netif
-            netif_->stop();
+    // direct children
+    for (auto it = layout.children.begin(); it != layout.children.end();) {
+        if (now - it->last_seen > KEEP_ALIVE_TIMEOUT) {
+            auto mac = it->mac;
+            ESP_LOGW(TAG, "Direct child " MACSTR " timed out", MAC2STR(mac));
+            it = layout.children.erase(it);
+            // send event upstream
+            sendChildDisconnected(mac);
         } else {
-            // child timed out
-            ESP_LOGW(TAG, "Direct child " MAC_FORMAT " timed out", MAC_FORMAT_ARGS(timed_out_mac));
-
-            if (!routing::removeDirectChild(layout_, timed_out_mac)) {
-                ESP_LOGE(TAG, "Failed to remove direct child " MAC_FORMAT, MAC_FORMAT_ARGS(timed_out_mac));
-            } else {
-                sendChildDisconnected(n->mac);
-            }
+            ++it;
         }
+    }
+
+    // parent
+    if (layout.parent && now - layout.parent->last_seen > KEEP_ALIVE_TIMEOUT) {
+        ESP_LOGW(TAG, "Parent " MACSTR " timed out", MAC2STR(layout.parent->mac));
+        layout.parent = std::nullopt;
+        // update state
+        state::setState(state::State::DISCONNECTED_FROM_PARENT);
+        // send event to children
+        sendRootUnreachable();
     }
 }
 
-void NeighborCheckJob::sendChildDisconnected(const meshnow::MAC_ADDR& mac_addr) {
-    if (state_->isRoot()) return;
-    ESP_LOGI(TAG, "Sending child disconnected event");
+void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
+    if (state::isRoot()) return;
+    {
+        util::Lock lock{routing::getMtx()};
+        if (!routing::getLayout().parent) return;
+    }
 
-    // send to root
-    send_worker_->enqueuePayload(ROOT_MAC_ADDR, true, packets::NodeDisconnected{mac_addr}, SendPromise{}, true,
-                                 QoS::NEXT_HOP);
+    ESP_LOGI(TAG, "Sending child disconnected event upstream");
+
+    // send to parent
+    auto payload = packets::NodeDisconnected{.child_mac = mac};
+    send::enqueuePayload(payload, send::SendBehavior::parent(), true);
 }
 
 void NeighborCheckJob::sendRootUnreachable() {
-    if (layout_->children.empty()) return;
-    ESP_LOGI(TAG, "Sending root unreachable event to %d children", layout_->children.size());
-
-    // enqueue packet for each child
-    for (auto&& c : layout_->children) {
-        send_worker_->enqueuePayload(c->mac, false, packets::RootUnreachable{}, SendPromise{}, true, QoS::NEXT_HOP);
-    }
-}
-
-void NeighborCheckJob::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& from_mac) {
-    std::scoped_lock lock(layout_->mtx);
-    auto neighbors = getNeighbors(layout_);
-
-    auto n = std::find_if(neighbors.begin(), neighbors.end(),
-                          [&from_mac](const auto& neighbor) { return neighbor->mac == from_mac; });
-
-    if (n == neighbors.end()) {
-        // ignore any stray beacons
-        return;
+    assert(!state::isRoot());
+    {
+        util::Lock lock{routing::getMtx()};
+        if (routing::getLayout().children.empty()) return;
     }
 
-    // update timestamp
-    (*n)->last_seen = xTaskGetTickCount();
+    ESP_LOGI(TAG, "Sending root unreachable event downstream");
+
+    // send to all children downstream
+    auto payload = packets::RootUnreachable{};
+    send::enqueuePayload(payload, send::SendBehavior::children(), true);
 }
+
+// TODO handled by packet handler directly now
+// void NeighborCheckJob::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& from_mac) {
+//    std::scoped_lock lock(layout_->mtx);
+//    auto neighbors = getNeighbors(layout_);
+//
+//    auto n = std::find_if(neighbors.begin(), neighbors.end(),
+//                          [&from_mac](const auto& neighbor) { return neighbor->mac == from_mac; });
+//
+//    if (n == neighbors.end()) {
+//        // ignore any stray beacons
+//        return;
+//    }
+//
+//    // update timestamp
+//    (*n)->last_seen = xTaskGetTickCount();
+//}
 
 }  // namespace meshnow::job
