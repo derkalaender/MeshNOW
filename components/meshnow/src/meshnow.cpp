@@ -6,6 +6,7 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
+#include "event_internal.hpp"
 #include "networking.hpp"
 #include "state.hpp"
 #include "util/util.hpp"
@@ -80,8 +81,8 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    // init state
-    ESP_RETURN_ON_ERROR(meshnow::state::init(), TAG, "Initializing state failed");
+    // init internal event loop
+    ESP_RETURN_ON_ERROR(meshnow::event::init(), TAG, "Initializing internal event loop failed");
 
     // setup state
     meshnow::state::setRoot(config->root);
@@ -125,9 +126,9 @@ esp_err_t meshnow_deinit() {
     ESP_LOGI(TAG, "Deinitializing MeshNOW");
 
     networking.deinit();
-    meshnow::state::deinit()
+    meshnow::event::deinit();
 
-        initialized = false;
+    initialized = false;
 
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
     return ESP_OK;

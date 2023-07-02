@@ -83,17 +83,17 @@ void UnreachableTimeoutJob::performAction() {
 }
 
 void UnreachableTimeoutJob::event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    if (event_base != state::MESHNOW_INTERNAL || event_id != state::MeshNOWInternalEvent::STATE_CHANGED) return;
+    if (event_base != event::MESHNOW_INTERNAL || event_id != event::InternalEvent::STATE_CHANGED) return;
 
-    auto* job = static_cast<UnreachableTimeoutJob*>(arg);
-    auto* new_state = static_cast<state::State*>(event_data);
+    auto job = static_cast<UnreachableTimeoutJob*>(arg);
+    auto new_state = static_cast<event::StateChangedData*>(event_data)->new_state;
 
-    if (job->awaiting_reachable && *new_state == state::State::REACHES_ROOT) {
+    if (job->awaiting_reachable && new_state == state::State::REACHES_ROOT) {
         // root is reachable again
         ESP_LOGI(TAG, "Root is reachable again");
         job->awaiting_reachable = false;
         job->mesh_unreachable_since_ = 0;
-    } else if (!job->awaiting_reachable && *new_state != state::State::REACHES_ROOT) {
+    } else if (!job->awaiting_reachable && new_state != state::State::REACHES_ROOT) {
         // root became unreachable
         ESP_LOGI(TAG, "Root became unreachable");
         job->awaiting_reachable = true;
