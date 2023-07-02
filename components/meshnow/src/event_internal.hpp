@@ -12,6 +12,7 @@ ESP_EVENT_DECLARE_BASE(MESHNOW_INTERNAL);
 enum InternalEvent {
     STATE_CHANGED,
     PARENT_FOUND,
+    GOT_CONNECTION_REPLY,
 };
 
 struct StateChangedData {
@@ -22,6 +23,10 @@ struct StateChangedData {
 struct ParentFoundData {
     const int rssi;
     const util::MacAddr* mac;
+};
+
+struct GotConnectionReplyData {
+    const bool accepted;
 };
 
 /**

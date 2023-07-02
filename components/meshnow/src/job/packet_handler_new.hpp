@@ -19,11 +19,11 @@ class PacketHandler {
    private:
     // HANDLERS for each payload type //
 
-    void handle(const util::MacAddr& from, const packets::KeepAlive& p);
+    void handle(const util::MacAddr& from, const packets::Status& p);
     void handle(const util::MacAddr& from, const packets::AnyoneThere& p);
     void handle(const util::MacAddr& from, const packets::IAmHere& p);
-    void handle(const util::MacAddr& from, const packets::PlsConnect& p);
-    void handle(const util::MacAddr& from, const packets::Verdict& p);
+    void handle(const util::MacAddr& from, const packets::ConnectRequest& p);
+    void handle(const util::MacAddr& from, const packets::ConnectResponse& p);
     void handle(const util::MacAddr& from, const packets::NodeConnected& p);
     void handle(const util::MacAddr& from, const packets::NodeDisconnected& p);
     void handle(const util::MacAddr& from, const packets::RootUnreachable& p);

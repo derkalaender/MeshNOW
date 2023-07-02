@@ -4,8 +4,8 @@
 #include <variant>
 #include <vector>
 
+#include "job/connect.hpp"
 #include "job/fragment_gc.hpp"
-#include "job/hand_shaker.hpp"
 #include "keep_alive.hpp"
 #include "layout.hpp"
 #include "packets.hpp"
@@ -20,7 +20,7 @@ namespace meshnow {
 class PacketHandler {
    public:
     PacketHandler(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                  std::shared_ptr<routing::Layout> layout, HandShaker& hand_shaker,
+                  std::shared_ptr<routing::Layout> layout, ConnectJob& hand_shaker,
                   keepalive::NeighborCheckJob& neighbors_alive_check_task,
                   keepalive::UnreachableTimeoutJob& rootReachableCheckTask, fragment::FragmentTask& fragment_task);
 
@@ -45,11 +45,11 @@ class PacketHandler {
 
     // HANDLERS for each payload type //
 
-    void handle(const ReceiveMeta& meta, const packets::KeepAlive& p);
+    void handle(const ReceiveMeta& meta, const packets::Status& p);
     void handle(const ReceiveMeta& meta, const packets::AnyoneThere& p);
     void handle(const ReceiveMeta& meta, const packets::IAmHere& p);
-    void handle(const ReceiveMeta& meta, const packets::PlsConnect& p);
-    void handle(const ReceiveMeta& meta, const packets::Verdict& p);
+    void handle(const ReceiveMeta& meta, const packets::ConnectRequest& p);
+    void handle(const ReceiveMeta& meta, const packets::ConnectResponse& p);
     void handle(const ReceiveMeta& meta, const packets::NodeConnected& p);
     void handle(const ReceiveMeta& meta, const packets::NodeDisconnected& p);
     void handle(const ReceiveMeta& meta, const packets::RootUnreachable& p);
@@ -64,7 +64,7 @@ class PacketHandler {
     std::shared_ptr<SendWorker> send_worker_;
     std::shared_ptr<NodeState> state_;
     std::shared_ptr<routing::Layout> layout_;
-    HandShaker& hand_shaker_;
+    ConnectJob& hand_shaker_;
     keepalive::NeighborCheckJob& neighbors_alive_check_task_;
     keepalive::UnreachableTimeoutJob& root_reachable_check_task_;
     fragment::FragmentTask& fragment_task_;

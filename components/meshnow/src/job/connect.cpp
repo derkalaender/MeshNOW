@@ -20,13 +20,13 @@ static constexpr auto SEARCH_PROBE_INTERVAL = pdMS_TO_TICKS(50);
 // How many probes to send per channel before switching
 static constexpr auto PROBES_PER_CHANNEL = 3;
 
-// Time to wait for a connection reply
-static constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(50);
-
 // Min time to wait for potential other parents after the first parent was found
 static constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(3000);
 
 static constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
+
+// Time to wait for a connection reply
+static constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(50);
 
 ConnectJob::ConnectJob()
     :  // use lambda to initialize channel config
@@ -47,19 +47,17 @@ ConnectJob::ConnectJob()
 
 TickType_t ConnectJob::nextActionAt() const noexcept {
     // root never performs any connecting process
-    if (state::isRoot()) return portMAX_DELAY;
+    if (state::isRoot() || state::getState() == state::State::REACHES_ROOT) return portMAX_DELAY;
     return phase_->nextActionAt();
 }
 
 void ConnectJob::performAction() {
     // root never performs any connecting process
-    if (state::isRoot()) return;
+    if (state::isRoot() || state::getState() == state::State::REACHES_ROOT) return;
     return phase_->performAction();
 }
 
 // SEARCH PHASE //
-
-// TODO event
 
 TickType_t ConnectJob::SearchPhase::nextActionAt() const noexcept {
     // we always want to send a search probe
@@ -67,6 +65,8 @@ TickType_t ConnectJob::SearchPhase::nextActionAt() const noexcept {
 }
 
 void ConnectJob::SearchPhase::performAction() {
+    if (xTaskGetTickCount() - last_search_probe_time_ < SEARCH_PROBE_INTERVAL) return;
+
     if (job_.parent_infos_.empty()) {
         // if we haven't found a parent yet, we switch the channel after a set amount of probes
         if (search_probes_sent_ >= PROBES_PER_CHANNEL) {

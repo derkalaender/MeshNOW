@@ -12,7 +12,7 @@ static const char* TAG = CREATE_TAG("PacketHandler");
 using meshnow::PacketHandler;
 
 PacketHandler::PacketHandler(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<NodeState> state,
-                             std::shared_ptr<routing::Layout> layout, HandShaker& hand_shaker,
+                             std::shared_ptr<routing::Layout> layout, ConnectJob& hand_shaker,
                              keepalive::NeighborCheckJob& neighbors_alive_check_task,
                              keepalive::UnreachableTimeoutJob& rootReachableCheckTask,
                              fragment::FragmentTask& fragment_task)
@@ -60,7 +60,7 @@ void PacketHandler::handlePacket(const meshnow::ReceiveMeta& meta, const packets
 
 // HANDLERS //
 
-void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::KeepAlive& p) {
+void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Status& p) {
     neighbors_alive_check_task_.receivedKeepAliveBeacon(meta.src_addr);
 }
 
@@ -72,11 +72,11 @@ void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::IAmH
     hand_shaker_.foundPotentialParent(meta.src_addr, meta.rssi);
 }
 
-void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::PlsConnect&) {
+void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::ConnectRequest&) {
     hand_shaker_.receivedConnectRequest(meta.src_addr);
 }
 
-void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::Verdict& p) {
+void PacketHandler::handle(const meshnow::ReceiveMeta& meta, const packets::ConnectResponse& p) {
     hand_shaker_.receivedConnectResponse(meta.src_addr, p.accept, p.root_mac);
 }
 

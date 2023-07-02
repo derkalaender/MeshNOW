@@ -6,7 +6,7 @@
 
 namespace meshnow::job {
 
-static const char* TAG = CREATE_TAG("PacketHandler");
+static constexpr auto TAG = CREATE_TAG("PacketHandler");
 
 void PacketHandler::handlePacket(const util::MacAddr& from, const packets::Packet& packet) {
     // TODO handle duplicate packets
@@ -19,15 +19,15 @@ void PacketHandler::handlePacket(const util::MacAddr& from, const packets::Packe
 
 // HANDLERS //
 
-void PacketHandler::handle(const util::MacAddr& from, const packets::KeepAlive& p) {}
+void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) {}
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::AnyoneThere& p) {}
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::IAmHere& p) {}
 
-void PacketHandler::handle(const util::MacAddr& from, const packets::PlsConnect& p) {}
+void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectRequest& p) {}
 
-void PacketHandler::handle(const util::MacAddr& from, const packets::Verdict& p) {}
+void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResponse& p) {}
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::NodeConnected& p) {}
 
