@@ -36,7 +36,6 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) 
         switch (p.state) {
             case state::State::DISCONNECTED_FROM_PARENT:
             case state::State::CONNECTED_TO_PARENT: {
-                // TODO event handler for this that then sends the root unreachable packet
                 state::setState(state::State::CONNECTED_TO_PARENT);
                 break;
             }
@@ -45,7 +44,6 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) 
                 // set root mac
                 state::setRootMac(p.root_mac.value());
                 // set state
-                // TODO event handler for this that then sends the root reachable packet
                 state::setState(state::State::REACHES_ROOT);
                 break;
             }
@@ -152,14 +150,16 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResp
     }
 
     // fire event to let connect job know
-    // TODO GET ACTUAL RSSI VALUE
-    auto mac = new util::MacAddr(from);
+    auto parent_mac = new util::MacAddr(from);
+    auto root_mac = new std::optional(p.root_mac);
     event::GotConnectResponseData data{
-        .mac = mac,
-        .accepted = true,
+        .mac = parent_mac,
+        .root_mac = root_mac,
+        .accepted = p.accept,
     };
     event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::GOT_CONNECT_RESPONSE, &data, sizeof(data));
-    delete mac;
+    delete parent_mac;
+    delete root_mac;
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::NodeConnected& p) {
@@ -224,7 +224,6 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RootUnreach
         if (parent->mac != from) return;
     }
 
-    // TODO event handler
     state::setState(state::State::CONNECTED_TO_PARENT);
 }
 
@@ -238,7 +237,6 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RootReachab
         if (parent->mac != from) return;
     }
 
-    // TODO event handler
     state::setState(state::State::REACHES_ROOT);
 }
 

@@ -54,10 +54,5 @@ class NeighborCheckJob : public Job {
      * @param mac_addr the MAC address of the child that disconnected
      */
     static void sendChildDisconnected(const util::MacAddr& mac);
-
-    /**
-     * Sends a root unreachable message downstream to all children if possible.
-     */
-    static void sendRootUnreachable();
 };
 }  // namespace meshnow::job

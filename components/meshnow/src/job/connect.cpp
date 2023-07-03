@@ -215,6 +215,9 @@ void ConnectJob::ConnectPhase::event_handler(void *event_handler_arg, esp_event_
             auto &layout = layout::getLayout();
             layout.parent = std::make_optional<layout::Neighbor>(*response_data->mac);
         }
+        // set root mac
+        state::setRootMac(*response_data->mac);
+
         // assume we can reach the root already because otherwise the parent would not have accepted us
         state::setState(state::State::REACHES_ROOT);
 

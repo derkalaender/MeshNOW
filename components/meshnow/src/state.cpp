@@ -4,6 +4,10 @@
 #include <freertos/FreeRTOS.h>
 
 #include "event_internal.hpp"
+#include "layout.hpp"
+#include "packets.hpp"
+#include "send/queue.hpp"
+#include "util/lock.hpp"
 #include "util/mac.hpp"
 
 namespace meshnow::state {
@@ -22,6 +26,22 @@ void setState(State new_state) {
     };
     event::fireEvent(event::MESHNOW_INTERNAL, static_cast<int32_t>(event::InternalEvent::STATE_CHANGED), &data,
                      sizeof(state));
+
+    {
+        // don't send root reachable status events downstream if no children
+        util::Lock lock{layout::getMtx()};
+        if (layout::getLayout().children.empty()) return;
+    }
+
+    // send to all children downstream
+    if (new_state == State::REACHES_ROOT) {
+        auto payload = packets::RootReachable{.root_mac = getRootMac()};
+        send::enqueuePayload(payload, send::SendBehavior::children(), true);
+    } else {
+        assert(!isRoot());
+        auto payload = packets::RootUnreachable{};
+        send::enqueuePayload(payload, send::SendBehavior::children(), true);
+    }
 }
 
 State getState() { return state; }

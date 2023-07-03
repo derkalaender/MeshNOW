@@ -153,9 +153,6 @@ void NeighborCheckJob::performAction() {
         layout.parent = std::nullopt;
         // update state
         state::setState(state::State::DISCONNECTED_FROM_PARENT);
-        // send event to children
-        // TODO dont do this as the state change will trigger this anyway
-        sendRootUnreachable();
     }
 }
 
@@ -171,20 +168,6 @@ void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
     // send to parent
     auto payload = packets::NodeDisconnected{.child_mac = mac};
     send::enqueuePayload(payload, send::SendBehavior::parent(), true);
-}
-
-void NeighborCheckJob::sendRootUnreachable() {
-    assert(!state::isRoot());
-    {
-        util::Lock lock{layout::getMtx()};
-        if (layout::getLayout().children.empty()) return;
-    }
-
-    ESP_LOGI(TAG, "Sending root unreachable event downstream");
-
-    // send to all children downstream
-    auto payload = packets::RootUnreachable{};
-    send::enqueuePayload(payload, send::SendBehavior::children(), true);
 }
 
 }  // namespace meshnow::job

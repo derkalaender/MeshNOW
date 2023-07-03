@@ -3,6 +3,8 @@
 #include <esp_err.h>
 #include <esp_event.h>
 
+#include <optional>
+
 #include "state.hpp"
 
 namespace meshnow::event {
@@ -27,6 +29,7 @@ struct ParentFoundData {
 
 struct GotConnectResponseData {
     const util::MacAddr* mac;
+    const std::optional<util::MacAddr>* root_mac;
     const bool accepted;
 };
 
