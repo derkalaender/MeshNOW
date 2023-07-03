@@ -7,6 +7,7 @@
 #include <esp_wifi.h>
 
 #include "state.hpp"
+#include "util/util.hpp"
 
 static constexpr auto TAG = CREATE_TAG("Wi-Fi");
 
