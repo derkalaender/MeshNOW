@@ -25,8 +25,8 @@ static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
 // StatusSendJob //
 
 TickType_t StatusSendJob::nextActionAt() const noexcept {
-    util::Lock lock{routing::getMtx()};
-    if (routing::hasNeighbors()) {
+    util::Lock lock{layout::getMtx()};
+    if (layout::hasNeighbors()) {
         return last_status_sent_ + STATUS_SEND_INTERVAL;
     } else {
         return portMAX_DELAY;
@@ -38,8 +38,8 @@ void StatusSendJob::performAction() {
     if (now - last_status_sent_ < STATUS_SEND_INTERVAL) return;
 
     {
-        util::Lock lock{routing::getMtx()};
-        if (!routing::hasNeighbors()) return;
+        util::Lock lock{layout::getMtx()};
+        if (!layout::hasNeighbors()) return;
     }
 
     sendStatus();
@@ -73,8 +73,8 @@ void UnreachableTimeoutJob::performAction() {
 
         awaiting_reachable = false;
         {
-            util::Lock lock{routing::getMtx()};
-            auto& layout = routing::getLayout();
+            util::Lock lock{layout::getMtx()};
+            auto& layout = layout::getLayout();
             assert(layout.parent.has_value());  // parent still has to be there
             layout.parent = std::nullopt;       // remove parent
         }
@@ -108,8 +108,8 @@ TickType_t NeighborCheckJob::nextActionAt() const noexcept {
     auto min_last_seen = portMAX_DELAY;
 
     {
-        util::Lock lock{routing::getMtx()};
-        const auto& layout = routing::getLayout();
+        util::Lock lock{layout::getMtx()};
+        const auto& layout = layout::getLayout();
 
         for (const auto& child : layout.children) {
             min_last_seen = std::min(min_last_seen, child.last_seen);
@@ -127,9 +127,9 @@ TickType_t NeighborCheckJob::nextActionAt() const noexcept {
 }
 
 void NeighborCheckJob::performAction() {
-    util::Lock lock{routing::getMtx()};
+    util::Lock lock{layout::getMtx()};
 
-    auto& layout = routing::getLayout();
+    auto& layout = layout::getLayout();
     auto now = xTaskGetTickCount();
 
     // check for timeouts in all neighbors and remove from the layout if necessary
@@ -162,8 +162,8 @@ void NeighborCheckJob::performAction() {
 void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
     if (state::isRoot()) return;
     {
-        util::Lock lock{routing::getMtx()};
-        if (!routing::getLayout().parent) return;
+        util::Lock lock{layout::getMtx()};
+        if (!layout::getLayout().parent) return;
     }
 
     ESP_LOGI(TAG, "Sending child disconnected event upstream");
@@ -176,8 +176,8 @@ void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
 void NeighborCheckJob::sendRootUnreachable() {
     assert(!state::isRoot());
     {
-        util::Lock lock{routing::getMtx()};
-        if (routing::getLayout().children.empty()) return;
+        util::Lock lock{layout::getMtx()};
+        if (layout::getLayout().children.empty()) return;
     }
 
     ESP_LOGI(TAG, "Sending root unreachable event downstream");

@@ -43,7 +43,7 @@ esp_err_t meshnow::lwip::io::postAttachCallback(esp_netif_t* esp_netif, esp_neti
 using meshnow::lwip::io::IODriverImpl;
 
 IODriverImpl::IODriverImpl(std::shared_ptr<esp_netif_t> netif, std::shared_ptr<SendWorker> send_worker,
-                           std::shared_ptr<routing::Layout> layout)
+                           std::shared_ptr<layout::Layout> layout)
     : layout_(std::move(layout)), send_worker_(std::move(send_worker)), netif_(std::move(netif)) {}
 
 void meshnow::lwip::io::IODriverImpl::receivedData(const meshnow::Buffer& buffer) {
@@ -121,7 +121,7 @@ esp_err_t RootIODriver::transmit(void* buffer, size_t len) {
     if (dest_mac == meshnow::BROADCAST_MAC_ADDR) {
         // broadcast case
 
-        routing::forEachChild(layout_, [&](auto&& node) {
+        layout::forEachChild(layout_, [&](auto&& node) {
             auto child_mac = node->mac;
             ESP_LOGD(TAG, "Sending to child: " MAC_FORMAT, MAC_FORMAT_ARGS(child_mac));
             sendData(child_mac, buffer, len);

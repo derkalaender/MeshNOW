@@ -7,9 +7,9 @@ namespace meshnow::send {
 
 class NeighborsSingleTry : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
-        util::Lock lock{routing::getMtx()};
+        util::Lock lock{layout::getMtx()};
 
-        const auto& layout = routing::getLayout();
+        const auto& layout = layout::getLayout();
 
         // send to children
         for (const auto& child : layout.children) {
@@ -30,9 +30,9 @@ std::unique_ptr<SendBehavior> meshnow::send::SendBehavior::neighborsSingleTry() 
 class Parent : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
-        util::Lock lock{routing::getMtx()};
+        util::Lock lock{layout::getMtx()};
 
-        const auto& layout = routing::getLayout();
+        const auto& layout = layout::getLayout();
 
         // send to parent
         if (layout.parent) {
@@ -46,9 +46,9 @@ std::unique_ptr<SendBehavior> SendBehavior::parent() { return std::make_unique<P
 class Children : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
-        util::Lock lock{routing::getMtx()};
+        util::Lock lock{layout::getMtx()};
 
-        const auto& layout = routing::getLayout();
+        const auto& layout = layout::getLayout();
 
         // send to children
         for (const auto& child : layout.children) {
@@ -94,9 +94,9 @@ class Resolve : public SendBehavior {
         if (target_ == state::getThisMac()) return;
 
         // TODO retry until success
-        util::Lock lock{routing::getMtx()};
+        util::Lock lock{layout::getMtx()};
 
-        const auto& layout = routing::getLayout();
+        const auto& layout = layout::getLayout();
 
         // broadcast
         if (target_.isBroadcast()) {
@@ -125,7 +125,7 @@ class Resolve : public SendBehavior {
         } else {
             // find child that either is the target or has a child that is the target
             auto child = std::find_if(layout.children.begin(), layout.children.end(),
-                                      [&](const routing::DirectChild& child) { return contains(child, target_); });
+                                      [&](const layout::DirectChild& child) { return contains(child, target_); });
 
             if (child != layout.children.end()) {
                 // send downstream to child
@@ -145,7 +145,7 @@ class Resolve : public SendBehavior {
 
         return std::any_of(
             child.children.begin(), child.children.end(),
-            [&](const routing::IndirectChild& indirect_child) { return contains(indirect_child, target); });
+            [&](const layout::IndirectChild& indirect_child) { return contains(indirect_child, target); });
     }
 
     const util::MacAddr target_;

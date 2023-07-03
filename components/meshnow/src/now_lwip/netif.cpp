@@ -18,7 +18,7 @@ static const char* TAG = CREATE_TAG("LWIP | Netif");
 
 using meshnow::lwip::netif::Netif;
 
-Netif::Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<routing::Layout> layout)
+Netif::Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<layout::Layout> layout)
     : send_worker_(std::move(send_worker)), layout_(std::move(layout)) {}
 
 void Netif::init() {

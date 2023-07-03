@@ -14,7 +14,7 @@ namespace meshnow::lwip::io {
 class IODriverImpl {
    public:
     explicit IODriverImpl(std::shared_ptr<esp_netif_t> netif, std::shared_ptr<SendWorker> send_worker,
-                          std::shared_ptr<routing::Layout> layout);
+                          std::shared_ptr<layout::Layout> layout);
 
     virtual ~IODriverImpl() = default;
 
@@ -29,7 +29,7 @@ class IODriverImpl {
      */
     void sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t len);
 
-    std::shared_ptr<routing::Layout> layout_;
+    std::shared_ptr<layout::Layout> layout_;
 
    private:
     // Static wrapper functions for the IO callbacks

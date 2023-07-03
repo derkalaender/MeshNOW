@@ -108,8 +108,8 @@ void ConnectJob::SearchPhase::event_handler(void *event_handler_arg, esp_event_b
 
     // check if the advertised parent is already in the Layout, if so, ignore
     {
-        util::Lock lock{routing::getMtx()};
-        if (routing::has(parent_mac)) return;
+        util::Lock lock{layout::getMtx()};
+        if (layout::has(parent_mac)) return;
     }
 
     auto &parent_infos = search->job_.parent_infos_;
@@ -211,9 +211,9 @@ void ConnectJob::ConnectPhase::event_handler(void *event_handler_arg, esp_event_
         // we are now connected to the parent
         // set parent info
         {
-            util::Lock lock{routing::getMtx()};
-            auto &layout = routing::getLayout();
-            layout.parent = std::make_optional<routing::Neighbor>(*response_data->mac);
+            util::Lock lock{layout::getMtx()};
+            auto &layout = layout::getLayout();
+            layout.parent = std::make_optional<layout::Neighbor>(*response_data->mac);
         }
         // assume we can reach the root already because otherwise the parent would not have accepted us
         state::setState(state::State::REACHES_ROOT);

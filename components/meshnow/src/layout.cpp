@@ -3,7 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
-namespace meshnow::routing {
+namespace meshnow::layout {
 
 static SemaphoreHandle_t mtx{nullptr};
 
@@ -108,4 +108,4 @@ void removeIndirectChild(const util::MacAddr& parent, const util::MacAddr& child
     }
 }
 
-}  // namespace meshnow::routing
+}  // namespace meshnow::layout

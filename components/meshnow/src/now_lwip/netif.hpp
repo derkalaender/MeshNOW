@@ -15,7 +15,7 @@ namespace meshnow::lwip::netif {
 
 class Netif {
    public:
-    Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<routing::Layout> layout);
+    Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<layout::Layout> layout);
 
     virtual ~Netif() = default;
 
@@ -61,14 +61,14 @@ class Netif {
     std::shared_ptr<esp_netif_t> netif_;
 
     std::shared_ptr<SendWorker> send_worker_;
-    std::shared_ptr<routing::Layout> layout_;
+    std::shared_ptr<layout::Layout> layout_;
 };
 
 class RootNetif : public Netif {
    public:
     using Netif::Netif;
 
-    RootNetif() : Netif(std::shared_ptr<SendWorker>(), std::shared_ptr<routing::Layout>()) {}
+    RootNetif() : Netif(std::shared_ptr<SendWorker>(), std::shared_ptr<layout::Layout>()) {}
     void start() override;
 
     void stop() override;
@@ -95,7 +95,7 @@ class NodeNetif : public Netif {
    public:
     using Netif::Netif;
 
-    NodeNetif() : Netif(std::shared_ptr<SendWorker>(), std::shared_ptr<routing::Layout>()) {}
+    NodeNetif() : Netif(std::shared_ptr<SendWorker>(), std::shared_ptr<layout::Layout>()) {}
     void start() override;
 
     void stop() override;

@@ -9,7 +9,7 @@
 #include "state.hpp"
 #include "util/mac.hpp"
 
-namespace meshnow::routing {
+namespace meshnow::layout {
 
 struct Node {
     explicit Node(const util::MacAddr& mac) : mac(mac) {}
@@ -67,4 +67,4 @@ void addIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
 
 void removeIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
 
-}  // namespace meshnow::routing
+}  // namespace meshnow::layout

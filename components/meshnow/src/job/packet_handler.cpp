@@ -26,8 +26,8 @@ void PacketHandler::handlePacket(const util::MacAddr& from, const packets::Packe
 // HANDLERS //
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) {
-    util::Lock lock{routing::getMtx()};
-    auto& layout = routing::getLayout();
+    util::Lock lock{layout::getMtx()};
+    auto& layout = layout::getLayout();
 
     // is parent?
     if (layout.parent && layout.parent->mac == from) {
@@ -55,7 +55,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) 
     }
 
     // is direct child?
-    auto it = routing::getDirectChild(from);
+    auto it = layout::getDirectChild(from);
 
     if (it == layout.children.end()) return;
 
@@ -69,13 +69,13 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::AnyoneThere
     if (state::getState() != state::State::REACHES_ROOT) return;
 
     {
-        util::Lock lock{routing::getMtx()};
+        util::Lock lock{layout::getMtx()};
         // we must have a parent by this point
-        assert(routing::getLayout().parent.has_value());
+        assert(layout::getLayout().parent.has_value());
 
         // check if node is already present in layout
         // should prevent most loops from forming
-        if (routing::has(from)) return;
+        if (layout::has(from)) return;
     }
 
     // send reply
@@ -88,14 +88,14 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::IAmHere&) {
     if (state::getState() != state::State::DISCONNECTED_FROM_PARENT) return;
 
     {
-        util::Lock lock(routing::getMtx());
-        const auto layout = routing::getLayout();
+        util::Lock lock(layout::getMtx());
+        const auto layout = layout::getLayout();
 
         // ignore if we're already connected to a parent
         if (layout.parent.has_value()) return;
 
         // ignore if child
-        if (routing::has(from)) return;
+        if (layout::has(from)) return;
     }
 
     // fire event to let connect job know
@@ -115,16 +115,16 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectRequ
     if (state::getState() != state::State::REACHES_ROOT) return;
 
     {
-        util::Lock lock{routing::getMtx()};
+        util::Lock lock{layout::getMtx()};
         // we must have a parent by this point
-        assert(routing::getLayout().parent.has_value());
+        assert(layout::getLayout().parent.has_value());
 
         // check if node is already present in layout
         // should prevent most loops from forming
-        if (routing::has(from)) return;
+        if (layout::has(from)) return;
 
         // add to layout
-        routing::addDirectChild(from);
+        layout::addDirectChild(from);
 
         // send node connected upstream
         send::enqueuePayload(packets::NodeConnected{.parent_mac = state::getThisMac(), .child_mac = from},
@@ -141,14 +141,14 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResp
     if (state::getState() != state::State::DISCONNECTED_FROM_PARENT) return;
 
     {
-        util::Lock lock(routing::getMtx());
-        const auto layout = routing::getLayout();
+        util::Lock lock(layout::getMtx());
+        const auto layout = layout::getLayout();
 
         // ignore if we're already connected to a parent
         if (layout.parent.has_value()) return;
 
         // ignore if child
-        if (routing::has(from)) return;
+        if (layout::has(from)) return;
     }
 
     // fire event to let connect job know
@@ -164,20 +164,20 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResp
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::NodeConnected& p) {
     {
-        util::Lock lock(routing::getMtx());
-        const auto layout = routing::getLayout();
+        util::Lock lock(layout::getMtx());
+        const auto layout = layout::getLayout();
 
         // ignore if packet wasn't sent by a child
-        if (!routing::hasDirectChild(from)) return;
+        if (!layout::hasDirectChild(from)) return;
 
         // ignore if from parent, should never happen
         if (p.child_mac == layout.parent->mac) return;
 
         // ignore if parent mac is not one of the (indirect) children
-        if (!routing::has(p.parent_mac)) return;
+        if (!layout::has(p.parent_mac)) return;
 
         // add to layout
-        routing::addIndirectChild(p.parent_mac, p.child_mac);
+        layout::addIndirectChild(p.parent_mac, p.child_mac);
 
         // TODO reset sequence number
 
@@ -191,20 +191,20 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::NodeConnect
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::NodeDisconnected& p) {
     {
-        util::Lock lock(routing::getMtx());
-        const auto layout = routing::getLayout();
+        util::Lock lock(layout::getMtx());
+        const auto layout = layout::getLayout();
 
         // ignore if packet wasn't sent by a child
-        if (!routing::hasDirectChild(from)) return;
+        if (!layout::hasDirectChild(from)) return;
 
         // ignore if from parent, should never happen
         if (p.child_mac == layout.parent->mac) return;
 
         // ignore if parent mac is not one of the (indirect) children
-        if (!routing::has(p.parent_mac)) return;
+        if (!layout::has(p.parent_mac)) return;
 
         // remove from layout
-        routing::removeIndirectChild(p.parent_mac, p.child_mac);
+        layout::removeIndirectChild(p.parent_mac, p.child_mac);
 
         // continue if we're connected to a parent
         if (!layout.parent.has_value()) return;
@@ -217,8 +217,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::NodeDisconn
 void PacketHandler::handle(const util::MacAddr& from, const packets::RootUnreachable& p) {
     if (state::getState() != state::State::REACHES_ROOT) return;
     {
-        util::Lock lock{routing::getMtx()};
-        const auto& parent = routing::getLayout().parent;
+        util::Lock lock{layout::getMtx()};
+        const auto& parent = layout::getLayout().parent;
         // we must have a parent by this point
         assert(parent.has_value());
         if (parent->mac != from) return;
@@ -231,8 +231,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RootUnreach
 void PacketHandler::handle(const util::MacAddr& from, const packets::RootReachable& p) {
     if (state::getState() != state::State::CONNECTED_TO_PARENT) return;
     {
-        util::Lock lock{routing::getMtx()};
-        const auto& parent = routing::getLayout().parent;
+        util::Lock lock{layout::getMtx()};
+        const auto& parent = layout::getLayout().parent;
         // we must have a parent by this point
         assert(parent.has_value());
         if (parent->mac != from) return;
@@ -245,8 +245,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RootReachab
 void PacketHandler::handle(const util::MacAddr& from, const packets::DataFragment& p) {
     {
         // check if from a neighbor
-        util::Lock lock{routing::getMtx()};
-        if (!routing::has(from)) return;
+        util::Lock lock{layout::getMtx()};
+        if (!layout::has(from)) return;
     }
 
     bool forward{false};
