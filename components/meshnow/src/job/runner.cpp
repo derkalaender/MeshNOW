@@ -7,7 +7,7 @@
 #include "freertos/portmacro.h"
 #include "job.hpp"
 #include "keep_alive.hpp"
-#include "packet_handler_new.hpp"
+#include "packet_handler.hpp"
 #include "receive/queue.hpp"
 #include "util/util.hpp"
 #include "util/waitbits.hpp"
@@ -52,7 +52,7 @@ static TickType_t calculateTimeout(JobList jobs) {
     return timeout;
 }
 
-void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runner_finished_bit) {
+void runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runner_finished_bit) {
     ESP_LOGI(TAG, "Starting!");
 
     ConnectJob hand_shaker;
@@ -62,8 +62,6 @@ void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_
     NeighborCheckJob neighbor_check;
 
     JobList jobs{hand_shaker, fragment_gc, status_send, unreachable_timeout, neighbor_check};
-
-    PacketHandler packet_handler;
 
     auto lastLoopRun = xTaskGetTickCount();
 
@@ -77,7 +75,7 @@ void job::runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_
         auto receive_item = receive::pop(timeout);
         if (receive_item) {
             // handle packet
-            packet_handler.handlePacket(receive_item->from, receive_item->packet);
+            PacketHandler::handlePacket(receive_item->from, receive_item->packet);
         }
 
         // perform tasks
