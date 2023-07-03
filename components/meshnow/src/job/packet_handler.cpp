@@ -127,7 +127,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectRequ
         routing::addDirectChild(from);
 
         // send node connected upstream
-        send::enqueuePayload(packets::NodeConnected{.child_mac = from}, send::SendBehavior::parent(), true);
+        send::enqueuePayload(packets::NodeConnected{.parent_mac = state::getThisMac(), .child_mac = from},
+                             send::SendBehavior::parent(), true);
     }
 
     // send reply
@@ -155,6 +156,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResp
     auto mac = new util::MacAddr(from);
     event::GotConnectResponseData data{
         .mac = mac,
+        .accepted = true,
     };
     event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::GOT_CONNECT_RESPONSE, &data, sizeof(data));
     delete mac;
@@ -266,7 +268,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::DataFragmen
     }
 
     if (forward) {
-        send::enqueuePayload(p, send::SendBehavior::resolve(), true);
+        send::enqueuePayload(p, send::SendBehavior::resolve(p.target, from), true);
     }
 }
 

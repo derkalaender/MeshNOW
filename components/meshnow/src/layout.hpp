@@ -67,6 +67,4 @@ void addIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
 
 void removeIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
 
-std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest);
-
 }  // namespace meshnow::routing

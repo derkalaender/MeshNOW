@@ -37,7 +37,7 @@ bool hasNeighbors() {
     return layout.parent || !layout.children.empty();
 }
 
-bool routing::hasNeighbor(const util::MacAddr& mac) { return getLayout().parent.has_value() || hasDirectChild(mac); }
+bool hasNeighbor(const util::MacAddr& mac) { return getLayout().parent.has_value() || hasDirectChild(mac); }
 
 decltype(getLayout().children.begin()) getDirectChild(const util::MacAddr& mac) {
     auto& children = getLayout().children;
