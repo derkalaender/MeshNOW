@@ -75,6 +75,7 @@ static void serialize(S& s, NodeConnected& p) {
 
 template <typename S>
 static void serialize(S& s, NodeDisconnected& p) {
+    s.object(p.parent_mac);
     s.object(p.child_mac);
 }
 

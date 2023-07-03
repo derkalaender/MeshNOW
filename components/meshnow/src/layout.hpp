@@ -53,60 +53,20 @@ Layout& getLayout();
 
 bool hasNeighbors();
 
-bool contains(const util::MacAddr& mac);
+bool hasNeighbor(const util::MacAddr& mac);
 
-template <typename T, typename Func>
-inline void forEachChild(const std::shared_ptr<T>& tree, Func&& func) {
-    assert(tree);
-    std::ranges::for_each(tree->children, [&](auto&& child) {
-        func(child);
-        forEachChild(child, func);
-    });
-}
+decltype(getLayout().children.begin()) getDirectChild(const util::MacAddr& mac);
+
+bool hasDirectChild(const util::MacAddr& mac);
+
+bool has(const util::MacAddr& mac);
+
+void addDirectChild(const util::MacAddr& mac);
+
+void addIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
+
+void removeIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
 
 std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest);
-
-// Wrappers for creating a child //
-
-template <typename T>
-static inline auto createChild(const MAC_ADDR& mac);
-
-template <>
-inline auto createChild<Layout>(const MAC_ADDR& mac) {
-    return std::make_shared<DirectChild>(mac);
-}
-
-template <>
-inline auto createChild<DirectChild>(const MAC_ADDR& mac) {
-    return std::make_shared<IndirectChild>(mac);
-}
-
-template <>
-inline auto createChild<IndirectChild>(const MAC_ADDR& mac) {
-    return std::make_shared<IndirectChild>(mac);
-}
-
-// Children handling functions //
-
-template <typename T>
-inline bool insertChild(const std::shared_ptr<T>& tree, const MAC_ADDR& parent_mac, const MAC_ADDR& child_mac) {
-    assert(tree);
-    if (tree->mac == parent_mac) {
-        tree->children.emplace_back(createChild<T>(child_mac));
-        return true;
-    }
-
-    for (auto&& child : tree->children) {
-        if (insertChild(child, parent_mac, child_mac)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void insertDirectChild(const std::shared_ptr<Layout>& tree, DirectChild&& child);
-
-bool removeDirectChild(const std::shared_ptr<Layout>& tree, const MAC_ADDR& child_mac);
 
 }  // namespace meshnow::routing

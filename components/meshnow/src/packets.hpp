@@ -32,6 +32,7 @@ struct NodeConnected {
 };
 
 struct NodeDisconnected {
+    util::MacAddr parent_mac;
     util::MacAddr child_mac;
 };
 

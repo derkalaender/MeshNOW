@@ -14,6 +14,8 @@ static util::MacAddr root_mac;
 static State state{State::DISCONNECTED_FROM_PARENT};
 
 void setState(State new_state) {
+    if (new_state == state) return;
+
     event::StateChangedData data{
         .old_state = state,
         .new_state = new_state,

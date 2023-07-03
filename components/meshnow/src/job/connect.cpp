@@ -109,7 +109,7 @@ void ConnectJob::SearchPhase::event_handler(void *event_handler_arg, esp_event_b
     // check if the advertised parent is already in the Layout, if so, ignore
     {
         util::Lock lock{routing::getMtx()};
-        if (routing::contains(parent_mac)) return;
+        if (routing::has(parent_mac)) return;
     }
 
     auto &parent_infos = search->job_.parent_infos_;

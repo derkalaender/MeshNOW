@@ -17,7 +17,7 @@ static constexpr auto MIN_TIMEOUT = pdMS_TO_TICKS(500);
  */
 class SendSinkImpl : public SendSink {
    public:
-    bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) override {
+    bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) const override {
         // TODO implement
         return true;
     }
@@ -40,6 +40,7 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
     }
 
     ESP_LOGI(TAG, "Stopping!");
+    task_waitbits.set(send_worker_finished_bit);
 }
 
 }  // namespace meshnow::send

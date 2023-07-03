@@ -15,7 +15,6 @@ esp_err_t init() {
 }
 
 void deinit() {
-    layout = Layout{};
     assert(mtx);
     vSemaphoreDelete(mtx);
     mtx = nullptr;
@@ -32,99 +31,80 @@ Layout& getLayout() {
 }
 
 // FUNCTIONS //
+
 bool hasNeighbors() {
     const auto& layout = getLayout();
     return layout.parent || !layout.children.empty();
 }
 
-static bool containsChild(const auto& tree, const util::MacAddr& mac) {
-    if (tree.mac == mac) return true;
-    for (const auto& child : tree.children) {
-        if (containsChild(child, mac)) return true;
-    }
+bool routing::hasNeighbor(const util::MacAddr& mac) { return getLayout().parent.has_value() || hasDirectChild(mac); }
+
+decltype(getLayout().children.begin()) getDirectChild(const util::MacAddr& mac) {
+    auto& children = getLayout().children;
+    return std::find_if(children.begin(), children.end(),
+                        [&mac](const DirectChild& child) { return child.mac == mac; });
 }
 
-bool contains(const util::MacAddr& mac) {
+bool hasDirectChild(const util::MacAddr& mac) { return getDirectChild(mac) != getLayout().children.end(); }
+
+static bool containsChild(const auto& tree, const util::MacAddr& mac) {
+    if (tree.mac == mac) return true;
+    return std::any_of(tree.children.begin(), tree.children.end(),
+                       [&mac](const auto& child) { return containsChild(child, mac); });
+}
+
+bool has(const util::MacAddr& mac) {
     const auto& layout = getLayout();
     if (layout.parent && layout.parent->mac == mac) return true;
 
-    for (const auto& child : layout.children) {
-        if (containsChild(child, mac)) return true;
-    }
+    return std::any_of(layout.children.begin(), layout.children.end(),
+                       [&mac](const auto& child) { return containsChild(child, mac); });
 }
 
-/////// unused
-
-std::vector<std::shared_ptr<Neighbor>> getNeighbors(const std::shared_ptr<Layout>& layout) {
-    assert(layout);
-    std::vector<std::shared_ptr<Neighbor>> neighbors;
-    if (layout->parent) {
-        neighbors.push_back(layout->parent);
-    }
-    neighbors.insert(neighbors.end(), layout->children.begin(), layout->children.end());
-    return neighbors;
+void addDirectChild(const util::MacAddr& mac) {
+    auto& layout = getLayout();
+    DirectChild child{mac};
+    child.last_seen = xTaskGetTickCount();
+    layout.children.emplace_back(std::move(child));
 }
 
-bool containsDirectChild(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
-    assert(layout);
-    return std::ranges::any_of(layout->children, [&mac](auto&& child) { return child->mac == mac; });
-}
-
-bool hasNeighbor(const std::shared_ptr<Layout>& layout, const MAC_ADDR& mac) {
-    assert(layout);
-    return (layout->parent && layout->parent->mac == mac) || containsDirectChild(layout, mac);
-}
-
-std::optional<MAC_ADDR> resolve(const std::shared_ptr<Layout>& layout, const MAC_ADDR& dest) {
-    assert(layout);
-    if (dest == layout->mac || dest == BROADCAST_MAC_ADDR) {
-        // don't do anything
-        return dest;
-    } else if (dest == ROOT_MAC_ADDR) {
-        // if we are the root, then return ourselves
-        if (layout->mac == ROOT_MAC_ADDR) return layout->mac;
-        // try to resolve the parent
-        if (layout->parent) {
-            return layout->parent->mac;
-        } else {
-            return std::nullopt;
-        }
-    } else if (layout->parent && dest == layout->parent->mac) {
-        return layout->parent->mac;
-    }
-
-    // try to find a suitable child
-    auto child = std::find_if(layout->children.begin(), layout->children.end(),
-                              [&dest](auto&& child) { return child->mac == dest || containsChild(child, dest); });
-
-    if (child != layout->children.end()) {
-        // found the child
-        return (*child)->mac;
-    } else {
-        // did not find the child, return the parent per default
-        if (layout->parent) {
-            return layout->parent->mac;
-        } else {
-            return std::nullopt;
-        }
-    }
-}
-
-void insertDirectChild(const std::shared_ptr<Layout>& tree, DirectChild&& child) {
-    assert(tree);
-    tree->children.push_back(std::make_shared<DirectChild>(child));
-}
-
-bool removeDirectChild(const std::shared_ptr<Layout>& tree, const MAC_ADDR& child_mac) {
-    assert(tree);
-    auto child = std::find_if(tree->children.begin(), tree->children.end(),
-                              [&child_mac](auto&& child) { return child->mac == child_mac; });
-
-    if (child != tree->children.end()) {
-        tree->children.erase(child);
+static bool addIndirectChildImpl(auto& tree, const util::MacAddr& parent, const util::MacAddr& child) {
+    if (tree.mac == parent) {
+        IndirectChild indirect_child{child};
+        tree.children.emplace_back(std::move(indirect_child));
         return true;
-    } else {
-        return false;
+    }
+    for (auto& child_node : tree.children) {
+        if (addIndirectChildImpl(child_node, parent, child)) return true;
+    }
+    return false;
+}
+
+void addIndirectChild(const util::MacAddr& parent, const util::MacAddr& child) {
+    for (auto& child_node : getLayout().children) {
+        if (addIndirectChildImpl(child_node, parent, child)) return;
+    }
+}
+
+static bool removeIndirectChildImpl(auto& tree, const util::MacAddr& parent, const util::MacAddr& child) {
+    if (tree.mac == parent) {
+        for (auto it = tree.children.begin(); it != tree.children.end(); ++it) {
+            if (it->mac == child) {
+                tree.children.erase(it);
+                break;
+            }
+        }
+        return true;
+    }
+    for (auto& child_node : tree.children) {
+        if (removeIndirectChildImpl(child_node, parent, child)) return true;
+    }
+    return false;
+}
+
+void removeIndirectChild(const util::MacAddr& parent, const util::MacAddr& child) {
+    for (auto& child_node : getLayout().children) {
+        if (removeIndirectChildImpl(child_node, parent, child)) return;
     }
 }
 

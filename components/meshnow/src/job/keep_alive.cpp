@@ -154,6 +154,7 @@ void NeighborCheckJob::performAction() {
         // update state
         state::setState(state::State::DISCONNECTED_FROM_PARENT);
         // send event to children
+        // TODO dont do this as the state change will trigger this anyway
         sendRootUnreachable();
     }
 }
@@ -185,22 +186,5 @@ void NeighborCheckJob::sendRootUnreachable() {
     auto payload = packets::RootUnreachable{};
     send::enqueuePayload(payload, send::SendBehavior::children(), true);
 }
-
-// TODO handled by packet handler directly now
-// void NeighborCheckJob::receivedKeepAliveBeacon(const meshnow::MAC_ADDR& from_mac) {
-//    std::scoped_lock lock(layout_->mtx);
-//    auto neighbors = getNeighbors(layout_);
-//
-//    auto n = std::find_if(neighbors.begin(), neighbors.end(),
-//                          [&from_mac](const auto& neighbor) { return neighbor->mac == from_mac; });
-//
-//    if (n == neighbors.end()) {
-//        // ignore any stray beacons
-//        return;
-//    }
-//
-//    // update timestamp
-//    (*n)->last_seen = xTaskGetTickCount();
-//}
 
 }  // namespace meshnow::job
