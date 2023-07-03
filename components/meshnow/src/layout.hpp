@@ -12,6 +12,8 @@
 namespace meshnow::routing {
 
 struct Node {
+    explicit Node(const util::MacAddr& mac) : mac(mac) {}
+
     util::MacAddr mac;
 };
 

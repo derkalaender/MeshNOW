@@ -46,15 +46,15 @@ class ConnectJob : public Job {
 
     class SearchPhase : public Phase {
        public:
-        static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id,
-                                  void* event_data);
-
         using Phase::Phase;
 
         TickType_t nextActionAt() const noexcept override;
         void performAction() override;
 
        private:
+        static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id,
+                                  void* event_data);
+
         /**
          * Sends a beacon to search for nearby parents willing to accept this node as a child.
          */
@@ -93,16 +93,33 @@ class ConnectJob : public Job {
         void performAction() override;
 
        private:
+        static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id,
+                                  void* event_data);
+
         /**
          * Sends a connect request to a potential parent.
          * @param to_mac MAC address of the parent
          */
         static void sendConnectRequest(const util::MacAddr& to_mac);
 
+        util::EventHandlerInstance event_handler_instance_{event::getEventHandle(), event::MESHNOW_INTERNAL,
+                                                           event::InternalEvent::GOT_CONNECT_RESPONSE,
+                                                           &ConnectPhase::event_handler, this};
+
         /**
          * Ticks since the last connect request was sent.
          */
         TickType_t last_connect_request_time_{0};
+
+        /**
+         * If currently awaiting a connect response.
+         */
+        bool awaiting_connect_response_{false};
+
+        /**
+         * The MAC address of the parent we are currently trying to connect to.
+         */
+        util::MacAddr current_parent_mac_;
     };
 
     const ChannelConfig channel_config_;
