@@ -59,13 +59,13 @@ struct Layout {
      */
     bool has(const util::MacAddr& mac) const;
 
-    void addChild(const util::MacAddr& addr) {}
-
-    void removeChild(const util::MacAddr& mac);
-
     std::optional<Neighbor>& getParent();
 
     std::span<Child> getChildren();
+
+    void addChild(const util::MacAddr& addr);
+
+    void removeChild(const util::MacAddr& mac);
 
    private:
     Layout() = default;
