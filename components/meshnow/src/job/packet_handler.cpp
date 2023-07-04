@@ -185,6 +185,10 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Reset& p) {
     }
 }
 
+void PacketHandler::handle(const util::MacAddr& from, const packets::ResetOk& p) {
+    // TODO
+}
+
 void PacketHandler::handle(const util::MacAddr& from, const packets::RemoveFromRoutingTable& p) {
     util::Lock lock(layout::mtx());
     auto& layout = layout::Layout::get();
