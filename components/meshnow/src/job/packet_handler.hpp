@@ -20,12 +20,13 @@ class PacketHandler {
     // HANDLERS for each payload type //
 
     static void handle(const util::MacAddr& from, const packets::Status& p);
-    static void handle(const util::MacAddr& from, const packets::AnyoneThere& p);
-    static void handle(const util::MacAddr& from, const packets::IAmHere& p);
+    static void handle(const util::MacAddr& from, const packets::SearchProbe& p);
+    static void handle(const util::MacAddr& from, const packets::SearchReply& p);
     static void handle(const util::MacAddr& from, const packets::ConnectRequest& p);
     static void handle(const util::MacAddr& from, const packets::ConnectResponse& p);
-    static void handle(const util::MacAddr& from, const packets::NodeConnected& p);
-    static void handle(const util::MacAddr& from, const packets::NodeDisconnected& p);
+    static void handle(const util::MacAddr& from, const packets::Reset& p);
+    static void handle(const util::MacAddr& from, const packets::ResetOk& p);
+    static void handle(const util::MacAddr& from, const packets::RemoveFromRoutingTable& p);
     static void handle(const util::MacAddr& from, const packets::RootUnreachable& p);
     static void handle(const util::MacAddr& from, const packets::RootReachable& p);
     static void handle(const util::MacAddr& from, const packets::DataFragment& p);

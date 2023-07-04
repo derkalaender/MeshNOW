@@ -7,18 +7,18 @@ namespace meshnow::send {
 
 class NeighborsSingleTry : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
-        util::Lock lock{layout::getMtx()};
+        util::Lock lock{layout::mtx()};
 
-        const auto& layout = layout::getLayout();
+        auto& layout = layout::Layout::get();
 
         // send to children
-        for (const auto& child : layout.children) {
+        for (const auto& child : layout.getChildren()) {
             sink.accept(child.mac, payload);
         }
 
         // send to parent
-        if (layout.parent) {
-            sink.accept(layout.parent->mac, payload);
+        if (auto& parent = layout.getParent()) {
+            sink.accept(parent->mac, payload);
         }
     }
 };
@@ -30,13 +30,13 @@ std::unique_ptr<SendBehavior> meshnow::send::SendBehavior::neighborsSingleTry() 
 class Parent : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
-        util::Lock lock{layout::getMtx()};
+        util::Lock lock{layout::mtx()};
 
-        const auto& layout = layout::getLayout();
+        auto& layout = layout::Layout::get();
 
         // send to parent
-        if (layout.parent) {
-            sink.accept(layout.parent->mac, payload);
+        if (auto& parent = layout.getParent()) {
+            sink.accept(parent->mac, payload);
         }
     }
 };
@@ -46,12 +46,12 @@ std::unique_ptr<SendBehavior> SendBehavior::parent() { return std::make_unique<P
 class Children : public SendBehavior {
     void send(const SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
-        util::Lock lock{layout::getMtx()};
+        util::Lock lock{layout::mtx()};
 
-        const auto& layout = layout::getLayout();
+        auto& layout = layout::Layout::get();
 
         // send to children
-        for (const auto& child : layout.children) {
+        for (const auto& child : layout.getChildren()) {
             sink.accept(child.mac, payload);
         }
     }
@@ -94,58 +94,57 @@ class Resolve : public SendBehavior {
         if (target_ == state::getThisMac()) return;
 
         // TODO retry until success
-        util::Lock lock{layout::getMtx()};
+        util::Lock lock{layout::mtx()};
 
-        const auto& layout = layout::getLayout();
+        auto& layout = layout::Layout::get();
 
         // broadcast
         if (target_.isBroadcast()) {
             // send to everyone except last_hop
 
             // send to children
-            for (const auto& child : layout.children) {
+            for (const auto& child : layout.getChildren()) {
                 if (child.mac != except_) {
                     sink.accept(child.mac, payload);
                 }
             }
 
             // send to parent
-            if (layout.parent && layout.parent->mac != except_) {
-                sink.accept(layout.parent->mac, payload);
+            if (auto& parent = layout.getParent(); parent && parent->mac != except_) {
+                sink.accept(parent->mac, payload);
             }
         } else if (target_.isRoot()) {
             if (state::isRoot()) return;
             // send upstream until root
-            if (layout.parent.has_value()) {
-                sink.accept(layout.parent->mac, payload);
+            if (auto& parent = layout.getParent()) {
+                sink.accept(parent->mac, payload);
             }
-        } else if (layout.parent && layout.parent->mac == target_) {
+        } else if (auto& parent = layout.getParent(); parent && parent->mac == target_) {
             // send upstream to parent
-            sink.accept(layout.parent->mac, payload);
+            sink.accept(parent->mac, payload);
         } else {
             // find child that either is the target or has a child that is the target
-            auto child = std::find_if(layout.children.begin(), layout.children.end(),
-                                      [&](const layout::DirectChild& child) { return contains(child, target_); });
+            auto children = layout.getChildren();
+            auto child = std::find_if(children.begin(), children.end(), [&](const layout::Child& child) {
+                return child.mac == target_ || inRoutingTable(child, target_);
+            });
 
-            if (child != layout.children.end()) {
+            if (child != children.end()) {
                 // send downstream to child
                 sink.accept(child->mac, payload);
             } else {
                 // send upstream to parent
-                if (layout.parent.has_value()) {
-                    sink.accept(layout.parent->mac, payload);
+                if (parent) {
+                    sink.accept(parent->mac, payload);
                 }
             }
         }
     }
 
    private:
-    static bool contains(const auto& child, const util::MacAddr& target) {
-        if (child.mac == target) return true;
-
-        return std::any_of(
-            child.children.begin(), child.children.end(),
-            [&](const layout::IndirectChild& indirect_child) { return contains(indirect_child, target); });
+    static inline bool inRoutingTable(const layout::Child& child, const util::MacAddr& target) {
+        return std::any_of(child.routing_table.begin(), child.routing_table.end(),
+                           [&](const layout::Node node) { return node.mac == target; });
     }
 
     const util::MacAddr target_;

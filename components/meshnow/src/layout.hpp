@@ -4,6 +4,7 @@
 #include <freertos/semphr.h>
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "state.hpp"
@@ -11,60 +12,70 @@
 
 namespace meshnow::layout {
 
-struct Node {
-    explicit Node(const util::MacAddr& mac) : mac(mac) {}
+// TODO
+constexpr auto MAX_CHILDREN = 5;
 
+struct Node {
+    Node() = default;
+    explicit Node(const util::MacAddr& mac) : mac{mac} {}
     util::MacAddr mac;
 };
 
 struct Neighbor : Node {
     using Node::Node;
-
-    TickType_t last_seen{0};
+    TickType_t last_seen{xTaskGetTickCount()};
 };
 
-template <typename T>
-struct NodeTree {
-    std::vector<T> children;
-};
-
-struct IndirectChild : Node, NodeTree<IndirectChild> {
-    using Node::Node;
-};
-
-struct DirectChild : Neighbor, NodeTree<IndirectChild> {
+struct Child : Neighbor {
     using Neighbor::Neighbor;
+    std::vector<Node> routing_table;
 };
 
-struct Layout : Node, NodeTree<DirectChild> {
-    Layout() : Node(state::getThisMac()), NodeTree() {}
+struct Layout {
+   public:
+    static Layout& get();
 
-    std::optional<Neighbor> parent;
+    // delete copy and move
+    Layout(const Layout&) = delete;
+    Layout(Layout&&) = delete;
+    Layout& operator=(const Layout&) = delete;
+    Layout& operator=(Layout&&) = delete;
+
+    /**
+     * Resets the parent, all children, and their respective routing tables.
+     */
+    void reset();
+
+    /**
+     * Returns true iff there is no parent AND no children.
+     */
+    bool isEmpty() const;
+
+    bool hasChildren() const;
+
+    /**
+     * Returns true iff the parent has the given mac OR a there is a child with the given mac OR the given mac is in the
+     * routing table of a child.
+     */
+    bool has(const util::MacAddr& mac) const;
+
+    void addChild(const util::MacAddr& addr) {}
+
+    void removeChild(const util::MacAddr& mac);
+
+    std::optional<Neighbor>& getParent();
+
+    std::span<Child> getChildren();
+
+   private:
+    Layout() = default;
+    ~Layout() = default;
+
+    std::optional<Neighbor> parent_;
+    std::array<Child, MAX_CHILDREN> children_;
+    size_t num_children{0};
 };
 
-esp_err_t init();
-void deinit();
-
-SemaphoreHandle_t getMtx();
-
-Layout& getLayout();
-
-// FUNCTIONS //
-
-bool hasNeighbors();
-
-bool hasNeighbor(const util::MacAddr& mac);
-
-decltype(getLayout().children.begin()) getDirectChild(const util::MacAddr& mac);
-
-bool hasDirectChild(const util::MacAddr& mac);
-
-bool has(const util::MacAddr& mac);
-
-void addDirectChild(const util::MacAddr& mac);
-
-void addIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
-
-void removeIndirectChild(const util::MacAddr& parent, const util::MacAddr& child);
+SemaphoreHandle_t mtx();
 
 }  // namespace meshnow::layout

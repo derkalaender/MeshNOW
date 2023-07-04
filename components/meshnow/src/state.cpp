@@ -1,8 +1,5 @@
 #include "state.hpp"
 
-#include <esp_event.h>
-#include <freertos/FreeRTOS.h>
-
 #include "event_internal.hpp"
 #include "layout.hpp"
 #include "packets.hpp"
@@ -20,6 +17,8 @@ static State state{State::DISCONNECTED_FROM_PARENT};
 void setState(State new_state) {
     if (new_state == state) return;
 
+    state = new_state;
+
     event::StateChangedData data{
         .old_state = state,
         .new_state = new_state,
@@ -29,8 +28,8 @@ void setState(State new_state) {
 
     {
         // don't send root reachable status events downstream if no children
-        util::Lock lock{layout::getMtx()};
-        if (layout::getLayout().children.empty()) return;
+        util::Lock lock{layout::mtx()};
+        if (!layout::Layout::get().hasChildren()) return;
     }
 
     // send to all children downstream

@@ -15,9 +15,9 @@ struct Status {
     std::optional<util::MacAddr> root_mac;
 };
 
-struct AnyoneThere {};
+struct SearchProbe {};
 
-struct IAmHere {};
+struct SearchReply {};
 
 struct ConnectRequest {};
 
@@ -26,14 +26,18 @@ struct ConnectResponse {
     std::optional<util::MacAddr> root_mac;
 };
 
-struct NodeConnected {
-    util::MacAddr parent_mac;
-    util::MacAddr child_mac;
+struct Reset {
+    uint32_t id;
+    util::MacAddr mac;
 };
 
-struct NodeDisconnected {
-    util::MacAddr parent_mac;
-    util::MacAddr child_mac;
+struct ResetOk {
+    uint32_t id;
+    util::MacAddr root_mac;
+};
+
+struct RemoveFromRoutingTable {
+    util::MacAddr mac;
 };
 
 struct RootUnreachable {};
@@ -51,11 +55,11 @@ struct DataFragment {
     util::Buffer data;
 };
 
-using Payload = std::variant<Status, AnyoneThere, IAmHere, ConnectRequest, ConnectResponse, NodeConnected,
-                             NodeDisconnected, RootUnreachable, RootReachable, DataFragment>;
+using Payload = std::variant<Status, SearchProbe, SearchReply, ConnectRequest, ConnectResponse, Reset, ResetOk,
+                             RemoveFromRoutingTable, RootUnreachable, RootReachable, DataFragment>;
 
 struct Packet {
-    uint32_t id;
+    uint32_t seq_num;
     Payload payload;
 };
 

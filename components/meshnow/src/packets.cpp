@@ -45,12 +45,12 @@ static void serialize(S& s, Status& p) {
 }
 
 template <typename S>
-static void serialize(S&, AnyoneThere&) {
+static void serialize(S&, SearchProbe&) {
     // no data
 }
 
 template <typename S>
-static void serialize(S&, IAmHere&) {
+static void serialize(S&, SearchReply&) {
     // no data
 }
 
@@ -68,15 +68,20 @@ static void serialize(S& s, ConnectResponse& p) {
 }
 
 template <typename S>
-static void serialize(S& s, NodeConnected& p) {
-    s.object(p.parent_mac);
-    s.object(p.child_mac);
+static void serialize(S& s, Reset& p) {
+    s.value4b(p.id);
+    s.object(p.mac);
 }
 
 template <typename S>
-static void serialize(S& s, NodeDisconnected& p) {
-    s.object(p.parent_mac);
-    s.object(p.child_mac);
+static void serialize(S& s, ResetOk& p) {
+    s.value4b(p.id);
+    s.object(p.root_mac);
+}
+
+template <typename S>
+static void serialize(S& s, RemoveFromRoutingTable& p) {
+    s.object(p.mac);
 }
 
 template <typename S>
@@ -132,7 +137,7 @@ util::Buffer serialize(const Packet& packet) {
     util::Buffer buffer;
     buffer.reserve(sizeof(WirePacket));
 
-    WirePacket wp{.header = {.magic = MAGIC, .id = packet.id}, .payload = packet.payload};
+    WirePacket wp{.header = {.magic = MAGIC, .id = packet.seq_num}, .payload = packet.payload};
 
     // write
     auto written_size = bitsery::quickSerialization(OutputAdapter{buffer}, wp);

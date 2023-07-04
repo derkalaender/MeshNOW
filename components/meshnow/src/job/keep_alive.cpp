@@ -25,8 +25,8 @@ static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
 // StatusSendJob //
 
 TickType_t StatusSendJob::nextActionAt() const noexcept {
-    util::Lock lock{layout::getMtx()};
-    if (layout::hasNeighbors()) {
+    util::Lock lock{layout::mtx()};
+    if (!layout::Layout::get().isEmpty()) {
         return last_status_sent_ + STATUS_SEND_INTERVAL;
     } else {
         return portMAX_DELAY;
@@ -38,8 +38,8 @@ void StatusSendJob::performAction() {
     if (now - last_status_sent_ < STATUS_SEND_INTERVAL) return;
 
     {
-        util::Lock lock{layout::getMtx()};
-        if (!layout::hasNeighbors()) return;
+        util::Lock lock{layout::mtx()};
+        if (!layout::Layout::get().isEmpty()) return;
     }
 
     sendStatus();
@@ -48,7 +48,7 @@ void StatusSendJob::performAction() {
 }
 
 void StatusSendJob::sendStatus() {
-    ESP_LOGD(TAG, "Sending status beacons to neighborsSingleTry");
+    ESP_LOGD(TAG, "Sending status beacons to neighbors");
     auto state = state::getState();
 
     packets::Status payload{
@@ -73,10 +73,10 @@ void UnreachableTimeoutJob::performAction() {
 
         awaiting_reachable = false;
         {
-            util::Lock lock{layout::getMtx()};
-            auto& layout = layout::getLayout();
-            assert(layout.parent.has_value());  // parent still has to be there
-            layout.parent = std::nullopt;       // remove parent
+            util::Lock lock{layout::mtx()};
+            auto& layout = layout::Layout::get();
+            assert(layout.getParent());         // parent still has to be there
+            layout.getParent() = std::nullopt;  // remove parent
         }
         state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
     }
@@ -108,14 +108,14 @@ TickType_t NeighborCheckJob::nextActionAt() const noexcept {
     auto min_last_seen = portMAX_DELAY;
 
     {
-        util::Lock lock{layout::getMtx()};
-        const auto& layout = layout::getLayout();
+        util::Lock lock{layout::mtx()};
+        auto& layout = layout::Layout::get();
 
-        for (const auto& child : layout.children) {
+        for (const auto& child : layout.getChildren()) {
             min_last_seen = std::min(min_last_seen, child.last_seen);
         }
 
-        if (layout.parent) min_last_seen = std::min(min_last_seen, layout.parent->last_seen);
+        if (auto& parent = layout.getParent()) min_last_seen = std::min(min_last_seen, parent->last_seen);
     }
 
     if (min_last_seen == portMAX_DELAY) {
@@ -127,19 +127,19 @@ TickType_t NeighborCheckJob::nextActionAt() const noexcept {
 }
 
 void NeighborCheckJob::performAction() {
-    util::Lock lock{layout::getMtx()};
+    util::Lock lock{layout::mtx()};
 
-    auto& layout = layout::getLayout();
+    auto& layout = layout::Layout::get();
     auto now = xTaskGetTickCount();
 
     // check for timeouts in all neighbors and remove from the layout if necessary
 
     // direct children
-    for (auto it = layout.children.begin(); it != layout.children.end();) {
+    for (auto it = layout.getChildren().begin(); it != layout.getChildren().end();) {
         if (now - it->last_seen > KEEP_ALIVE_TIMEOUT) {
             auto mac = it->mac;
             ESP_LOGW(TAG, "Direct child " MACSTR " timed out", MAC2STR(mac));
-            it = layout.children.erase(it);
+            layout.removeChild(it->mac);
             // send event upstream
             sendChildDisconnected(mac);
         } else {
@@ -148,9 +148,9 @@ void NeighborCheckJob::performAction() {
     }
 
     // parent
-    if (layout.parent && now - layout.parent->last_seen > KEEP_ALIVE_TIMEOUT) {
-        ESP_LOGW(TAG, "Parent " MACSTR " timed out", MAC2STR(layout.parent->mac));
-        layout.parent = std::nullopt;
+    if (auto& parent = layout.getParent(); parent && now - parent->last_seen > KEEP_ALIVE_TIMEOUT) {
+        ESP_LOGW(TAG, "Parent " MACSTR " timed out", MAC2STR(parent->mac));
+        parent = std::nullopt;
         // update state
         state::setState(state::State::DISCONNECTED_FROM_PARENT);
     }
@@ -159,14 +159,14 @@ void NeighborCheckJob::performAction() {
 void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
     if (state::isRoot()) return;
     {
-        util::Lock lock{layout::getMtx()};
-        if (!layout::getLayout().parent) return;
+        util::Lock lock{layout::mtx()};
+        if (!layout::Layout::get().getParent()) return;
     }
 
     ESP_LOGI(TAG, "Sending child disconnected event upstream");
 
     // send to parent
-    auto payload = packets::NodeDisconnected{.parent_mac = state::getThisMac(), .child_mac = mac};
+    auto payload = packets::RemoveFromRoutingTable{mac};
     send::enqueuePayload(payload, send::SendBehavior::parent(), true);
 }
 
