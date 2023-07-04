@@ -55,9 +55,11 @@ esp_err_t Networking::start() {
     constexpr auto priority = 4;
     constexpr auto cpu = util::CPU::PRO_CPU;
 
+    // TODO adapt stack size, right now it is ridiculously high but works
+
     // start job runner
     {
-        auto settings = util::TaskSettings{"job_runner", 200, priority, cpu};
+        auto settings = util::TaskSettings{"job_runner", 5000, priority, cpu};
         ESP_RETURN_ON_ERROR(job_runner_task_.init(settings, &job::runner_task, std::ref(stop_tasks_),
                                                   std::ref(task_waitbits_), JOB_RUNNER_FINISHED_BIT),
                             TAG, "Failed to create job runner task");
@@ -65,7 +67,7 @@ esp_err_t Networking::start() {
 
     // start send worker
     {
-        auto settings = util::TaskSettings{"send_worker", 200, priority, cpu};
+        auto settings = util::TaskSettings{"send_worker", 5000, priority, cpu};
         ESP_RETURN_ON_ERROR(send_worker_task_.init(settings, &send::worker_task, std::ref(stop_tasks_),
                                                    std::ref(task_waitbits_), SEND_WORKER_FINISHED_BIT),
                             TAG, "Failed to create send worker task");

@@ -7,6 +7,7 @@
 #include <nvs_flash.h>
 
 #include "event_internal.hpp"
+#include "layout.hpp"
 #include "networking.hpp"
 #include "state.hpp"
 #include "util/util.hpp"
@@ -74,13 +75,15 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
     ESP_LOGI(TAG, "Initializing MeshNOW");
 
     ESP_LOGI(TAG, "Checking ESP-IDF network stack is properly initialized...");
-    if (checkWiFi() && checkEspNow() && checkNetif()) {
+    if (checkWiFi() && checkNetif()) {
         ESP_LOGI(TAG, "Check OK!");
     } else {
         ESP_LOGE(TAG, "Check failed!");
         return ESP_ERR_INVALID_STATE;
     }
 
+    // init layout
+    ESP_RETURN_ON_ERROR(meshnow::layout::init(), TAG, "Initializing layout failed");
     // init internal event loop
     ESP_RETURN_ON_ERROR(meshnow::event::init(), TAG, "Initializing internal event loop failed");
 
@@ -127,6 +130,7 @@ esp_err_t meshnow_deinit() {
 
     networking.deinit();
     meshnow::event::deinit();
+    meshnow::layout::deinit();
 
     initialized = false;
 

@@ -8,7 +8,6 @@
 #include "event_internal.hpp"
 #include "job.hpp"
 #include "layout.hpp"
-#include "now_lwip/netif.hpp"
 #include "send/worker.hpp"
 #include "util/event.hpp"
 

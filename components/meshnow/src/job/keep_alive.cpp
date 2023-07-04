@@ -166,7 +166,7 @@ void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
     ESP_LOGI(TAG, "Sending child disconnected event upstream");
 
     // send to parent
-    auto payload = packets::NodeDisconnected{.child_mac = mac};
+    auto payload = packets::NodeDisconnected{.parent_mac = state::getThisMac(), .child_mac = mac};
     send::enqueuePayload(payload, send::SendBehavior::parent(), true);
 }
 
