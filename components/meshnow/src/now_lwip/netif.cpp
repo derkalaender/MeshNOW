@@ -41,8 +41,6 @@ void Netif::setNetifMac(wifi_interface_t wifi_interface) {
     ESP_LOGI(TAG, "Set netif MAC to: " MACSTR, MAC2STR(mac));
 }
 
-using meshnow::lwip::netif::RootNetif;
-
 esp_netif_t* RootNetif::createInterface() {
     ESP_LOGI(TAG, "Creating custom network interface for root node (AP)");
     // inherit from default config
@@ -108,8 +106,6 @@ void RootNetif::set_dhcp_dns() {
     ESP_ERROR_CHECK(esp_netif_set_dns_info(netif_.get(), ESP_NETIF_DNS_MAIN, &dns));
     ESP_LOGI(TAG, "DHCP DNS set");
 }
-
-using meshnow::lwip::netif::NodeNetif;
 
 esp_netif_t* NodeNetif::createInterface() {
     ESP_LOGI(TAG, "Creating custom network interface for node (STA)");

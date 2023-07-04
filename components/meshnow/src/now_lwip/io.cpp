@@ -31,7 +31,7 @@ static void driver_free_rx_buffer_static(esp_netif_iodriver_handle driver_handle
     }
 }
 
-esp_err_t meshnow::lwip::io::postAttachCallback(esp_netif_t* esp_netif, esp_netif_iodriver_handle driver_handle) {
+esp_err_t postAttachCallback(esp_netif_t* esp_netif, esp_netif_iodriver_handle driver_handle) {
     ESP_LOGI(TAG, "Post attach callback called");
     auto driver = static_cast<meshnow::lwip::io::IODriver*>(driver_handle);
     driver->base.netif = esp_netif;
@@ -42,11 +42,9 @@ esp_err_t meshnow::lwip::io::postAttachCallback(esp_netif_t* esp_netif, esp_neti
     return esp_netif_set_driver_config(esp_netif, &driver_ifconfig);
 }
 
-using meshnow::lwip::io::IODriverImpl;
-
 IODriverImpl::IODriverImpl(std::shared_ptr<esp_netif_t> netif) : netif_(std::move(netif)) {}
 
-void meshnow::lwip::io::IODriverImpl::receivedData(const util::Buffer& buffer) {
+void IODriverImpl::receivedData(const util::Buffer& buffer) {
     ESP_LOGD(TAG, "Received data via MeshNOW. Forwarding to Netif layer");
     ESP_LOG_BUFFER_HEXDUMP(TAG, buffer.data(), buffer.size(), ESP_LOG_VERBOSE);
     void* data_ptr = const_cast<void*>(reinterpret_cast<const void*>(buffer.data()));
@@ -113,8 +111,6 @@ void IODriverImpl::sendData(const util::MacAddr& mac, void* buffer, size_t len) 
     //    }
 }
 
-using meshnow::lwip::io::RootIODriver;
-
 esp_err_t RootIODriver::transmit(void* buffer, size_t len) {
     // TODO
 
@@ -138,8 +134,6 @@ esp_err_t RootIODriver::transmit(void* buffer, size_t len) {
     //
     return ESP_OK;
 }
-
-using meshnow::lwip::io::NodeIODriver;
 
 esp_err_t NodeIODriver::transmit(void* buffer, size_t len) {
     // TODO
