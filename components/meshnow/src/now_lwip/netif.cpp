@@ -1,4 +1,4 @@
-#include "now_lwip/netif.hpp"
+#include "netif.hpp"
 
 #include <dhcpserver/dhcpserver.h>
 #include <esp_log.h>
@@ -9,17 +9,14 @@
 
 #include <memory>
 
-#include "constants.hpp"
-#include "error.hpp"
-#include "now_lwip/io.hpp"
+#include "io.hpp"
 #include "state.hpp"
+#include "util/mac.hpp"
+#include "util/util.hpp"
+
+namespace meshnow::lwip::netif {
 
 static const char* TAG = CREATE_TAG("LWIP | Netif");
-
-using meshnow::lwip::netif::Netif;
-
-Netif::Netif(std::shared_ptr<SendWorker> send_worker, std::shared_ptr<layout::Layout> layout)
-    : send_worker_(std::move(send_worker)), layout_(std::move(layout)) {}
 
 void Netif::init() {
     ESP_LOGI(TAG, "Initializing");
@@ -39,10 +36,9 @@ void Netif::start() {
 }
 
 void Netif::setNetifMac(wifi_interface_t wifi_interface) {
-    MAC_ADDR mac;
-    esp_wifi_get_mac(wifi_interface, mac.data());
-    esp_netif_set_mac(netif_.get(), mac.data());
-    ESP_LOGI(TAG, "Set netif MAC to: " MAC_FORMAT, MAC_FORMAT_ARGS(mac));
+    uint8_t* mac = state::getThisMac().addr.data();
+    esp_netif_set_mac(netif_.get(), mac);
+    ESP_LOGI(TAG, "Set netif MAC to: " MACSTR, MAC2STR(mac));
 }
 
 using meshnow::lwip::netif::RootNetif;
@@ -64,7 +60,7 @@ esp_netif_t* RootNetif::createInterface() {
     esp_netif_t* netif = esp_netif_new(&cfg);
     if (netif == nullptr) {
         ESP_LOGE(TAG, "Failed to create custom network interface for root node (AP)");
-        CHECK_THROW(ESP_FAIL);
+        ESP_ERROR_CHECK(ESP_FAIL);  // TODO
     }
 
     ESP_LOGI(TAG, "Custom network interface for root node (AP) created");
@@ -72,7 +68,7 @@ esp_netif_t* RootNetif::createInterface() {
 }
 
 std::unique_ptr<meshnow::lwip::io::IODriverImpl> RootNetif::createIODriverImpl() {
-    return std::make_unique<meshnow::lwip::io::RootIODriver>(netif_, send_worker_, layout_);
+    return std::make_unique<meshnow::lwip::io::RootIODriver>(netif_);
 }
 
 void RootNetif::start() {
@@ -107,9 +103,9 @@ void RootNetif::set_dhcp_dns() {
     dhcps_offer_t dhcps_dns_value = OFFER_DNS;
 
     ESP_LOGI(TAG, "Setting DHCP DNS to: %s", ip4addr_ntoa(reinterpret_cast<ip4_addr_t*>(&dns.ip.u_addr.ip4)));
-    CHECK_THROW(esp_netif_dhcps_option(netif_.get(), ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &dhcps_dns_value,
-                                       sizeof(dhcps_dns_value)));
-    CHECK_THROW(esp_netif_set_dns_info(netif_.get(), ESP_NETIF_DNS_MAIN, &dns));
+    ESP_ERROR_CHECK(esp_netif_dhcps_option(netif_.get(), ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER,
+                                           &dhcps_dns_value, sizeof(dhcps_dns_value)));
+    ESP_ERROR_CHECK(esp_netif_set_dns_info(netif_.get(), ESP_NETIF_DNS_MAIN, &dns));
     ESP_LOGI(TAG, "DHCP DNS set");
 }
 
@@ -130,7 +126,7 @@ esp_netif_t* NodeNetif::createInterface() {
     esp_netif_t* netif = esp_netif_new(&cfg);
     if (netif == nullptr) {
         ESP_LOGE(TAG, "Failed to create custom network interface for node (STA)");
-        CHECK_THROW(ESP_FAIL);
+        ESP_ERROR_CHECK(ESP_FAIL);
     }
 
     ESP_LOGI(TAG, "Custom network interface for node (STA) created");
@@ -138,7 +134,7 @@ esp_netif_t* NodeNetif::createInterface() {
 }
 
 std::unique_ptr<meshnow::lwip::io::IODriverImpl> NodeNetif::createIODriverImpl() {
-    return std::make_unique<meshnow::lwip::io::NodeIODriver>(netif_, send_worker_, layout_);
+    return std::make_unique<meshnow::lwip::io::NodeIODriver>(netif_);
 }
 
 void NodeNetif::start() {
@@ -160,3 +156,5 @@ void NodeNetif::stop() {
     esp_netif_action_stop(netif_.get(), nullptr, 0, nullptr);
     ESP_LOGI(TAG, "Stopped network interface for node (STA)");
 }
+
+}  // namespace meshnow::lwip::netif

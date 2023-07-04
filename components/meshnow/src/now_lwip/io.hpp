@@ -5,20 +5,19 @@
 
 #include <memory>
 
-#include "constants.hpp"
 #include "layout.hpp"
-#include "send/worker.hpp"
+#include "util/mac.hpp"
+#include "util/util.hpp"
 
 namespace meshnow::lwip::io {
 
 class IODriverImpl {
    public:
-    explicit IODriverImpl(std::shared_ptr<esp_netif_t> netif, std::shared_ptr<SendWorker> send_worker,
-                          std::shared_ptr<layout::Layout> layout);
+    explicit IODriverImpl(std::shared_ptr<esp_netif_t> netif);
 
     virtual ~IODriverImpl() = default;
 
-    void receivedData(const Buffer& buffer);
+    void receivedData(const util::Buffer& buffer);
 
     // Only the transmit function needs to be a member and is different for root and node.
     virtual esp_err_t transmit(void* buffer, size_t len) = 0;
@@ -27,7 +26,7 @@ class IODriverImpl {
     /**
      * Enqueues the buffer in the send worker.
      */
-    void sendData(const meshnow::MAC_ADDR& mac, void* buffer, size_t len);
+    void sendData(const util::MacAddr& mac, void* buffer, size_t len);
 
     std::shared_ptr<layout::Layout> layout_;
 
@@ -36,7 +35,6 @@ class IODriverImpl {
     // For all of these, driver_handle is *this.
     // TODO make these noexcept
 
-    std::shared_ptr<SendWorker> send_worker_;
     std::shared_ptr<esp_netif_t> netif_;
 };
 
