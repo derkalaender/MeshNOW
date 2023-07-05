@@ -4,7 +4,7 @@
 
 #include <memory>
 
-#include "receive/worker.hpp"
+#include "receive/receiver.hpp"
 #include "util/task.hpp"
 #include "util/waitbits.hpp"
 
@@ -32,6 +32,10 @@ class Networking {
     void stop();
 
    private:
+    // receiver is initialized here, which sets up everything ESP-NOW related automatically
+    receive::Receiver receiver_;
+
+    // tasks
     util::WaitBits task_waitbits_;
     bool stop_tasks_{false};
     util::Task job_runner_task_;

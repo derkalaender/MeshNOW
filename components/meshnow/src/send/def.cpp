@@ -6,7 +6,7 @@
 namespace meshnow::send {
 
 class NeighborsSingleTry : public SendBehavior {
-    void send(const SendSink& sink, const packets::Payload& payload) override {
+    void send(SendSink& sink, const packets::Payload& payload) override {
         util::Lock lock{layout::mtx()};
 
         auto& layout = layout::Layout::get();
@@ -28,7 +28,7 @@ std::unique_ptr<SendBehavior> meshnow::send::SendBehavior::neighborsSingleTry() 
 }
 
 class Parent : public SendBehavior {
-    void send(const SendSink& sink, const packets::Payload& payload) override {
+    void send(SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
         util::Lock lock{layout::mtx()};
 
@@ -44,7 +44,7 @@ class Parent : public SendBehavior {
 std::unique_ptr<SendBehavior> SendBehavior::parent() { return std::make_unique<Parent>(); }
 
 class Children : public SendBehavior {
-    void send(const SendSink& sink, const packets::Payload& payload) override {
+    void send(SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
         util::Lock lock{layout::mtx()};
 
@@ -63,7 +63,7 @@ class Direct : public SendBehavior {
    public:
     explicit Direct(const util::MacAddr& dest_addr) : dest_addr_(dest_addr) {}
 
-    void send(const SendSink& sink, const packets::Payload& payload) override {
+    void send(SendSink& sink, const packets::Payload& payload) override {
         // don't do anything if we are the target
         if (dest_addr_ == state::getThisMac()) return;
 
@@ -89,7 +89,7 @@ class Resolve : public SendBehavior {
      * 4. If target is an (indirect) child, send downstream to correct child
      * 5. Otherwise, target is not in layout so we send upstream to parent
      */
-    void send(const SendSink& sink, const packets::Payload& payload) override {
+    void send(SendSink& sink, const packets::Payload& payload) override {
         // don't do anything if we are the target
         if (target_ == state::getThisMac()) return;
 

@@ -39,44 +39,44 @@ extern "C" void app_main(void) {
 
     bool is_root = my_mac == root;
 
-    while (true) {
-        ESP_LOGI(TAG, "Initializing MeshNOW");
+    //    while (true) {
+    ESP_LOGI(TAG, "Initializing MeshNOW");
 
-        ESP_LOGI(TAG, "BEGIN. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
-                 esp_get_free_heap_size());
+    ESP_LOGI(TAG, "BEGIN. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
+             esp_get_free_heap_size());
 
-        {
-            meshnow_config_t config{.root = is_root,
-                                    .router_config = {
-                                        .should_connect = false,
-                                        .sta_config = &sta_config,
-                                    }};
-            meshnow_init(&config);
-        }
-        ESP_LOGI(TAG, "MeshNOW initialized");
-
-        ESP_LOGI(TAG, "INITIALIZED. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
-                 esp_get_free_heap_size());
-
-        ESP_LOGI(TAG, "Starting as %s!", is_root ? "root" : "node");
-
-        meshnow_start();
-
-        ESP_LOGI(TAG, "STARTED. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
-                 esp_get_free_heap_size());
-
-        ESP_LOGI(TAG, "Stopping MeshNOW");
-
-        meshnow_stop();
-
-        ESP_LOGI(TAG, "STOPPED. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
-                 esp_get_free_heap_size());
-
-        ESP_LOGI(TAG, "Deinitializing MeshNOW");
-
-        meshnow_deinit();
-
-        ESP_LOGI(TAG, "END. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
-                 esp_get_free_heap_size());
+    {
+        meshnow_config_t config{.root = is_root,
+                                .router_config = {
+                                    .should_connect = false,
+                                    .sta_config = &sta_config,
+                                }};
+        meshnow_init(&config);
     }
+    ESP_LOGI(TAG, "MeshNOW initialized");
+
+    ESP_LOGI(TAG, "INITIALIZED. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
+             esp_get_free_heap_size());
+
+    ESP_LOGI(TAG, "Starting as %s!", is_root ? "root" : "node");
+
+    meshnow_start();
+
+    ESP_LOGI(TAG, "STARTED. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
+             esp_get_free_heap_size());
+
+    //        ESP_LOGI(TAG, "Stopping MeshNOW");
+    //
+    //        meshnow_stop();
+    //
+    //        ESP_LOGI(TAG, "STOPPED. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
+    //                 esp_get_free_heap_size());
+    //
+    //        ESP_LOGI(TAG, "Deinitializing MeshNOW");
+    //
+    //        meshnow_deinit();
+    //
+    //        ESP_LOGI(TAG, "END. Heap watermark: %lu | Current heap: %lu", esp_get_minimum_free_heap_size(),
+    //                 esp_get_free_heap_size());
+    //    }
 }

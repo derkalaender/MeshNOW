@@ -41,7 +41,7 @@ class SendBehavior {
      * @param sink The sink to send the payload to.
      * @param payload The payload to send.
      */
-    virtual void send(const SendSink& sink, const packets::Payload& payload) = 0;
+    virtual void send(SendSink& sink, const packets::Payload& payload) = 0;
 };
 
 }  // namespace meshnow::send

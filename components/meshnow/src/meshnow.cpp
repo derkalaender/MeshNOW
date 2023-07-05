@@ -7,7 +7,6 @@
 #include <nvs_flash.h>
 
 #include "event_internal.hpp"
-#include "layout.hpp"
 #include "networking.hpp"
 #include "state.hpp"
 #include "util/util.hpp"
@@ -33,19 +32,19 @@ static bool checkWiFi() {
     return true;
 }
 
-static bool checkEspNow() {
-    // check if ESP-NOW is initialized
-    // do dummy operation
-    esp_now_peer_info_t peer;
-    if (esp_now_fetch_peer(true, &peer) == ESP_ERR_ESPNOW_NOT_INIT) {
-        ESP_LOGE(TAG, "ESP-NOW is not initialized!");
-        return false;
-    } else {
-        ESP_LOGI(TAG, "ESP-NOW OK!");
-        ESP_LOGI(TAG, "You may register the MeshNow callbacks now...");
-    }
-    return true;
-}
+// static bool checkEspNow() {
+//     // check if ESP-NOW is initialized
+//     // do dummy operation
+//     esp_now_peer_info_t peer;
+//     if (esp_now_fetch_peer(true, &peer) == ESP_ERR_ESPNOW_NOT_INIT) {
+//         ESP_LOGE(TAG, "ESP-NOW is not initialized!");
+//         return false;
+//     } else {
+//         ESP_LOGI(TAG, "ESP-NOW OK!");
+//         ESP_LOGI(TAG, "You may register the MeshNow callbacks now...");
+//     }
+//     return true;
+// }
 
 static bool checkNetif() {
     ESP_LOGW(TAG,

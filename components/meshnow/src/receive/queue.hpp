@@ -32,7 +32,7 @@ void deinit();
  *
  * @param item Item to push.
  */
-void push(const Item& item);
+void push(Item&& item);
 
 /**
  * Pops an item from the receive queue.
