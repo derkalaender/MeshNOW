@@ -8,5 +8,5 @@ idf_component_register(
         INCLUDE_DIRS "include"
         PRIV_INCLUDE_DIRS "src"
         REQUIRES esp_wifi
-        PRIV_REQUIRES nvs_flash lwip bitsery
+        PRIV_REQUIRES nvs_flash lwip bitsery espnow_multi
 )

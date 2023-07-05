@@ -20,7 +20,7 @@ class SendSink {
      * @param payload The payload to send.
      * @return True, iff sending was successful.
      */
-    virtual bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) const = 0;
+    virtual bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) = 0;
 };
 
 /**
