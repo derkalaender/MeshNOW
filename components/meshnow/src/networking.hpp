@@ -33,7 +33,7 @@ class Networking {
 
    private:
     // receiver is initialized here, which sets up everything ESP-NOW related automatically
-    receive::Receiver receiver_;
+    std::shared_ptr<receive::Receiver> receiver_;
 
     // tasks
     util::WaitBits task_waitbits_;

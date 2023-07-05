@@ -69,8 +69,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::SearchProbe
         util::Lock lock{layout::mtx()};
         auto& layout = layout::Layout::get();
 
-        // we must have a parent by this point
-        assert(layout.getParent());
+        // we must have a parent by this point or be root
+        assert(state::isRoot() || layout.getParent());
 
         // check if node is already present in layout
         // should prevent most loops from forming
@@ -90,8 +90,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::SearchReply
         util::Lock lock(layout::mtx());
         auto& layout = layout::Layout::get();
 
-        // we must not have a parent by this point
-        assert(!layout.getParent());
+        // cannot have a parent or be the root
+        assert(!state::isRoot() && !layout.getParent());
 
         // check if node is already present in layout
         // should prevent most loops from forming
@@ -119,8 +119,9 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectRequ
     {
         util::Lock lock{layout::mtx()};
         auto& layout = layout::Layout::get();
-        // we must have a parent by this point
-        assert(layout.getParent());
+
+        // we must have a parent by this point or be root
+        assert(state::isRoot() || layout.getParent());
 
         // check if node is already present in layout
         // should prevent most loops from forming

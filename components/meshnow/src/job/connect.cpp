@@ -114,6 +114,11 @@ void ConnectJob::SearchPhase::event_handler(void *event_handler_arg, esp_event_b
 
     auto &parent_infos = search->job_.parent_infos_;
 
+    // if we have found the first parent, remember the time
+    if (parent_infos.empty()) {
+        search->first_parent_found_time_ = xTaskGetTickCount();
+    }
+
     // check if we already know this parent
     auto it = std::find_if(parent_infos.begin(), parent_infos.end(),
                            [&parent_mac](const ParentInfo &info) { return info.mac_addr == parent_mac; });
@@ -141,11 +146,6 @@ void ConnectJob::SearchPhase::event_handler(void *event_handler_arg, esp_event_b
             // just add the new parent
             parent_infos.push_back(ParentInfo{parent_mac, parent_rssi});
         }
-    }
-
-    // if we have found the first parent, remember the time
-    if (parent_infos.size() == 1) {
-        search->first_parent_found_time_ = xTaskGetTickCount();
     }
 }
 

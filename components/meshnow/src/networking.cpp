@@ -28,6 +28,10 @@ esp_err_t Networking::init() {
     ESP_RETURN_ON_ERROR(task_waitbits_.init(), TAG, "Failed to initialize task waitbits");
     ESP_RETURN_ON_ERROR(fragments::init(), TAG, "Failed to initialize fragment reassembly");
 
+    // init receiver
+    receiver_ = std::make_shared<receive::Receiver>();
+    espnow_multi::EspnowMulti::getInstance()->addReceiver(receiver_);
+
     //    // create netif
     //    if (state_->isRoot()) {
     //        netif_ = std::make_shared<meshnow::lwip::netif::RootNetif>(send_worker_, layout_);

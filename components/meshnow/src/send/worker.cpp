@@ -16,17 +16,16 @@ static constexpr auto MIN_TIMEOUT = pdMS_TO_TICKS(500);
 /**
  * Sends packet via ESP-NOW. Interface and impl are separate to achieve low coupling and prevent circular dependency.
  */
-class SendSinkImpl : public SendSink, espnow_multi::EspnowInterface {
+class SendSinkImpl : public SendSink,
+                     public espnow_multi::EspnowSender,
+                     public std::enable_shared_from_this<SendSinkImpl> {
    public:
     void sendCallback(const uint8_t* peer_addr, esp_now_send_status_t status) override {}
-
-    // not used
-    void receiveCallback(const esp_now_recv_info_t* esp_now_info, const uint8_t* data, int data_len) override {}
 
     bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) override {
         // serialize
         auto buffer = packets::serialize(packets::Packet{0, payload});
-        if (send(dest_addr.addr.data(), buffer.data(), buffer.size()) != ESP_OK) {
+        if (multi_instance_->send(shared_from_this(), dest_addr.addr.data(), buffer.data(), buffer.size()) != ESP_OK) {
             ESP_LOGE(TAG, "Failed to send packet!");
             return false;
         } else {
@@ -41,7 +40,10 @@ class SendSinkImpl : public SendSink, espnow_multi::EspnowInterface {
 void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_worker_finished_bit) {
     ESP_LOGI(TAG, "Starting!");
 
-    SendSinkImpl sink;
+    // create sink
+    auto sink = std::make_shared<SendSinkImpl>();
+
+    sink->accept(util::MacAddr::broadcast(), packets::SearchProbe{});  // TODO remove
 
     while (!should_stop) {
         auto item = popItem(MIN_TIMEOUT);
@@ -51,7 +53,7 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
         }
 
         // delegate sending to send behavior
-        item->behavior->send(sink, item->payload);
+        item->behavior->send(*sink, item->payload);
     }
 
     ESP_LOGI(TAG, "Stopping!");
