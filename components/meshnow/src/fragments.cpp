@@ -23,7 +23,10 @@ class ReassemblyData {
     explicit ReassemblyData(uint16_t total_size)
         : data_(total_size),
           // rounds up to the next integer
-          num_fragments((total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE) {}
+          num_fragments((total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE) {
+        // reserve buffer beforehand
+        data_.reserve(total_size);
+    }
 
     void insert(uint8_t frag_num, const util::Buffer& data) {
         // set bit to indicate this fragment was received

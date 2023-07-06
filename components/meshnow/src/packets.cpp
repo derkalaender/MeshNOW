@@ -60,11 +60,8 @@ static void serialize(S&, ConnectRequest&) {
 }
 
 template <typename S>
-static void serialize(S& s, ConnectResponse& p) {
-    s.boolValue(p.accept);
-    if (p.accept) {
-        s.object(*p.root_mac);
-    }
+static void serialize(S& s, ConnectOk& p) {
+    s.object(p.root_mac);
 }
 
 template <typename S>

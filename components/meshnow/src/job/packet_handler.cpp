@@ -13,15 +13,75 @@ namespace meshnow::job {
 
 static constexpr auto TAG = CREATE_TAG("PacketHandler");
 
-void PacketHandler::handlePacket(const util::MacAddr& from, const packets::Packet& packet) {
+void PacketHandler::handlePacket(const util::MacAddr& from, int rssi, const packets::Packet& packet) {
     // TODO handle duplicate packets
     // TODO update routing table
 
     auto payload = packet.payload;
 
     // simply visit the corresponding overload
-    std::visit([&](const auto& p) { handle(from, p); }, payload);
+    std::visit(
+        [&](const auto& p) {
+            // little hack to check at compiletime if specific handle function also accepts the rssi value
+            if constexpr (requires {
+                              { handle(util::MacAddr::root(), rssi, p) };
+                          }) {
+                handle(from, rssi, p);
+            } else {
+                handle(from, p);
+            }
+        },
+        payload);
 }
+
+/**
+ * Helper functions
+ */
+namespace {
+
+inline layout::Layout& layout() { return layout::Layout::get(); }
+
+inline bool reachesRoot() {
+    if (state::getState() == state::State::REACHES_ROOT) {
+        assert((state::isRoot() || layout().getParent()) && "By this point, must have either a parent or be the root");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+inline bool knowsNode(const util::MacAddr& mac) { return layout().has(mac); }
+
+inline bool isParent(const util::MacAddr& mac) {
+    auto& parent = layout().getParent();
+    if (parent) {
+        assert(state::getState() != state::State::DISCONNECTED_FROM_PARENT &&
+               "Must not be disconnected from parent if there is a parent");
+        return parent->mac == mac;
+    }
+    return false;
+}
+
+inline bool isChild(const util::MacAddr& mac) {
+    auto children = layout().getChildren();
+    return std::any_of(children.begin(), children.end(), [&](const layout::Child& child) { return child.mac == mac; });
+}
+
+inline bool isNeighbor(const util::MacAddr& mac) { return isParent(mac) || isChild(mac); }
+
+inline bool canAcceptNewChild() { return layout().getChildren().size() < layout::MAX_CHILDREN; }
+
+inline bool disconnected() {
+    if (state::getState() == state::State::DISCONNECTED_FROM_PARENT) {
+        assert(!state::isRoot() && "Cannot be disconnected and root at the same time");
+        assert(!layout().getParent() && "Cannot have a parent by this point");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+}  // namespace
 
 // HANDLERS //
 
@@ -59,96 +119,52 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) 
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::SearchProbe& p) {
-    // TODO check if we reached the maximum number of children
-    // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
-    if (state::getState() != state::State::REACHES_ROOT) return;
-
-    auto& layout = layout::Layout::get();
-
-    // we must have a parent by this point or be root
-    assert(state::isRoot() || layout.getParent());
-
-    // check if node is already present in layout
-    // should prevent most loops from forming
-    if (layout.has(from)) return;
+    if (!reachesRoot()) return;
+    if (knowsNode(from)) return;
+    if (!canAcceptNewChild()) return;
 
     // send reply
     ESP_LOGI(TAG, "Sending I Am Here");
     send::enqueuePayload(packets::SearchReply{}, send::SendBehavior::direct(from), true);
 }
 
-void PacketHandler::handle(const util::MacAddr& from, const packets::SearchReply&) {
-    // only process if we are disconnected
-    if (state::getState() != state::State::DISCONNECTED_FROM_PARENT) return;
-
-    auto& layout = layout::Layout::get();
-
-    // cannot have a parent or be the root
-    assert(!state::isRoot() && !layout.getParent());
-
-    // check if node is already present in layout
-    // should prevent most loops from forming
-    if (layout.has(from)) return;
+void PacketHandler::handle(const util::MacAddr& from, int rssi, const packets::SearchReply&) {
+    if (!disconnected()) return;
+    if (knowsNode(from)) return;
 
     // fire event to let connect job know
-    // TODO GET ACTUAL RSSI VALUE
     auto mac = new util::MacAddr(from);
     event::ParentFoundData data{
         .mac = mac,
-        .rssi = 0,
+        .rssi = rssi,
     };
     event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::PARENT_FOUND, &data, sizeof(data));
     delete mac;
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectRequest& p) {
-    // TODO check if we reached the maximum number of children
-    // only offer connection if we have a parent and can reach the root -> disconnected islands won't grow
-    if (state::getState() != state::State::REACHES_ROOT) return;
-
-    bool added{false};
-
-    auto& layout = layout::Layout::get();
-
-    // we must have a parent by this point or be root
-    assert(state::isRoot() || layout.getParent());
-
-    // check if node is already present in layout
-    // should prevent most loops from forming
-    if (layout.has(from)) return;
+    if (!reachesRoot()) return;
+    if (knowsNode(from)) return;
+    if (!canAcceptNewChild()) return;
 
     // add to layout
-    layout.addChild(from);
-    added = true;
+    layout().addChild(from);
 
     // send reply
     ESP_LOGI(TAG, "Sending Connect Response");
-    send::enqueuePayload(
-        packets::ConnectResponse{.accept = added,
-                                 .root_mac = added ? std::make_optional(state::getRootMac()) : std::nullopt},
-        send::SendBehavior::direct(from), true);
+    send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::SendBehavior::direct(from), true);
 }
 
-void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResponse& p) {
-    // only process if we are disconnected
-    if (state::getState() != state::State::DISCONNECTED_FROM_PARENT) return;
-
-    auto& layout = layout::Layout::get();
-
-    // we must not have a parent by this point
-    assert(!layout.getParent());
-
-    // check if node is already present in layout
-    // should prevent most loops from forming
-    if (layout.has(from)) return;
+void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectOk& p) {
+    if (!disconnected()) return;
+    if (knowsNode(from)) return;
 
     // fire event to let connect job know
     auto parent_mac = new util::MacAddr(from);
-    auto root_mac = new std::optional(p.root_mac);
+    auto root_mac = new util::MacAddr(p.root_mac);
     event::GotConnectResponseData data{
         .mac = parent_mac,
         .root_mac = root_mac,
-        .accepted = p.accept,
     };
     event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::GOT_CONNECT_RESPONSE, &data, sizeof(data));
     delete parent_mac;
@@ -156,9 +172,10 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResp
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::ResetRequest& p) {
-    auto& layout = layout::Layout::get();
+    if (isParent(from)) return;
+    if (!isChild(from)) return;
 
-    // ignore if packet was sent by parent (should never happen)
+    auto& layout = layout::Layout::get();
 
     // forward upstream
     if (layout.getParent()) {
@@ -172,14 +189,17 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ResetReques
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::ResetOk& p) {
+    if (!isParent(from)) return;
+    if (isChild(from)) return;
+
     // TODO
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::RemoveFromRoutingTable& p) {
-    auto& layout = layout::Layout::get();
+    if (isParent(from)) return;
+    if (!isChild(from)) return;
 
-    // ignore if packet was sent by parent (should never happen)
-    if (const auto& parent = layout.getParent(); parent && parent->mac == from) return;
+    auto& layout = layout::Layout::get();
 
     // forward upstream
     if (layout.getParent()) {
@@ -198,29 +218,22 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RemoveFromR
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::RootUnreachable& p) {
-    if (state::getState() != state::State::REACHES_ROOT) return;
-    const auto& parent = layout::Layout::get().getParent();
-    // we must have a parent by this point
-    assert(parent);
-    if (parent->mac != from) return;
+    if (!reachesRoot()) return;
+    if (!isParent(from)) return;
+    if (isChild(from)) return;
 
     state::setState(state::State::CONNECTED_TO_PARENT);
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::RootReachable& p) {
+    if (!isParent(from)) return;
     if (state::getState() != state::State::CONNECTED_TO_PARENT) return;
-    const auto& parent = layout::Layout::get().getParent();
-    // we must have a parent by this point
-    assert(parent);
-    if (parent->mac != from) return;
 
     state::setState(state::State::REACHES_ROOT);
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::DataFragment& p) {
-    // check if from a neighbor
-    const auto& layout = layout::Layout::get();
-    if (!layout.has(from)) return;
+    if (!isNeighbor(from)) return;
 
     bool forward{false};
     bool consume{false};

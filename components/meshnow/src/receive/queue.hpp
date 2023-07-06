@@ -4,6 +4,7 @@
 #include <freertos/portmacro.h>
 
 #include <optional>
+#include <utility>
 
 #include "packets.hpp"
 #include "util/mac.hpp"
@@ -12,8 +13,10 @@
 namespace meshnow::receive {
 
 struct Item {
+    Item(util::MacAddr from, int rssi, packets::Packet packet) : from(from), rssi(rssi), packet(std::move(packet)) {}
+
     util::MacAddr from;
-    util::MacAddr to;
+    int rssi;
     packets::Packet packet;
 };
 

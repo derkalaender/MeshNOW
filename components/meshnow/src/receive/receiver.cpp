@@ -18,9 +18,9 @@ void Receiver::receiveCallback(const esp_now_recv_info_t *esp_now_info, const ui
 
     // create item
     Item item{
-        .from = util::MacAddr(esp_now_info->src_addr),
-        .to = util::MacAddr(esp_now_info->des_addr),
-        .packet = std::move(*packet),
+        util::MacAddr(esp_now_info->src_addr),
+        esp_now_info->rx_ctrl->rssi,
+        std::move(*packet),
     };
 
     // push item to queue

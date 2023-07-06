@@ -21,9 +21,8 @@ struct SearchReply {};
 
 struct ConnectRequest {};
 
-struct ConnectResponse {
-    bool accept;
-    std::optional<util::MacAddr> root_mac;
+struct ConnectOk {
+    util::MacAddr root_mac;
 };
 
 struct ResetRequest {
@@ -55,7 +54,7 @@ struct DataFragment {
     util::Buffer data;
 };
 
-using Payload = std::variant<Status, SearchProbe, SearchReply, ConnectRequest, ConnectResponse, ResetRequest, ResetOk,
+using Payload = std::variant<Status, SearchProbe, SearchReply, ConnectRequest, ConnectOk, ResetRequest, ResetOk,
                              RemoveFromRoutingTable, RootUnreachable, RootReachable, DataFragment>;
 
 struct Packet {
