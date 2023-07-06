@@ -31,7 +31,7 @@ class SendBehavior {
     static std::unique_ptr<SendBehavior> neighborsSingleTry();
     static std::unique_ptr<SendBehavior> parent();
     static std::unique_ptr<SendBehavior> children();
-    static std::unique_ptr<SendBehavior> direct(const util::MacAddr& dest_addr);
+    static std::unique_ptr<SendBehavior> directSingleTry(const util::MacAddr& dest_addr);
     static std::unique_ptr<SendBehavior> resolve(const util::MacAddr& target, const util::MacAddr& last_hop);
 
     virtual ~SendBehavior() = default;

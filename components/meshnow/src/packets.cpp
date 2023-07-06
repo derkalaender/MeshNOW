@@ -3,6 +3,7 @@
 #include <bitsery/adapter/buffer.h>
 #include <bitsery/bitsery.h>
 #include <bitsery/deserializer.h>
+#include <bitsery/ext/std_optional.h>
 #include <bitsery/ext/std_variant.h>
 #include <bitsery/traits/array.h>
 #include <bitsery/traits/vector.h>
@@ -39,9 +40,8 @@ namespace meshnow::packets {
 template <typename S>
 static void serialize(S& s, Status& p) {
     s.value1b(p.state);
-    if (p.state == state::State::REACHES_ROOT) {
-        s.object(*p.root_mac);
-    }
+    // TODO optimize with custom extension
+    s.ext(p.root, bitsery::ext::StdOptional{});
 }
 
 template <typename S>
@@ -61,24 +61,24 @@ static void serialize(S&, ConnectRequest&) {
 
 template <typename S>
 static void serialize(S& s, ConnectOk& p) {
-    s.object(p.root_mac);
+    s.object(p.root);
 }
 
 template <typename S>
 static void serialize(S& s, ResetRequest& p) {
     s.value4b(p.id);
-    s.object(p.mac);
+    s.object(p.from);
 }
 
 template <typename S>
 static void serialize(S& s, ResetOk& p) {
     s.value4b(p.id);
-    s.object(p.root_mac);
+    s.object(p.to);
 }
 
 template <typename S>
 static void serialize(S& s, RemoveFromRoutingTable& p) {
-    s.object(p.mac);
+    s.object(p.to_remove);
 }
 
 template <typename S>
@@ -88,16 +88,17 @@ static void serialize(S&, RootUnreachable&) {
 
 template <typename S>
 static void serialize(S& s, RootReachable& p) {
-    s.object(p.root_mac);
+    s.object(p.root);
 }
 
 template <typename S>
 static void serialize(S& s, DataFragment& p) {
-    s.object(p.source);
-    s.object(p.target);
+    s.object(p.from);
+    s.object(p.to);
     s.value4b(p.id);
     s.value1b(p.frag_num);
     s.value2b(p.total_size);
+    // TODO optimize with custom extension
     s.container1b(p.data, MAX_FRAG_PAYLOAD_SIZE);
 }
 
@@ -134,7 +135,7 @@ util::Buffer serialize(const Packet& packet) {
     util::Buffer buffer;
     buffer.reserve(sizeof(WirePacket));
 
-    WirePacket wp{.header = {.magic = MAGIC, .id = packet.seq_num}, .payload = packet.payload};
+    WirePacket wp{.header = {.magic = MAGIC, .id = packet.seq}, .payload = packet.payload};
 
     // write
     auto written_size = bitsery::quickSerialization(OutputAdapter{buffer}, wp);

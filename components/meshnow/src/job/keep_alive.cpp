@@ -15,7 +15,7 @@ static constexpr auto TAG = CREATE_TAG("KeepAlive");
 static constexpr auto STATUS_SEND_INTERVAL = pdMS_TO_TICKS(500);
 
 // consider a neighbor dead if no beacon was received for 3s
-static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(2000);
+static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
 
 // disconnect from parent if the root was unreachable for 10s
 static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
@@ -34,7 +34,7 @@ void StatusSendJob::performAction() {
     auto now = xTaskGetTickCount();
     if (now - last_status_sent_ < STATUS_SEND_INTERVAL) return;
 
-    if (!layout::Layout::get().isEmpty()) return;
+    if (layout::Layout::get().isEmpty()) return;
 
     sendStatus();
 
@@ -47,7 +47,7 @@ void StatusSendJob::sendStatus() {
 
     packets::Status payload{
         .state = state,
-        .root_mac = state == state::State::REACHES_ROOT ? std::make_optional(state::getRootMac()) : std::nullopt,
+        .root = state == state::State::REACHES_ROOT ? std::make_optional(state::getRootMac()) : std::nullopt,
     };
 
     send::enqueuePayload(payload, send::SendBehavior::neighborsSingleTry(), true);
@@ -65,32 +65,40 @@ void UnreachableTimeoutJob::performAction() {
     if (awaiting_reachable && now - mesh_unreachable_since_ > ROOT_UNREACHABLE_TIMEOUT) {
         // timeout from waiting for a path to the root
 
+        ESP_LOGI(TAG, "Timeout from waiting for a path to the root");
+
         awaiting_reachable = false;
 
-        auto& layout = layout::Layout::get();
-        assert(layout.getParent());         // parent still has to be there
-        layout.getParent() = std::nullopt;  // remove parent
-
-        state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
+        // if we haven't lost the parent by now because of a Keep Alive timeout, remove it
+        if (auto& parent = layout::Layout::get().getParent()) {
+            parent = std::nullopt;
+            state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
+        }
     }
 }
 
 void UnreachableTimeoutJob::event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
     if (event_base != event::MESHNOW_INTERNAL || event_id != event::InternalEvent::STATE_CHANGED) return;
 
-    auto job = static_cast<UnreachableTimeoutJob*>(arg);
-    auto new_state = static_cast<event::StateChangedData*>(event_data)->new_state;
+    auto& job = *static_cast<UnreachableTimeoutJob*>(arg);
+    auto& data = *static_cast<event::StateChangedData*>(event_data);
+    auto new_state = data.new_state;
+    auto old_state = data.old_state;
 
-    if (job->awaiting_reachable && new_state == state::State::REACHES_ROOT) {
-        // root is reachable again
-        ESP_LOGI(TAG, "Root is reachable again");
-        job->awaiting_reachable = false;
-        job->mesh_unreachable_since_ = 0;
-    } else if (!job->awaiting_reachable && new_state != state::State::REACHES_ROOT) {
-        // root became unreachable
-        ESP_LOGI(TAG, "Root became unreachable");
-        job->awaiting_reachable = true;
-        job->mesh_unreachable_since_ = xTaskGetTickCount();
+    if (job.awaiting_reachable) {
+        if (old_state == state::State::CONNECTED_TO_PARENT && new_state == state::State::REACHES_ROOT) {
+            // root is reachable again
+            ESP_LOGI(TAG, "Root is reachable again");
+        }
+        job.awaiting_reachable = false;
+        job.mesh_unreachable_since_ = 0;
+    } else {
+        if (old_state == state::State::REACHES_ROOT && new_state == state::State::CONNECTED_TO_PARENT) {
+            // root became unreachable
+            ESP_LOGI(TAG, "Root became unreachable");
+            job.awaiting_reachable = true;
+            job.mesh_unreachable_since_ = xTaskGetTickCount();
+        }
     }
 }
 

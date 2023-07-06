@@ -89,7 +89,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) 
     auto& layout = layout::Layout::get();
 
     // is parent?
-    if (auto parent = layout.getParent(); parent && parent->mac == from) {
+    if (auto& parent = layout.getParent(); parent && parent->mac == from) {
         // got status from parent
         parent->last_seen = xTaskGetTickCount();
         switch (p.state) {
@@ -99,9 +99,11 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::Status& p) 
                 break;
             }
             case state::State::REACHES_ROOT: {
-                assert(p.root_mac.has_value());
+                // this should never be the case, but we never know with malicious packets
+                if (!p.root.has_value()) return;
+
                 // set root mac
-                state::setRootMac(p.root_mac.value());
+                state::setRootMac(p.root.value());
                 // set state
                 state::setState(state::State::REACHES_ROOT);
                 break;
@@ -124,8 +126,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::SearchProbe
     if (!canAcceptNewChild()) return;
 
     // send reply
-    ESP_LOGI(TAG, "Sending I Am Here");
-    send::enqueuePayload(packets::SearchReply{}, send::SendBehavior::direct(from), true);
+    ESP_LOGV(TAG, "Sending I Am Here");
+    send::enqueuePayload(packets::SearchReply{}, send::SendBehavior::directSingleTry(from), true);
 }
 
 void PacketHandler::handle(const util::MacAddr& from, int rssi, const packets::SearchReply&) {
@@ -152,7 +154,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectRequ
 
     // send reply
     ESP_LOGI(TAG, "Sending Connect Response");
-    send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::SendBehavior::direct(from), true);
+    send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::SendBehavior::directSingleTry(from), true);
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectOk& p) {
@@ -161,7 +163,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectOk& 
 
     // fire event to let connect job know
     auto parent_mac = new util::MacAddr(from);
-    auto root_mac = new util::MacAddr(p.root_mac);
+    auto root_mac = new util::MacAddr(p.root);
     event::GotConnectResponseData data{
         .mac = parent_mac,
         .root_mac = root_mac,
@@ -177,14 +179,32 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ResetReques
 
     auto& layout = layout::Layout::get();
 
+    // go through every child first
+    for (auto& child : layout.getChildren()) {
+        // if the child is the one that sent the reset request, reset its sequence number
+        if (child.mac == from) {
+            child.seq = 0;
+            break;
+        }
+
+        // otherwise check the routing table and reset there if necessary
+        for (auto& entry : child.routing_table) {
+            if (entry.mac == from) {
+                entry.seq = 0;
+                break;
+            }
+        }
+    }
+
     // forward upstream
     if (layout.getParent()) {
         send::enqueuePayload(p, send::SendBehavior::parent(), true);
     }
 
-    // TODO reset sequence number
-    for (auto& child : layout.getChildren()) {
-        //
+    // if root we answer with an OK
+    if (state::isRoot()) {
+        send::enqueuePayload(packets::ResetOk{p.id, p.from}, send::SendBehavior::resolve(p.from, state::getThisMac()),
+                             true);
     }
 }
 
@@ -192,7 +212,11 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ResetOk& p)
     if (!isParent(from)) return;
     if (isChild(from)) return;
 
-    // TODO
+    // if we are the target then fire the corresponding event
+    if (p.to == state::getThisMac()) {
+        event::GotResetOk event{p.id};
+        event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::GOT_RESET_OK, &event, sizeof(event));
+    }
 }
 
 void PacketHandler::handle(const util::MacAddr& from, const packets::RemoveFromRoutingTable& p) {
@@ -201,19 +225,19 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RemoveFromR
 
     auto& layout = layout::Layout::get();
 
-    // forward upstream
-    if (layout.getParent()) {
-        send::enqueuePayload(p, send::SendBehavior::parent(), true);
-    }
-
     // remove from routing table
     for (auto& child : layout.getChildren()) {
         for (auto entry = child.routing_table.begin(); entry != child.routing_table.end(); ++entry) {
-            if (p.mac == entry->mac) {
+            if (p.to_remove == entry->mac) {
                 child.routing_table.erase(entry);
                 break;
             }
         }
+    }
+
+    // forward upstream
+    if (layout.getParent()) {
+        send::enqueuePayload(p, send::SendBehavior::parent(), true);
     }
 }
 
@@ -221,6 +245,8 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::RootUnreach
     if (!reachesRoot()) return;
     if (!isParent(from)) return;
     if (isChild(from)) return;
+
+    ESP_LOGI(TAG, "Got Root Unreachable packet from parent");
 
     state::setState(state::State::CONNECTED_TO_PARENT);
 }
@@ -238,10 +264,10 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::DataFragmen
     bool forward{false};
     bool consume{false};
 
-    if (p.target.isBroadcast()) {
+    if (p.to.isBroadcast()) {
         // in case of broadcast we want it, but also forward it
         forward = consume = true;
-    } else if ((p.target.isRoot() && state::isRoot()) || p.target == state::getThisMac()) {
+    } else if ((p.to.isRoot() && state::isRoot()) || p.to == state::getThisMac()) {
         // if directed to this node, only consume
         consume = true;
     } else {
@@ -250,11 +276,11 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::DataFragmen
     }
 
     if (consume) {
-        fragments::addFragment(p.source, p.id, p.frag_num, p.total_size, p.data);
+        fragments::addFragment(p.from, p.id, p.frag_num, p.total_size, p.data);
     }
 
     if (forward) {
-        send::enqueuePayload(p, send::SendBehavior::resolve(p.target, from), true);
+        send::enqueuePayload(p, send::SendBehavior::resolve(p.to, from), true);
     }
 }
 

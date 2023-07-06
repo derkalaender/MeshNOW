@@ -50,7 +50,7 @@ class ConnectJob : public Job {
         static void sendSearchProbe();
 
         /**
-         * If any probe has been sent yet
+         * If this phase just been started.
          */
         bool started_{false};
 
@@ -93,6 +93,11 @@ class ConnectJob : public Job {
         static void sendConnectRequest(const util::MacAddr& to_mac);
 
         /**
+         * If this phase just been started.
+         */
+        bool started_{false};
+
+        /**
          * Ticks since the last connect request was sent.
          */
         TickType_t last_connect_request_time_{0};
@@ -121,8 +126,19 @@ class ConnectJob : public Job {
        private:
         static void sendResetRequest(uint32_t id);
 
-        bool reset_sent{false};
+        /**
+         * If this phase just been started.
+         */
+        bool started_{false};
+
+        /**
+         * Time since ResetRequest was sent.
+         */
         TickType_t reset_sent_time_{0};
+
+        /**
+         * The random ID with which the ResetRequest is sent.
+         */
         uint32_t reset_id_{esp_random()};
     };
 
@@ -135,6 +151,12 @@ class ConnectJob : public Job {
         void performAction(ConnectJob& job);
 
         void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
+
+       private:
+        /**
+         * If this phase just been started.
+         */
+        bool started_{false};
     };
 
     using Phase = std::variant<SearchPhase, ConnectPhase, ResetPhase, DonePhase>;

@@ -17,12 +17,13 @@ static State state{State::DISCONNECTED_FROM_PARENT};
 void setState(State new_state) {
     if (new_state == state) return;
 
-    state = new_state;
-
     event::StateChangedData data{
         .old_state = state,
         .new_state = new_state,
     };
+
+    state = new_state;
+
     event::fireEvent(event::MESHNOW_INTERNAL, static_cast<int32_t>(event::InternalEvent::STATE_CHANGED), &data,
                      sizeof(state));
 
@@ -31,7 +32,7 @@ void setState(State new_state) {
 
     // send to all children downstream
     if (new_state == State::REACHES_ROOT) {
-        auto payload = packets::RootReachable{.root_mac = getRootMac()};
+        auto payload = packets::RootReachable{.root = getRootMac()};
         send::enqueuePayload(payload, send::SendBehavior::children(), true);
     } else {
         assert(!isRoot());

@@ -55,9 +55,9 @@ class Children : public SendBehavior {
 
 std::unique_ptr<SendBehavior> SendBehavior::children() { return std::make_unique<Children>(); }
 
-class Direct : public SendBehavior {
+class DirectSingleTry : public SendBehavior {
    public:
-    explicit Direct(const util::MacAddr& dest_addr) : dest_addr_(dest_addr) {}
+    explicit DirectSingleTry(const util::MacAddr& dest_addr) : dest_addr_(dest_addr) {}
 
     void send(SendSink& sink, const packets::Payload& payload) override {
         // don't do anything if we are the target
@@ -70,8 +70,8 @@ class Direct : public SendBehavior {
     const util::MacAddr dest_addr_;
 };
 
-std::unique_ptr<SendBehavior> SendBehavior::direct(const util::MacAddr& dest_addr) {
-    return std::make_unique<Direct>(dest_addr);
+std::unique_ptr<SendBehavior> SendBehavior::directSingleTry(const util::MacAddr& dest_addr) {
+    return std::make_unique<DirectSingleTry>(dest_addr);
 }
 
 class Resolve : public SendBehavior {

@@ -12,7 +12,7 @@ namespace meshnow::packets {
 
 struct Status {
     state::State state;
-    std::optional<util::MacAddr> root_mac;
+    std::optional<util::MacAddr> root;
 };
 
 struct SearchProbe {};
@@ -22,32 +22,32 @@ struct SearchReply {};
 struct ConnectRequest {};
 
 struct ConnectOk {
-    util::MacAddr root_mac;
+    util::MacAddr root;
 };
 
 struct ResetRequest {
     uint32_t id;
-    util::MacAddr mac;
+    util::MacAddr from;
 };
 
 struct ResetOk {
     uint32_t id;
-    util::MacAddr root_mac;
+    util::MacAddr to;
 };
 
 struct RemoveFromRoutingTable {
-    util::MacAddr mac;
+    util::MacAddr to_remove;
 };
 
 struct RootUnreachable {};
 
 struct RootReachable {
-    util::MacAddr root_mac;
+    util::MacAddr root;
 };
 
 struct DataFragment {
-    util::MacAddr source;
-    util::MacAddr target;
+    util::MacAddr from;
+    util::MacAddr to;
     uint32_t id;
     uint8_t frag_num;
     uint16_t total_size;
@@ -58,7 +58,7 @@ using Payload = std::variant<Status, SearchProbe, SearchReply, ConnectRequest, C
                              RemoveFromRoutingTable, RootUnreachable, RootReachable, DataFragment>;
 
 struct Packet {
-    uint32_t seq_num;
+    uint32_t seq;
     Payload payload;
 };
 

@@ -19,6 +19,7 @@ struct Node {
     Node() = default;
     explicit Node(const util::MacAddr& mac) : mac{mac} {}
     util::MacAddr mac;
+    uint32_t seq{0};
 };
 
 struct Neighbor : Node {

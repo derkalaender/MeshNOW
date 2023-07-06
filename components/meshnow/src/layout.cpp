@@ -49,7 +49,7 @@ void Layout::addChild(const util::MacAddr& addr) {
 }
 
 void Layout::removeChild(const util::MacAddr& mac) {
-    auto it = std::find_if(children_.begin(), children_.end(), [&mac](const auto& child) { return child.mac == mac; });
+    auto it = std::find_if(children_.begin(), children_.end(), [&mac](const Child& child) { return child.mac == mac; });
     if (it == children_.end()) return;
 
     // remove child

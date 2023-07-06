@@ -79,13 +79,16 @@ void runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runne
         auto receive_item = receive::pop(timeout);
         if (receive_item) {
             // handle packet
-            PacketHandler::handlePacket(receive_item->from, receive_item->packet);
+            PacketHandler::handlePacket(receive_item->from, receive_item->rssi, receive_item->packet);
         }
 
         // perform tasks
-        for (auto job : jobs) {
+        for (auto now = xTaskGetTickCount(); auto job : jobs) {
             auto _ = lock();
-            job.get().performAction();
+            // only perform the action if it is due
+            if (job.get().nextActionAt() <= now) {
+                job.get().performAction();
+            }
         }
 
         // wait at least one tick to avoid triggering the watchdog

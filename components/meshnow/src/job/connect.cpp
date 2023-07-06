@@ -49,14 +49,14 @@ ConnectJob::ConnectJob()
 
 TickType_t ConnectJob::nextActionAt() const noexcept {
     // root never performs any connecting process
-    if (state::isRoot() || state::getState() == state::State::REACHES_ROOT) return portMAX_DELAY;
+    if (state::isRoot()) return portMAX_DELAY;
     // forward to current phase
     return std::visit([](auto &phase) { return phase.nextActionAt(); }, phase_);
 }
 
 void ConnectJob::performAction() {
     // root never performs any connecting process
-    if (state::isRoot() || state::getState() == state::State::REACHES_ROOT) return;
+    if (state::isRoot()) return;
     // forward to current phase
     std::visit([&](auto &phase) { phase.performAction(*this); }, phase_);
 }
@@ -81,9 +81,10 @@ TickType_t ConnectJob::SearchPhase::nextActionAt() const noexcept {
 }
 
 void ConnectJob::SearchPhase::performAction(ConnectJob &job) {
-    if (started_ && xTaskGetTickCount() - last_search_probe_time_ < SEARCH_PROBE_INTERVAL) return;
-
-    started_ = true;
+    if (!started_) {
+        ESP_LOGI(TAG, "Starting search for potential parents");
+        started_ = true;
+    }
 
     if (job.parent_infos_.empty()) {
         // if we haven't found a parent yet, we switch the channel after a set amount of probes
@@ -94,7 +95,7 @@ void ConnectJob::SearchPhase::performAction(ConnectJob &job) {
             if (current_channel_ > job.channel_config_.max_channel) {
                 current_channel_ = job.channel_config_.min_channel;
             }
-            ESP_LOGI(TAG, "Switching to channel %d", current_channel_);
+            ESP_LOGD(TAG, "Switching to channel %d", current_channel_);
             ESP_ERROR_CHECK(esp_wifi_set_channel(current_channel_, WIFI_SECOND_CHAN_NONE));
             search_probes_sent_ = 0;
         }
@@ -102,7 +103,6 @@ void ConnectJob::SearchPhase::performAction(ConnectJob &job) {
         // have found at least one parent
         // keep searching for new ones, but after a while start the connecting phase
         if (xTaskGetTickCount() - first_parent_found_time_ > FIRST_PARENT_WAIT) {
-            ESP_LOGI(TAG, "Starting connecting phase");
             job.phase_ = ConnectPhase();
             return;
         }
@@ -136,7 +136,7 @@ void ConnectJob::SearchPhase::event_handler(ConnectJob &job, int32_t event_id, v
                            [&parent_mac](const ParentInfo &info) { return info.mac_addr == parent_mac; });
 
     if (it != parent_infos.end()) {
-        ESP_LOGI(TAG, "Updating parent " MACSTR ". RSSI %d(old) -> %d(new)", MAC2STR(parent_mac), it->rssi,
+        ESP_LOGV(TAG, "Updating parent " MACSTR ". RSSI %d(old) -> %d(new)", MAC2STR(parent_mac), it->rssi,
                  parent_rssi);
 
         // update the RSSI
@@ -162,27 +162,31 @@ void ConnectJob::SearchPhase::event_handler(ConnectJob &job, int32_t event_id, v
 }
 
 void ConnectJob::SearchPhase::sendSearchProbe() {
-    ESP_LOGI(TAG, "Broadcasting search probe");
-    send::enqueuePayload(packets::SearchProbe{}, send::SendBehavior::direct(util::MacAddr::broadcast()), true);
+    ESP_LOGV(TAG, "Broadcasting search probe");
+    send::enqueuePayload(packets::SearchProbe{}, send::SendBehavior::directSingleTry(util::MacAddr::broadcast()), true);
 }
 
 // CONNECT PHASE //
 
 TickType_t ConnectJob::ConnectPhase::nextActionAt() const noexcept {
-    if (awaiting_connect_response_) {
-        return last_connect_request_time_ + CONNECT_TIMEOUT;
-    } else {
+    if (!started_) return 0;
+
+    if (!awaiting_connect_response_) {
         return 0;
+    } else {
+        return last_connect_request_time_ + CONNECT_TIMEOUT;
     }
 }
 
 void ConnectJob::ConnectPhase::performAction(ConnectJob &job) {
+    if (!started_) {
+        ESP_LOGI(TAG, "Starting connect phase");
+        started_ = true;
+    }
+
     if (awaiting_connect_response_) {
-        // check if we have timed out
-        if (xTaskGetTickCount() - last_connect_request_time_ > CONNECT_TIMEOUT) {
-            ESP_LOGI(TAG, "Connect request timed out");
-            awaiting_connect_response_ = false;
-        }
+        ESP_LOGI(TAG, "Connect request timed out");
+        awaiting_connect_response_ = false;
     }
 
     // send a connect request to the best potential parent
@@ -191,7 +195,7 @@ void ConnectJob::ConnectPhase::performAction(ConnectJob &job) {
     auto it = std::max_element(job.parent_infos_.begin(), job.parent_infos_.end(),
                                [](const ParentInfo &a, const ParentInfo &b) { return a.rssi < b.rssi; });
     if (it == job.parent_infos_.end()) {
-        ESP_LOGI(TAG, "All parents exhausted, returning to search phase");
+        ESP_LOGI(TAG, "All parents exhausted");
         job.phase_ = SearchPhase{};
         return;
     }
@@ -214,39 +218,36 @@ void ConnectJob::ConnectPhase::event_handler(ConnectJob &job, int32_t event_id, 
     if (parent_mac != current_parent_mac_) return;
 
     // got a correct connection response
-    ESP_LOGI(TAG, "Got connect response from " MACSTR "%s.", MAC2STR(parent_mac),
-             response_data.accepted ? "Accepted" : "Rejected");
+    ESP_LOGI(TAG, "Got accepted by" MACSTR, MAC2STR(parent_mac));
     awaiting_connect_response_ = false;
 
-    if (response_data.accepted) {
-        // we are now connected to the parent
-        // set parent info
-        auto &layout = layout::Layout::get();
-        layout.getParent() = std::make_optional<layout::Neighbor>(parent_mac);
+    // we are now connected to the parent
+    // set parent info
+    auto &layout = layout::Layout::get();
+    layout.getParent() = std::make_optional<layout::Neighbor>(parent_mac);
 
-        // set root mac
-        state::setRootMac(*response_data.mac);
+    // set root mac
+    state::setRootMac(*response_data.root_mac);
 
-        // update the state
-        state::setState(state::State::CONNECTED_TO_PARENT);
+    // update the state
+    state::setState(state::State::CONNECTED_TO_PARENT);
 
-        // we now want to perform the reset
-        job.phase_ = ResetPhase{};
-    }
+    // we now want to perform the reset
+    job.phase_ = ResetPhase{};
 
     // if we weren't accepted, then the next parent will be tried in the next action
 }
 
 void ConnectJob::ConnectPhase::sendConnectRequest(const util::MacAddr &to_mac) {
     ESP_LOGI(TAG, "Sending connect request to " MACSTR, MAC2STR(to_mac));
-    send::enqueuePayload(packets::ConnectRequest{}, send::SendBehavior::direct(to_mac), true);
+    send::enqueuePayload(packets::ConnectRequest{}, send::SendBehavior::directSingleTry(to_mac), true);
 }
 
 // ResetPhase //
 
 TickType_t ConnectJob::ResetPhase::nextActionAt() const noexcept {
     // if we haven't sent yet, do it immediately
-    if (!reset_sent_time_) {
+    if (!started_) {
         return 0;
     } else {
         return reset_sent_time_ + RESET_TIMEOUT;
@@ -254,32 +255,39 @@ TickType_t ConnectJob::ResetPhase::nextActionAt() const noexcept {
 }
 
 void ConnectJob::ResetPhase::performAction(ConnectJob &job) {
-    if (!reset_sent) {
+    if (!started_) {
+        ESP_LOGI(TAG, "Starting reset phase");
         // no reset sent yet, so we do it here
         sendResetRequest(reset_id_);
-        reset_sent = true;
+        started_ = true;
         reset_sent_time_ = xTaskGetTickCount();
     } else {
-        // check if we have timed out
-        if (xTaskGetTickCount() - reset_sent_time_ > RESET_TIMEOUT) {
-            ESP_LOGI(TAG, "Reset request timed out");
-            // try connecting to a different node
-            job.phase_ = ConnectPhase{};
-        }
+        ESP_LOGI(TAG, "Reset request timed out");
+        // try connecting to a different node
+        layout::Layout::get().getParent() = std::nullopt;
+        job.phase_ = ConnectPhase{};
+        state::setState(state::State::DISCONNECTED_FROM_PARENT);
     }
 }
 
 void ConnectJob::ResetPhase::event_handler(ConnectJob &job, int32_t event_id, void *event_data) const {
-    if (event_id != event::InternalEvent::GOT_RESET_OK) return;
-
-    auto reset_id = static_cast<event::GotResetOk *>(event_data)->id;
-    if (reset_id == reset_id_) {
-        // reset id matches, reset was done successfully
-        // we can now reach the root
-        state::setState(state::State::REACHES_ROOT);
-        // also reset the found parents
-        job.parent_infos_.clear();
-        job.phase_ = DonePhase{};
+    if (event_id == event::InternalEvent::GOT_RESET_OK) {
+        auto reset_id = static_cast<event::GotResetOk *>(event_data)->id;
+        if (reset_id == reset_id_) {
+            // reset id matches, reset was done successfully
+            // we can now reach the root
+            state::setState(state::State::REACHES_ROOT);
+            // also reset the found parents
+            job.parent_infos_.clear();
+            job.phase_ = DonePhase{};
+        }
+    } else if (event_id == event::InternalEvent::STATE_CHANGED) {
+        auto new_state = static_cast<event::StateChangedData *>(event_data)->new_state;
+        if (new_state == state::State::DISCONNECTED_FROM_PARENT) {
+            ESP_LOGI(TAG, "THIS WAS CALLED");
+            // lost connection to parent -> reset failed
+            job.phase_ = ConnectPhase{};
+        }
     }
 }
 
@@ -290,10 +298,21 @@ void ConnectJob::ResetPhase::sendResetRequest(uint32_t id) {
 
 // DonePhase //
 
-TickType_t ConnectJob::DonePhase::nextActionAt() const noexcept { return portMAX_DELAY; }
+TickType_t ConnectJob::DonePhase::nextActionAt() const noexcept {
+    if (!started_) {
+        return 0;
+    } else {
+        return portMAX_DELAY;
+    }
+}
 
-// does nothing
-void ConnectJob::DonePhase::performAction(meshnow::job::ConnectJob &job) {}
+// does nothing really
+void ConnectJob::DonePhase::performAction(meshnow::job::ConnectJob &job) {
+    if (!started_) {
+        ESP_LOGI(TAG, "Connect job done!");
+        started_ = true;
+    }
+}
 
 void ConnectJob::DonePhase::event_handler(meshnow::job::ConnectJob &job, int32_t event_id, void *event_data) {
     if (event_id != event::InternalEvent::STATE_CHANGED) return;

@@ -12,6 +12,8 @@ void registerPeer(const uint8_t* peer_addr, uint8_t channel, wifi_interface_t if
     esp_now_peer_info_t peer_info;
     peer_info.channel = channel;
     peer_info.ifidx = ifidx;
+    peer_info.encrypt = false;
+
     std::copy(peer_addr, peer_addr + ESP_NOW_ETH_ALEN, peer_info.peer_addr);
     ESP_ERROR_CHECK(esp_now_add_peer(&peer_info));
 }

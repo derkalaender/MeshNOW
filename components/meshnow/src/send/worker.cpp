@@ -27,10 +27,10 @@ class SendSinkImpl : public SendSink,
         // serialize
         auto buffer = packets::serialize(packets::Packet{0, payload});
         if (multi_instance_->send(shared_from_this(), dest_addr.addr.data(), buffer.data(), buffer.size()) != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to send packet!");
+            ESP_LOGW(TAG, "Failed to send packet!");
             return false;
         } else {
-            ESP_LOGI(TAG, "Sent packet!");
+            ESP_LOGV(TAG, "Sent packet!");
             return true;
         }
     }
