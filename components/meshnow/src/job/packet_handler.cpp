@@ -169,7 +169,7 @@ void PacketHandler::handle(const util::MacAddr& from, const packets::ConnectResp
     delete root_mac;
 }
 
-void PacketHandler::handle(const util::MacAddr& from, const packets::Reset& p) {
+void PacketHandler::handle(const util::MacAddr& from, const packets::ResetRequest& p) {
     util::Lock lock(layout::mtx());
     auto& layout = layout::Layout::get();
 

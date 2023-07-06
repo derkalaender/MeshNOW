@@ -71,7 +71,8 @@ esp_err_t Networking::start() {
 
     // start send worker
     {
-        auto settings = util::TaskSettings{"send_worker", 5000, priority, cpu};
+        // the send worker has a higher priority so that it can always send
+        auto settings = util::TaskSettings{"send_worker", 5000, priority + 1, cpu};
         ESP_RETURN_ON_ERROR(send_worker_task_.init(settings, &send::worker_task, std::ref(stop_tasks_),
                                                    std::ref(task_waitbits_), SEND_WORKER_FINISHED_BIT),
                             TAG, "Failed to create send worker task");

@@ -1,8 +1,10 @@
 #pragma once
 
 #include <esp_event.h>
+#include <esp_random.h>
 
-#include <memory>
+#include <optional>
+#include <variant>
 #include <vector>
 
 #include "event_internal.hpp"
@@ -31,38 +33,26 @@ class ConnectJob : public Job {
         int rssi{0};
     };
 
-    class Phase {
+    /**
+     * Searches for potential parents by performing an all-channel scan
+     */
+    class SearchPhase {
        public:
-        explicit Phase(ConnectJob& job) : job_(job) {}
+        TickType_t nextActionAt() const noexcept;
+        void performAction(ConnectJob& job);
 
-        virtual ~Phase() = default;
-
-        virtual TickType_t nextActionAt() const noexcept = 0;
-        virtual void performAction() = 0;
-
-       protected:
-        ConnectJob& job_;
-    };
-
-    class SearchPhase : public Phase {
-       public:
-        using Phase::Phase;
-
-        TickType_t nextActionAt() const noexcept override;
-        void performAction() override;
+        void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
 
        private:
-        static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id,
-                                  void* event_data);
-
         /**
          * Sends a beacon to search for nearby parents willing to accept this node as a child.
          */
         static void sendSearchProbe();
 
-        util::EventHandlerInstance event_handler_instance_{event::getEventHandle(), event::MESHNOW_INTERNAL,
-                                                           event::InternalEvent::PARENT_FOUND,
-                                                           &SearchPhase::event_handler, this};
+        /**
+         * If any probe has been sent yet
+         */
+        bool started_{false};
 
         /**
          * Ticks since the first parent was found while searching.
@@ -85,26 +75,22 @@ class ConnectJob : public Job {
         uint8_t current_channel_{0};
     };
 
-    class ConnectPhase : public Phase {
+    /**
+     * Tries to connect to the best available parent.
+     */
+    class ConnectPhase {
        public:
-        using Phase::Phase;
+        TickType_t nextActionAt() const noexcept;
+        void performAction(ConnectJob& job);
 
-        TickType_t nextActionAt() const noexcept override;
-        void performAction() override;
+        void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
 
        private:
-        static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id,
-                                  void* event_data);
-
         /**
          * Sends a connect request to a potential parent.
          * @param to_mac MAC address of the parent
          */
         static void sendConnectRequest(const util::MacAddr& to_mac);
-
-        util::EventHandlerInstance event_handler_instance_{event::getEventHandle(), event::MESHNOW_INTERNAL,
-                                                           event::InternalEvent::GOT_CONNECT_RESPONSE,
-                                                           &ConnectPhase::event_handler, this};
 
         /**
          * Ticks since the last connect request was sent.
@@ -122,9 +108,46 @@ class ConnectJob : public Job {
         util::MacAddr current_parent_mac_;
     };
 
+    /**
+     * Sends a request request upstream so that all nodes to the root know of this node's presence.
+     */
+    class ResetPhase {
+       public:
+        TickType_t nextActionAt() const noexcept;
+        void performAction(ConnectJob& job);
+
+        void event_handler(ConnectJob& job, int32_t event_id, void* event_data) const;
+
+       private:
+        static void sendResetRequest(uint32_t id);
+
+        bool reset_sent{false};
+        TickType_t reset_sent_time_{0};
+        uint32_t reset_id_{esp_random()};
+    };
+
+    /**
+     * Idle phase, only reacts to state change when disconnecting from the parent.
+     */
+    class DonePhase {
+       public:
+        TickType_t nextActionAt() const noexcept;
+        void performAction(ConnectJob& job);
+
+        void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
+    };
+
+    using Phase = std::variant<SearchPhase, ConnectPhase, ResetPhase, DonePhase>;
+
+    static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+    util::EventHandlerInstance event_handler_instance_{event::getEventHandle(), event::MESHNOW_INTERNAL,
+                                                       ESP_EVENT_ANY_ID, &ConnectJob::event_handler, this};
+
     const ChannelConfig channel_config_;
     std::vector<ParentInfo> parent_infos_;
-    std::unique_ptr<Phase> phase_;
+    // starts per default with SearchPhase
+    Phase phase_{SearchPhase{}};
 };
 
 }  // namespace meshnow::job

@@ -26,7 +26,7 @@ struct ConnectResponse {
     std::optional<util::MacAddr> root_mac;
 };
 
-struct Reset {
+struct ResetRequest {
     uint32_t id;
     util::MacAddr mac;
 };
@@ -55,7 +55,7 @@ struct DataFragment {
     util::Buffer data;
 };
 
-using Payload = std::variant<Status, SearchProbe, SearchReply, ConnectRequest, ConnectResponse, Reset, ResetOk,
+using Payload = std::variant<Status, SearchProbe, SearchReply, ConnectRequest, ConnectResponse, ResetRequest, ResetOk,
                              RemoveFromRoutingTable, RootUnreachable, RootReachable, DataFragment>;
 
 struct Packet {

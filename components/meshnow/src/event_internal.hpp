@@ -15,6 +15,7 @@ enum InternalEvent {
     STATE_CHANGED,
     PARENT_FOUND,
     GOT_CONNECT_RESPONSE,
+    GOT_RESET_OK,
 };
 
 struct StateChangedData {
@@ -31,6 +32,10 @@ struct GotConnectResponseData {
     const util::MacAddr* mac;
     const std::optional<util::MacAddr>* root_mac;
     const bool accepted;
+};
+
+struct GotResetOk {
+    const uint32_t id;
 };
 
 /**

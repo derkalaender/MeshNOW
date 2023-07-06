@@ -68,7 +68,7 @@ static void serialize(S& s, ConnectResponse& p) {
 }
 
 template <typename S>
-static void serialize(S& s, Reset& p) {
+static void serialize(S& s, ResetRequest& p) {
     s.value4b(p.id);
     s.object(p.mac);
 }
