@@ -5,8 +5,6 @@
 #include "layout.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
-#include "util/event.hpp"
-#include "util/lock.hpp"
 #include "util/util.hpp"
 
 namespace meshnow::job {
@@ -25,7 +23,6 @@ static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
 // StatusSendJob //
 
 TickType_t StatusSendJob::nextActionAt() const noexcept {
-    util::Lock lock{layout::mtx()};
     if (!layout::Layout::get().isEmpty()) {
         return last_status_sent_ + STATUS_SEND_INTERVAL;
     } else {
@@ -37,10 +34,7 @@ void StatusSendJob::performAction() {
     auto now = xTaskGetTickCount();
     if (now - last_status_sent_ < STATUS_SEND_INTERVAL) return;
 
-    {
-        util::Lock lock{layout::mtx()};
-        if (!layout::Layout::get().isEmpty()) return;
-    }
+    if (!layout::Layout::get().isEmpty()) return;
 
     sendStatus();
 
@@ -72,12 +66,11 @@ void UnreachableTimeoutJob::performAction() {
         // timeout from waiting for a path to the root
 
         awaiting_reachable = false;
-        {
-            util::Lock lock{layout::mtx()};
-            auto& layout = layout::Layout::get();
-            assert(layout.getParent());         // parent still has to be there
-            layout.getParent() = std::nullopt;  // remove parent
-        }
+
+        auto& layout = layout::Layout::get();
+        assert(layout.getParent());         // parent still has to be there
+        layout.getParent() = std::nullopt;  // remove parent
+
         state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
     }
 }
@@ -107,16 +100,13 @@ TickType_t NeighborCheckJob::nextActionAt() const noexcept {
     // get the neighbor with the lowest last_seen timestamp
     auto min_last_seen = portMAX_DELAY;
 
-    {
-        util::Lock lock{layout::mtx()};
-        auto& layout = layout::Layout::get();
+    auto& layout = layout::Layout::get();
 
-        for (const auto& child : layout.getChildren()) {
-            min_last_seen = std::min(min_last_seen, child.last_seen);
-        }
-
-        if (auto& parent = layout.getParent()) min_last_seen = std::min(min_last_seen, parent->last_seen);
+    for (const auto& child : layout.getChildren()) {
+        min_last_seen = std::min(min_last_seen, child.last_seen);
     }
+
+    if (auto& parent = layout.getParent()) min_last_seen = std::min(min_last_seen, parent->last_seen);
 
     if (min_last_seen == portMAX_DELAY) {
         // no neighbors
@@ -127,8 +117,6 @@ TickType_t NeighborCheckJob::nextActionAt() const noexcept {
 }
 
 void NeighborCheckJob::performAction() {
-    util::Lock lock{layout::mtx()};
-
     auto& layout = layout::Layout::get();
     auto now = xTaskGetTickCount();
 
@@ -158,10 +146,8 @@ void NeighborCheckJob::performAction() {
 
 void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
     if (state::isRoot()) return;
-    {
-        util::Lock lock{layout::mtx()};
-        if (!layout::Layout::get().getParent()) return;
-    }
+
+    if (!layout::Layout::get().getParent()) return;
 
     ESP_LOGI(TAG, "Sending child disconnected event upstream");
 

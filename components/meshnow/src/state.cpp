@@ -26,11 +26,8 @@ void setState(State new_state) {
     event::fireEvent(event::MESHNOW_INTERNAL, static_cast<int32_t>(event::InternalEvent::STATE_CHANGED), &data,
                      sizeof(state));
 
-    {
-        // don't send root reachable status events downstream if no children
-        util::Lock lock{layout::mtx()};
-        if (!layout::Layout::get().hasChildren()) return;
-    }
+    // don't send root reachable status events downstream if no children
+    if (!layout::Layout::get().hasChildren()) return;
 
     // send to all children downstream
     if (new_state == State::REACHES_ROOT) {

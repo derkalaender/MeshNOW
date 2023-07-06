@@ -5,6 +5,7 @@
 #include "def.hpp"
 #include "espnow_multi.hpp"
 #include "layout.hpp"
+#include "mtx.hpp"
 #include "queue.hpp"
 #include "util/util.hpp"
 
@@ -43,8 +44,6 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
     // create sink
     auto sink = std::make_shared<SendSinkImpl>();
 
-    sink->accept(util::MacAddr::broadcast(), packets::SearchProbe{});  // TODO remove
-
     while (!should_stop) {
         auto item = popItem(MIN_TIMEOUT);
         if (!item.has_value()) {
@@ -52,8 +51,11 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
             continue;
         }
 
-        // delegate sending to send behavior
-        item->behavior->send(*sink, item->payload);
+        {
+            auto _ = lock();
+            // delegate sending to send behavior
+            item->behavior->send(*sink, item->payload);
+        }
     }
 
     ESP_LOGI(TAG, "Stopping!");

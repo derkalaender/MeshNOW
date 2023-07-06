@@ -7,6 +7,7 @@
 #include "freertos/portmacro.h"
 #include "job.hpp"
 #include "keep_alive.hpp"
+#include "mtx.hpp"
 #include "packet_handler.hpp"
 #include "receive/queue.hpp"
 #include "util/util.hpp"
@@ -67,7 +68,10 @@ void runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runne
 
     while (!should_stop) {
         // calculate timeout
-        auto timeout = calculateTimeout(jobs);
+        auto timeout = [&] {
+            auto _ = lock();
+            return calculateTimeout(jobs);
+        }();
 
         ESP_LOGV(TAG, "Next action in at most %lu ticks", timeout);
 
@@ -80,6 +84,7 @@ void runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runne
 
         // perform tasks
         for (auto job : jobs) {
+            auto _ = lock();
             job.get().performAction();
         }
 

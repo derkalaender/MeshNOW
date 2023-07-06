@@ -5,15 +5,6 @@
 
 namespace meshnow::layout {
 
-SemaphoreHandle_t mtx() {
-    static auto mtx = [] {
-        auto mtx = xSemaphoreCreateMutex();
-        assert(mtx);
-        return mtx;
-    }();
-    return mtx;
-}
-
 Layout& Layout::get() {
     static Layout layout;
     return layout;

@@ -16,7 +16,22 @@ class Lock {
 
     Lock& operator=(const Lock&) = delete;
 
-    ~Lock() { xSemaphoreGive(handle_); }
+    Lock(Lock&& other) noexcept : handle_(other.handle_) { other.handle_ = nullptr; }
+
+    Lock& operator=(Lock&& other) noexcept {
+        if (this != &other) {
+            xSemaphoreGive(handle_);
+            handle_ = other.handle_;
+            other.handle_ = nullptr;
+        }
+        return *this;
+    }
+
+    ~Lock() {
+        if (handle_ != nullptr) {
+            xSemaphoreGive(handle_);
+        }
+    }
 
    private:
     SemaphoreHandle_t handle_;

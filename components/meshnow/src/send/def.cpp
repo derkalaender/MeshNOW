@@ -7,8 +7,6 @@ namespace meshnow::send {
 
 class NeighborsSingleTry : public SendBehavior {
     void send(SendSink& sink, const packets::Payload& payload) override {
-        util::Lock lock{layout::mtx()};
-
         auto& layout = layout::Layout::get();
 
         // send to children
@@ -30,7 +28,6 @@ std::unique_ptr<SendBehavior> meshnow::send::SendBehavior::neighborsSingleTry() 
 class Parent : public SendBehavior {
     void send(SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
-        util::Lock lock{layout::mtx()};
 
         auto& layout = layout::Layout::get();
 
@@ -46,7 +43,6 @@ std::unique_ptr<SendBehavior> SendBehavior::parent() { return std::make_unique<P
 class Children : public SendBehavior {
     void send(SendSink& sink, const packets::Payload& payload) override {
         // TODO retry until success
-        util::Lock lock{layout::mtx()};
 
         auto& layout = layout::Layout::get();
 
@@ -94,8 +90,6 @@ class Resolve : public SendBehavior {
         if (target_ == state::getThisMac()) return;
 
         // TODO retry until success
-        util::Lock lock{layout::mtx()};
-
         auto& layout = layout::Layout::get();
 
         // broadcast

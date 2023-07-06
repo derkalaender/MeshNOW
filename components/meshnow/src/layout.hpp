@@ -76,6 +76,4 @@ struct Layout {
     size_t num_children{0};
 };
 
-SemaphoreHandle_t mtx();
-
 }  // namespace meshnow::layout

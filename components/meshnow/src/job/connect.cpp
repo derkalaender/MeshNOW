@@ -7,7 +7,6 @@
 #include "packets.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
-#include "util/lock.hpp"
 #include "util/util.hpp"
 
 namespace {
@@ -123,10 +122,7 @@ void ConnectJob::SearchPhase::event_handler(ConnectJob &job, int32_t event_id, v
     auto parent_rssi = parent_data.rssi;
 
     // check if the advertised parent is already in the Layout, if so, ignore
-    {
-        util::Lock lock{layout::mtx()};
-        if (layout::Layout::get().has(parent_mac)) return;
-    }
+    if (layout::Layout::get().has(parent_mac)) return;
 
     auto &parent_infos = job.parent_infos_;
 
@@ -225,11 +221,9 @@ void ConnectJob::ConnectPhase::event_handler(ConnectJob &job, int32_t event_id, 
     if (response_data.accepted) {
         // we are now connected to the parent
         // set parent info
-        {
-            util::Lock lock{layout::mtx()};
-            auto &layout = layout::Layout::get();
-            layout.getParent() = std::make_optional<layout::Neighbor>(parent_mac);
-        }
+        auto &layout = layout::Layout::get();
+        layout.getParent() = std::make_optional<layout::Neighbor>(parent_mac);
+
         // set root mac
         state::setRootMac(*response_data.mac);
 
