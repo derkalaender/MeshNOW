@@ -265,7 +265,7 @@ void ConnectJob::ResetPhase::performAction(ConnectJob &job) {
         ESP_LOGI(TAG, "Reset request timed out");
         // try connecting to a different node
         layout::Layout::get().getParent() = std::nullopt;
-        job.phase_ = ConnectPhase{};
+        //        job.phase_ = ConnectPhase{};
         state::setState(state::State::DISCONNECTED_FROM_PARENT);
     }
 }
@@ -284,7 +284,6 @@ void ConnectJob::ResetPhase::event_handler(ConnectJob &job, int32_t event_id, vo
     } else if (event_id == event::InternalEvent::STATE_CHANGED) {
         auto new_state = static_cast<event::StateChangedData *>(event_data)->new_state;
         if (new_state == state::State::DISCONNECTED_FROM_PARENT) {
-            ESP_LOGI(TAG, "THIS WAS CALLED");
             // lost connection to parent -> reset failed
             job.phase_ = ConnectPhase{};
         }
@@ -317,9 +316,13 @@ void ConnectJob::DonePhase::performAction(meshnow::job::ConnectJob &job) {
 void ConnectJob::DonePhase::event_handler(meshnow::job::ConnectJob &job, int32_t event_id, void *event_data) {
     if (event_id != event::InternalEvent::STATE_CHANGED) return;
 
-    auto &state_change = *static_cast<event::StateChangedData *>(event_data);
+    ESP_LOGI(TAG, "Got called!");
 
-    if (state_change.new_state == state::State::DISCONNECTED_FROM_PARENT) {
+    auto state_change = static_cast<event::StateChangedData *>(event_data);
+
+    ESP_LOGI(TAG, "new State: %d", static_cast<uint8_t>(state_change->new_state));
+
+    if (state_change->new_state == state::State::DISCONNECTED_FROM_PARENT) {
         job.phase_ = SearchPhase{};
     }
 }

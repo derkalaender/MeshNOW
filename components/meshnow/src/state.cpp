@@ -1,20 +1,29 @@
 #include "state.hpp"
 
+#include <esp_log.h>
+
 #include "event_internal.hpp"
 #include "layout.hpp"
 #include "packets.hpp"
 #include "send/queue.hpp"
-#include "util/lock.hpp"
 #include "util/mac.hpp"
+#include "util/util.hpp"
 
 namespace meshnow::state {
 
-static bool root{false};
+namespace {
 
-static util::MacAddr root_mac;
-static State state{State::DISCONNECTED_FROM_PARENT};
+constexpr auto TAG = CREATE_TAG("State");
+
+bool root{false};
+
+util::MacAddr root_mac;
+State state{State::DISCONNECTED_FROM_PARENT};
+
+}  // namespace
 
 void setState(State new_state) {
+    ESP_LOGI(TAG, "Requested state change from %d to %d", static_cast<uint8_t>(state), static_cast<uint8_t>(new_state));
     if (new_state == state) return;
 
     event::StateChangedData data{
@@ -24,8 +33,8 @@ void setState(State new_state) {
 
     state = new_state;
 
-    event::fireEvent(event::MESHNOW_INTERNAL, static_cast<int32_t>(event::InternalEvent::STATE_CHANGED), &data,
-                     sizeof(state));
+    ESP_LOGI(TAG, "Firing event!");
+    event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::STATE_CHANGED, &data, sizeof(data));
 
     // don't send root reachable status events downstream if no children
     if (!layout::Layout::get().hasChildren()) return;
