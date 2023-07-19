@@ -5,6 +5,7 @@
 #include <bitsery/deserializer.h>
 #include <bitsery/ext/std_optional.h>
 #include <bitsery/ext/std_variant.h>
+#include <bitsery/serializer.h>
 #include <bitsery/traits/array.h>
 #include <bitsery/traits/vector.h>
 #include <esp_now.h>
@@ -13,25 +14,91 @@
 #include <variant>
 #include <vector>
 
+namespace {
+
 using OutputAdapter = bitsery::OutputBufferAdapter<meshnow::util::Buffer>;
 using InputAdapter = bitsery::InputBufferAdapter<meshnow::util::Buffer>;
 
-// common header for every packet
-struct Header {
-    std::array<uint8_t, 3> magic;
-    uint32_t id;
-};
-
-// packet the way it is sent over ESP-NOW
-struct WirePacket {
-    Header header;
-    meshnow::packets::Payload payload;
-};
-
 // CONSTANTS //
 constexpr std::array<uint8_t, 3> MAGIC{0x55, 0x77, 0x55};
-constexpr auto HEADER_SIZE{sizeof(Header)};
-constexpr auto MAX_FRAG_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE - 19};
+constexpr auto HEADER_SIZE{30};
+constexpr auto MAX_FRAG_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE - 6};
+constexpr auto MAX_CUSTOM_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE};
+
+}  // namespace
+
+// SPECIAL SERIALIZATION EXTENSIONS //
+
+namespace bitsery {
+
+namespace ext {
+
+// Efficiently serialize data as we already encode the size of the data using other attributes
+class DataFragmentExtension {
+   public:
+    DataFragmentExtension(uint16_t frag_num, uint16_t total_size) : frag_num(frag_num), total_size(total_size) {}
+
+    template <typename Ser, typename Func>
+    void serialize(Ser& ser, const meshnow::util::Buffer& data, Func&&) const {
+        validateWrite(data);
+
+        for (const auto& byte : data) {
+            ser.value1b(byte);
+        }
+    }
+
+    inline void validateWrite(const meshnow::util::Buffer& data) const {
+        assert(data.size() <= MAX_FRAG_PAYLOAD_SIZE && "Data too large");
+        assert(frag_num <= 6 && "Fragment number too large");
+        assert(total_size <= 1500 && "Total size too large");
+        assert((frag_num + 1) * MAX_FRAG_PAYLOAD_SIZE <= total_size && "Fragment number and total size mismatch");
+    }
+
+    template <typename Des, typename Func>
+    void deserialize(Des& des, meshnow::util::Buffer& data, Func&&) const {
+        validateRead(des.adapter());
+
+        // if last fragment, only read the remaining size, otherwise read MAX_FRAG_PAYLOAD_SIZE
+        uint16_t to_read = total_size - (frag_num * MAX_FRAG_PAYLOAD_SIZE);
+        if (to_read > MAX_FRAG_PAYLOAD_SIZE) {
+            to_read = MAX_FRAG_PAYLOAD_SIZE;
+        }
+
+        data.resize(to_read);
+        for (auto& byte : data) {
+            des.value1b(byte);
+        }
+    }
+
+    template <typename Reader>
+    inline void validateRead(Reader& r) const {
+        if (frag_num <= 6) return;
+        if (total_size <= 1500) return;
+        if ((frag_num + 1) * MAX_FRAG_PAYLOAD_SIZE <= total_size) return;
+
+        r.error(bitsery::ReaderError::InvalidData);
+    }
+
+   private:
+    uint16_t frag_num;
+    uint16_t total_size;
+};
+
+}  // namespace ext
+
+namespace traits {
+
+template <>
+struct ExtensionTraits<ext::DataFragmentExtension, meshnow::util::Buffer> {
+    using TValue = meshnow::util::Buffer::value_type;
+    static constexpr bool SupportValueOverload = false;
+    static constexpr bool SupportObjectOverload = false;
+    static constexpr bool SupportLambdaOverload = true;
+};
+
+}  // namespace traits
+
+}  // namespace bitsery
 
 // PAYLOAD SERIALIZERS //
 
@@ -65,20 +132,13 @@ static void serialize(S& s, ConnectOk& p) {
 }
 
 template <typename S>
-static void serialize(S& s, ResetRequest& p) {
-    s.value4b(p.id);
-    s.object(p.from);
+static void serialize(S& s, RoutingTableAdd& p) {
+    s.object(p.entry);
 }
 
 template <typename S>
-static void serialize(S& s, ResetOk& p) {
-    s.value4b(p.id);
-    s.object(p.to);
-}
-
-template <typename S>
-static void serialize(S& s, RemoveFromRoutingTable& p) {
-    s.object(p.to_remove);
+static void serialize(S& s, RoutingTableRemove& p) {
+    s.object(p.entry);
 }
 
 template <typename S>
@@ -93,67 +153,84 @@ static void serialize(S& s, RootReachable& p) {
 
 template <typename S>
 static void serialize(S& s, DataFragment& p) {
-    s.object(p.from);
-    s.object(p.to);
-    s.value4b(p.id);
-    s.value1b(p.frag_num);
-    s.value2b(p.total_size);
-    // TODO optimize with custom extension
-    s.container1b(p.data, MAX_FRAG_PAYLOAD_SIZE);
+    s.value4b(p.frag_id);
+    s.value2b(p.options.packed);
+    s.ext(p.data, bitsery::ext::DataFragmentExtension{p.options.unpacked.frag_num, p.options.unpacked.total_size},
+          [] {});
+}
+
+template <typename S>
+static void serialize(S& s, CustomData& p) {
+    s.container1b(p.data, MAX_CUSTOM_PAYLOAD_SIZE);
 }
 
 }  // namespace meshnow::packets
 
 // HELPER SERIALIZERS //
 
+namespace {
+
+// full packet also includes magic bytes but is not exposed publicly
+struct FullPacket {
+    std::array<uint8_t, 3> magic;
+    meshnow::packets::Packet packet;
+};
+
+template <typename S>
+void serialize(S& s, FullPacket& fp) {
+    s.container1b(fp.magic);
+    s.object(fp.packet);
+}
+
+}  // namespace
+
 namespace meshnow::util {
 
 template <typename S>
-static void serialize(S& s, MacAddr& mac) {
-    s.container1b(mac.addr);
+static void serialize(S& s, MacAddr& m) {
+    s.container1b(m.addr);
 }
 
 }  // namespace meshnow::util
 
-template <typename S>
-static void serialize(S& s, Header& h) {
-    s.container1b(h.magic);
-    s.value4b(h.id);
-}
-
-template <typename S>
-static void serialize(S& s, WirePacket& wp) {
-    s.object(wp.header);
-    s.ext(wp.payload, bitsery::ext::StdVariant{[](S& s, auto& p) { s.object(p); }});
-}
-
 namespace meshnow::packets {
+
+template <typename S>
+static void serialize(S& s, Packet& p) {
+    s.value4b(p.id);
+    s.object(p.from);
+    s.object(p.to);
+    s.ext(p.payload, bitsery::ext::StdVariant{[](S& s, auto& p) { s.object(p); }});
+}
+
+}  // namespace meshnow::packets
 
 // PACKET SERIALIZATION //
 
+namespace meshnow::packets {
+
 util::Buffer serialize(const Packet& packet) {
     util::Buffer buffer;
-    buffer.reserve(sizeof(WirePacket));
 
-    WirePacket wp{.header = {.magic = MAGIC, .id = packet.seq}, .payload = packet.payload};
+    FullPacket fp{MAGIC, packet};
 
     // write
-    auto written_size = bitsery::quickSerialization(OutputAdapter{buffer}, wp);
+    bitsery::quickSerialization(OutputAdapter{buffer}, fp);
 
     // shrink and return
-    buffer.resize(written_size);
+    buffer.shrink_to_fit();
     return buffer;
 }
 
 std::optional<Packet> deserialize(const util::Buffer& buffer) {
-    WirePacket wp;
+    FullPacket fp;
 
     // read
-    auto [error, red_everything] = bitsery::quickDeserialization(InputAdapter{buffer.begin(), buffer.size()}, wp);
+    auto [error, red_everything] = bitsery::quickDeserialization(InputAdapter{buffer.begin(), buffer.size()}, fp);
 
     // check for errors
-    if (error == bitsery::ReaderError::NoError && red_everything) {
-        return Packet{wp.header.id, wp.payload};
+    if (error == bitsery::ReaderError::NoError && red_everything && fp.magic == MAGIC) {
+        return fp.packet;
     } else {
         return std::nullopt;
     }
