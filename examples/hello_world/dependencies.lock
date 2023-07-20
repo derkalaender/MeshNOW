@@ -1,0 +1,29 @@
+dependencies:
+  bitsery:
+    component_hash: 9a1cb61054875c1785399215a8bc1d59e816ebac27c3f447aef2ae693a66e3c6
+    source:
+      git: https://github.com/derkalaender/bitsery-esp.git
+      path: .
+      type: git
+    version: 2b4336352905aaedfcafb0e0fcc3787923b6b1f0
+  espnow_multi:
+    component_hash: 60d4d497159819d2ba5207b62d862d405eb26c426144bbdf5ddb233e80a0a3ff
+    source:
+      git: https://github.com/derkalaender/espnow-multi.git
+      path: .
+      type: git
+    version: 19793ec9949d6fdc09942949e150e1d06fd206f4
+  idf:
+    component_hash: null
+    source:
+      type: idf
+    version: 5.0.1
+  meshnow:
+    component_hash: null
+    source:
+      path: C:\Users\Marvin\Documents\Programming\BA\MeshNOW\meshnow
+      type: local
+    version: '*'
+manifest_hash: 93e8cefaac5cff29ee47e0bbc1e7c3c44c50a042c78dbe0368fb521b16254dc5
+target: esp32
+version: 1.0.0

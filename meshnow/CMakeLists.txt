@@ -5,7 +5,7 @@ file(
 
 idf_component_register(
         SRCS "${SRC_FILES}"
-        INCLUDE_DIRS "include"
+        INCLUDE_DIRS "src/include"
         PRIV_INCLUDE_DIRS "src"
         REQUIRES esp_wifi
         PRIV_REQUIRES nvs_flash lwip bitsery espnow_multi

@@ -3,3 +3,5 @@ dependencies:
     version: ">=5.0.1"
   bitsery:
     git: "https://github.com/derkalaender/bitsery-esp.git"
+  espnow_multi:
+    git: "https://github.com/derkalaender/espnow-multi.git"

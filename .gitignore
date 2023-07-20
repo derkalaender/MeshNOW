@@ -13,4 +13,4 @@ sdkconfig.old
 .idea
 
 # IDF Component Manager
-/managed_components
+managed_components
