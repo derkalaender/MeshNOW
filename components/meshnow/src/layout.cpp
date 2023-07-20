@@ -1,8 +1,5 @@
 #include "layout.hpp"
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/semphr.h>
-
 namespace meshnow::layout {
 
 Layout& Layout::get() {
@@ -12,13 +9,12 @@ Layout& Layout::get() {
 
 void Layout::reset() {
     parent_.reset();
-    children_.fill({});
-    num_children = 0;
+    children_.clear();
 }
 
 bool Layout::isEmpty() const { return !parent_ && !hasChildren(); }
 
-bool Layout::hasChildren() const { return num_children > 0; }
+bool Layout::hasChildren() const { return !children_.empty(); }
 
 bool Layout::has(const util::MacAddr& mac) const {
     // check parent
@@ -36,25 +32,46 @@ bool Layout::has(const util::MacAddr& mac) const {
     return false;
 }
 
-std::span<Child> Layout::getChildren() { return std::span{children_.begin(), num_children}; }
-
-std::optional<Neighbor>& Layout::getParent() { return parent_; }
-
 void Layout::addChild(const util::MacAddr& addr) {
-    if (num_children == MAX_CHILDREN) return;
+    if (children_.size() == MAX_CHILDREN) return;
 
-    auto& child = children_[num_children++];
+    Child child{};
     child.mac = addr;
-    child.last_seen = xTaskGetTickCount();
+
+    children_.emplace_back(std::move(child));
 }
 
 void Layout::removeChild(const util::MacAddr& mac) {
-    auto it = std::find_if(children_.begin(), children_.end(), [&mac](const Child& child) { return child.mac == mac; });
-    if (it == children_.end()) return;
-
-    // remove child
-    *it = {};
-    std::rotate(it, it + 1, children_.end());
-    --num_children;
+    for (auto it = children_.begin(); it != children_.end(); ++it) {
+        if (it->mac == mac) {
+            children_.erase(it);
+            return;
+        }
+    }
 }
+
+bool Layout::hasParent() const { return parent_.has_value(); }
+
+Neighbor& Layout::getParent() { return parent_.value(); }
+
+void Layout::setParent(const util::MacAddr& mac) { parent_.emplace(mac); }
+
+void Layout::removeParent() { parent_.reset(); }
+
+bool Layout::hasChild(const util::MacAddr& mac) const {
+    for (const auto& child : children_) {
+        if (child.mac == mac) return true;
+    }
+    return false;
+}
+
+Child& Layout::getChild(const util::MacAddr& mac) {
+    for (auto& child : children_) {
+        if (child.mac == mac) return child;
+    }
+    assert(false);
+}
+
+std::span<Child> Layout::getChildren() { return {children_.data(), children_.size()}; }
+
 }  // namespace meshnow::layout

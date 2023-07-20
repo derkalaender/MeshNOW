@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <variant>
 
 #include "packets.hpp"
 #include "util/mac.hpp"
@@ -15,33 +16,69 @@ class SendSink {
     virtual ~SendSink() = default;
 
     /**
-     * "Consumes" a payload for sending.
-     * @param dest_addr Where to send the packet to.
-     * @param payload The payload to send.
-     * @return True, iff sending was successful.
+     * Accepts a packet to be sent.
+     * @param next_hop the address of the very next hop to actually send to
+     * @param from the address written as the from field
+     * @return to the address written as the to field
      */
-    virtual bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) = 0;
-};
-
-/**
- * Defines how a packet is sent, e.g., to which nodes, are addresses resolved etc.
- */
-class SendBehavior {
-   public:
-    static std::unique_ptr<SendBehavior> neighborsSingleTry();
-    static std::unique_ptr<SendBehavior> parent();
-    static std::unique_ptr<SendBehavior> children();
-    static std::unique_ptr<SendBehavior> directSingleTry(const util::MacAddr& dest_addr);
-    static std::unique_ptr<SendBehavior> resolve(const util::MacAddr& target, const util::MacAddr& last_hop);
-
-    virtual ~SendBehavior() = default;
+    virtual bool accept(const util::MacAddr& next_hop, const util::MacAddr& from, const util::MacAddr& to) = 0;
 
     /**
-     * Sends the given payload by calling the sink.
-     * @param sink The sink to send the payload to.
-     * @param payload The payload to send.
+     * Retries later.
      */
-    virtual void send(SendSink& sink, const packets::Payload& payload) = 0;
+    virtual void requeue() = 0;
 };
+
+class DirectOnce {
+   public:
+    explicit DirectOnce(const util::MacAddr& dest_addr) : dest_addr_(dest_addr) {}
+
+    void send(SendSink& sink);
+
+   private:
+    util::MacAddr dest_addr_;
+};
+
+class NeighborsOnce {
+   public:
+    void send(SendSink& sink);
+};
+
+class UpstreamRetry {
+   public:
+    void send(SendSink& sink);
+};
+
+class DownstreamRetry {
+   public:
+    void send(SendSink& sink);
+
+   private:
+    std::vector<util::MacAddr> failed_;
+};
+
+class FullyResolve {
+   public:
+    FullyResolve(const util::MacAddr& from, const util::MacAddr& to, const util::MacAddr& prev_hop)
+        : from(from), to(to), prev_hop(prev_hop) {}
+
+    void send(SendSink& sink);
+
+   private:
+    void broadcast(SendSink& sink);
+
+    void root(SendSink& sink);
+
+    void parent(SendSink& sink);
+
+    void child(SendSink& sink);
+
+    util::MacAddr from;
+    util::MacAddr to;
+    util::MacAddr prev_hop;
+    std::vector<util::MacAddr> broadcast_failed_;
+};
+
+using SendBehavior = std::variant<DirectOnce, NeighborsOnce, UpstreamRetry, DownstreamRetry, FullyResolve>;
 
 }  // namespace meshnow::send

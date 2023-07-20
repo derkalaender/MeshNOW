@@ -11,44 +11,42 @@ namespace meshnow::event {
 
 ESP_EVENT_DECLARE_BASE(MESHNOW_INTERNAL);
 
-enum InternalEvent {
+enum class InternalEvent : int32_t {
     STATE_CHANGED,
     PARENT_FOUND,
     GOT_CONNECT_RESPONSE,
-    GOT_RESET_OK,
 };
 
-struct StateChangedData {
+struct StateChangedEvent {
     const state::State old_state;
     const state::State new_state;
 };
 
 struct ParentFoundData {
-    const util::MacAddr* mac;
+    const util::MacAddr parent;
     const int rssi;
 };
 
 struct GotConnectResponseData {
-    const util::MacAddr* mac;
-    const util::MacAddr* root_mac;
+    const util::MacAddr parent;
+    const util::MacAddr root;
 };
 
-struct GotResetOk {
-    const uint32_t id;
+class Internal {
+   public:
+    /**
+     * Initializes internal event loop.
+     */
+    static esp_err_t init();
+
+    /**
+     * Deinitializes everything.
+     */
+    static void deinit();
+
+    static void fire(InternalEvent event, void* data, size_t data_size);
+
+    static esp_event_loop_handle_t handle;
 };
-
-/**
- * Initializes internal event loop.
- */
-esp_err_t init();
-
-/**
- * Deinitializes everything.
- */
-void deinit();
-
-void fireEvent(esp_event_base_t base, int32_t id, void* data, size_t data_size);
-
-esp_event_loop_handle_t getEventHandle();
 
 }  // namespace meshnow::event

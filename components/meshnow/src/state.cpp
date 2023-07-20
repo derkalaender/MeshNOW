@@ -2,7 +2,7 @@
 
 #include <esp_log.h>
 
-#include "event_internal.hpp"
+#include "event.hpp"
 #include "layout.hpp"
 #include "packets.hpp"
 #include "send/queue.hpp"
@@ -26,7 +26,7 @@ void setState(State new_state) {
     ESP_LOGI(TAG, "Requested state change from %d to %d", static_cast<uint8_t>(state), static_cast<uint8_t>(new_state));
     if (new_state == state) return;
 
-    event::StateChangedData data{
+    event::StateChangedEvent data{
         .old_state = state,
         .new_state = new_state,
     };
@@ -34,7 +34,7 @@ void setState(State new_state) {
     state = new_state;
 
     ESP_LOGI(TAG, "Firing event!");
-    event::fireEvent(event::MESHNOW_INTERNAL, event::InternalEvent::STATE_CHANGED, &data, sizeof(data));
+    event::Internal::fire(event::InternalEvent::STATE_CHANGED, &data, sizeof(data));
 
     // don't send root reachable status events downstream if no children
     if (!layout::Layout::get().hasChildren()) return;
@@ -42,11 +42,11 @@ void setState(State new_state) {
     // send to all children downstream
     if (new_state == State::REACHES_ROOT) {
         auto payload = packets::RootReachable{.root = getRootMac()};
-        send::enqueuePayload(payload, send::SendBehavior::children(), true);
+        send::enqueuePayload(payload, send::DownstreamRetry(), true);
     } else {
         assert(!isRoot());
         auto payload = packets::RootUnreachable{};
-        send::enqueuePayload(payload, send::SendBehavior::children(), true);
+        send::enqueuePayload(payload, send::DownstreamRetry(), true);
     }
 }
 

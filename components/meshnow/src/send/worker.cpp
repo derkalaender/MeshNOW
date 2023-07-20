@@ -1,9 +1,12 @@
 #include "worker.hpp"
 
 #include <esp_log.h>
+#include <esp_random.h>
+
+#include <espnow_multi.hpp>
+#include <utility>
 
 #include "def.hpp"
-#include "espnow_multi.hpp"
 #include "layout.hpp"
 #include "mtx.hpp"
 #include "queue.hpp"
@@ -14,19 +17,23 @@ namespace meshnow::send {
 static constexpr auto TAG = CREATE_TAG("SendWorker");
 static constexpr auto MIN_TIMEOUT = pdMS_TO_TICKS(500);
 
-/**
- * Sends packet via ESP-NOW. Interface and impl are separate to achieve low coupling and prevent circular dependency.
- */
-class SendSinkImpl : public SendSink,
-                     public espnow_multi::EspnowSender,
-                     public std::enable_shared_from_this<SendSinkImpl> {
+class Sender : public espnow_multi::EspnowSender {
    public:
-    void sendCallback(const uint8_t* peer_addr, esp_now_send_status_t status) override {}
+    void sendCallback(const uint8_t* peer_addr, esp_now_send_status_t status) override {
+        // TODO
+    }
+};
 
-    bool accept(const util::MacAddr& dest_addr, const packets::Payload& payload) override {
+class SendSinkImpl : public SendSink {
+   public:
+    SendSinkImpl(std::shared_ptr<Sender> sender, SendBehavior behavior, packets::Payload payload, uint32_t id)
+        : sender_(std::move(sender)), behavior_(std::move(behavior)), payload_(std::move(payload)), id_(id) {}
+
+    bool accept(const util::MacAddr& next_hop, const util::MacAddr& from, const util::MacAddr& to) override {
         // serialize
-        auto buffer = packets::serialize(packets::Packet{0, payload});
-        if (multi_instance_->send(shared_from_this(), dest_addr.addr.data(), buffer.data(), buffer.size()) != ESP_OK) {
+        auto buffer = packets::serialize(packets::Packet{id_, from, to, payload_});
+        if (espnow_multi::EspnowMulti::getInstance()->send(sender_, next_hop.addr.data(), buffer.data(),
+                                                           buffer.size()) != ESP_OK) {
             ESP_LOGW(TAG, "Failed to send packet!");
             return false;
         } else {
@@ -35,14 +42,20 @@ class SendSinkImpl : public SendSink,
         }
     }
 
+    void requeue() override { enqueuePayload(payload_, behavior_, id_); }
+
    private:
+    std::shared_ptr<Sender> sender_;
+    SendBehavior behavior_;
+    packets::Payload payload_;
+    uint32_t id_;
 };
 
 void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_worker_finished_bit) {
     ESP_LOGI(TAG, "Starting!");
 
-    // create sink
-    auto sink = std::make_shared<SendSinkImpl>();
+    // create sender
+    auto sender = std::make_shared<Sender>();
 
     while (!should_stop) {
         auto item = popItem(MIN_TIMEOUT);
@@ -53,8 +66,9 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
 
         {
             auto _ = lock();
+            SendSinkImpl sink{sender, item->behavior, item->payload, item->id};
             // delegate sending to send behavior
-            item->behavior->send(*sink, item->payload);
+            std::visit([&](auto& behavior) { behavior.send(sink); }, item->behavior);
         }
     }
 

@@ -52,7 +52,23 @@ struct Layout {
      */
     bool isEmpty() const;
 
+    bool hasParent() const;
+
+    Neighbor& getParent();
+
+    void setParent(const util::MacAddr& mac);
+
+    void removeParent();
+
     bool hasChildren() const;
+
+    bool hasChild(const util::MacAddr& mac) const;
+
+    Child& getChild(const util::MacAddr& mac);
+
+    std::span<Child> getChildren();
+
+    void removeChild(const util::MacAddr& mac);
 
     /**
      * Returns true iff the parent has the given mac OR a there is a child with the given mac OR the given mac is in the
@@ -60,21 +76,14 @@ struct Layout {
      */
     bool has(const util::MacAddr& mac) const;
 
-    std::optional<Neighbor>& getParent();
-
-    std::span<Child> getChildren();
-
     void addChild(const util::MacAddr& addr);
-
-    void removeChild(const util::MacAddr& mac);
 
    private:
     Layout() = default;
     ~Layout() = default;
 
     std::optional<Neighbor> parent_;
-    std::array<Child, MAX_CHILDREN> children_;
-    size_t num_children{0};
+    std::vector<Child> children_;
 };
 
 }  // namespace meshnow::layout

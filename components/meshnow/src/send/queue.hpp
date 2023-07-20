@@ -15,7 +15,8 @@ namespace meshnow::send {
 
 struct Item {
     packets::Payload payload;
-    std::unique_ptr<SendBehavior> behavior;
+    SendBehavior behavior;
+    uint32_t id;
 };
 
 /**
@@ -32,9 +33,11 @@ void deinit();
  * Enqueues a new payload to be sent.
  * @param packet The payload to send
  * @param behavior The behavior to use for sending
- * @param priority If true, the payload is sent before all others in the queue
+ * @param id The id of the packet
  */
-void enqueuePayload(const packets::Payload& payload, std::unique_ptr<SendBehavior> behavior, bool priority);
+void enqueuePayload(const packets::Payload& payload, SendBehavior behavior, uint32_t id);
+
+void enqueuePayload(const packets::Payload& payload, SendBehavior behavior);
 
 std::optional<Item> popItem(TickType_t timeout);
 

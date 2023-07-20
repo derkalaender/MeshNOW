@@ -5,7 +5,7 @@
 
 #include <memory>
 
-#include "event_internal.hpp"
+#include "event.hpp"
 #include "job.hpp"
 #include "layout.hpp"
 #include "send/worker.hpp"
@@ -35,8 +35,8 @@ class UnreachableTimeoutJob : public Job {
     void performAction() override;
 
    private:
-    util::EventHandlerInstance event_handler_instance_{event::getEventHandle(), event::MESHNOW_INTERNAL,
-                                                       event::InternalEvent::STATE_CHANGED,
+    util::EventHandlerInstance event_handler_instance_{event::Internal::handle, event::MESHNOW_INTERNAL,
+                                                       static_cast<int32_t>(event::InternalEvent::STATE_CHANGED),
                                                        &UnreachableTimeoutJob::event_handler, this};
     TickType_t mesh_unreachable_since_{0};
     bool awaiting_reachable{false};

@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-#include "event_internal.hpp"
+#include "event.hpp"
 #include "job.hpp"
 #include "util/event.hpp"
 #include "util/mac.hpp"
@@ -41,7 +41,7 @@ class ConnectJob : public Job {
         TickType_t nextActionAt() const noexcept;
         void performAction(ConnectJob& job);
 
-        void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
+        void event_handler(ConnectJob& job, event::InternalEvent event, void* event_data);
 
        private:
         /**
@@ -83,7 +83,7 @@ class ConnectJob : public Job {
         TickType_t nextActionAt() const noexcept;
         void performAction(ConnectJob& job);
 
-        void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
+        void event_handler(ConnectJob& job, event::InternalEvent event, void* event_data);
 
        private:
         /**
@@ -114,35 +114,6 @@ class ConnectJob : public Job {
     };
 
     /**
-     * Sends a request request upstream so that all nodes to the root know of this node's presence.
-     */
-    class ResetPhase {
-       public:
-        TickType_t nextActionAt() const noexcept;
-        void performAction(ConnectJob& job);
-
-        void event_handler(ConnectJob& job, int32_t event_id, void* event_data) const;
-
-       private:
-        static void sendResetRequest(uint32_t id);
-
-        /**
-         * If this phase just been started.
-         */
-        bool started_{false};
-
-        /**
-         * Time since ResetRequest was sent.
-         */
-        TickType_t reset_sent_time_{0};
-
-        /**
-         * The random ID with which the ResetRequest is sent.
-         */
-        uint32_t reset_id_{esp_random()};
-    };
-
-    /**
      * Idle phase, only reacts to state change when disconnecting from the parent.
      */
     class DonePhase {
@@ -150,7 +121,7 @@ class ConnectJob : public Job {
         TickType_t nextActionAt() const noexcept;
         void performAction(ConnectJob& job);
 
-        void event_handler(ConnectJob& job, int32_t event_id, void* event_data);
+        void event_handler(ConnectJob& job, event::InternalEvent event, void* event_data);
 
        private:
         /**
@@ -159,11 +130,11 @@ class ConnectJob : public Job {
         bool started_{false};
     };
 
-    using Phase = std::variant<SearchPhase, ConnectPhase, ResetPhase, DonePhase>;
+    using Phase = std::variant<SearchPhase, ConnectPhase, DonePhase>;
 
     static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
-    util::EventHandlerInstance event_handler_instance_{event::getEventHandle(), event::MESHNOW_INTERNAL,
+    util::EventHandlerInstance event_handler_instance_{event::Internal::handle, event::MESHNOW_INTERNAL,
                                                        ESP_EVENT_ANY_ID, &ConnectJob::event_handler, this};
 
     const ChannelConfig channel_config_;

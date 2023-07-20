@@ -1,6 +1,6 @@
 #pragma once
 
-#include "espnow_multi.hpp"
+#include <espnow_multi.hpp>
 
 namespace meshnow::receive {
 
