@@ -28,10 +28,9 @@ constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
 // Time to wait for a connection reply
 constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(1000);
 
-// Time to wait for an ResetOK
-constexpr auto RESET_TIMEOUT = pdMS_TO_TICKS(5000);
-
 }  // namespace
+
+// TODO save last channel to NVS
 
 namespace meshnow::job {
 
@@ -170,7 +169,7 @@ void ConnectJob::SearchPhase::event_handler(ConnectJob &job, event::InternalEven
 }
 
 void ConnectJob::SearchPhase::sendSearchProbe() {
-    ESP_LOGI(TAG, "Broadcasting search probe");
+    ESP_LOGV(TAG, "Broadcasting search probe");
     send::enqueuePayload(packets::SearchProbe{}, send::DirectOnce{util::MacAddr::broadcast()}, true);
 }
 

@@ -215,9 +215,10 @@ util::Buffer serialize(const Packet& packet) {
     FullPacket fp{MAGIC, packet};
 
     // write
-    bitsery::quickSerialization(OutputAdapter{buffer}, fp);
+    auto written_size = bitsery::quickSerialization(OutputAdapter{buffer}, fp);
 
     // shrink and return
+    buffer.resize(written_size);
     buffer.shrink_to_fit();
     return buffer;
 }
