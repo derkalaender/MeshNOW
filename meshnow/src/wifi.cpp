@@ -18,8 +18,6 @@ static wifi_sta_config_t sta_config_;
 static esp_event_handler_instance_t wifi_event_handler_instance_ = nullptr;
 static esp_event_handler_instance_t ip_event_handler_instance_ = nullptr;
 
-static esp_netif_obj *wifi_sta_netif_obj_ = nullptr;
-
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT) {
         if (event_id == WIFI_EVENT_STA_START) {
@@ -45,8 +43,8 @@ void setConfig(wifi_sta_config_t *sta_config) { sta_config_ = *sta_config; }
 
 void setShouldConnect(bool should_connect) { should_connect_ = should_connect; }
 
-esp_err_t start() {
-    ESP_LOGI(TAG, "Starting Wi-Fi...");
+esp_err_t init() {
+    ESP_LOGI(TAG, "Initializing Wi-Fi...");
 
     // set mode to station for both root and node
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "Could not set Wi-Fi mode");
@@ -56,10 +54,13 @@ esp_err_t start() {
     // no powersave mode or else ESP-NOW may not receive messages
     ESP_RETURN_ON_ERROR(esp_wifi_set_ps(WIFI_PS_NONE), TAG, "Could not set Wi-Fi powersave mode");
 
-    // root may should_connect to a router
+    // root may connect to a router
     if (state::isRoot() && should_connect_) {
-        // need to create default sta to should_connect to router
-        wifi_sta_netif_obj_ = esp_netif_create_default_wifi_sta();
+        // create default STA netif if not already created
+        if (esp_netif_get_handle_from_ifkey((ESP_NETIF_BASE_DEFAULT_WIFI_STA)->if_key) == nullptr) {
+            // Wi-Fi station netif has not been created yet, create it
+            esp_netif_create_default_wifi_sta();
+        }
 
         // set router config
         wifi_config_t wifi_config = {.sta = sta_config_};
@@ -73,6 +74,13 @@ esp_err_t start() {
                                                                 &ip_event_handler_instance_),
                             TAG, "Could not register IP event handler");
     }
+
+    ESP_LOGI(TAG, "Wi-Fi initialized!");
+    return ESP_OK;
+}
+
+esp_err_t start() {
+    ESP_LOGI(TAG, "Starting Wi-Fi...");
 
     // actually start Wi-Fi
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "Could not start Wi-Fi");
@@ -101,14 +109,7 @@ esp_err_t stop() {
     // stop Wi-Fi
     ESP_RETURN_ON_ERROR(esp_wifi_stop(), TAG, "Could not stop Wi-Fi");
 
-    // delete default sta netif
-    if (wifi_sta_netif_obj_ != nullptr) {
-        esp_netif_destroy(wifi_sta_netif_obj_);
-        wifi_sta_netif_obj_ = nullptr;
-    }
-
     ESP_LOGI(TAG, "Wi-Fi stopped!");
-
     return ESP_OK;
 }
 
