@@ -86,8 +86,6 @@ extern "C" esp_err_t meshnow_init(meshnow_config_t *config) {
         nvs_close(nvs_handle);
     }
 
-    ESP_RETURN_ON_ERROR(meshnow::wifi::init(), TAG, "Initializing Wi-Fi failed");
-
     // init internal event loop
     ESP_RETURN_ON_ERROR(meshnow::event::Internal::init(), TAG, "Initializing internal event loop failed");
 
@@ -108,6 +106,8 @@ extern "C" esp_err_t meshnow_init(meshnow_config_t *config) {
     } else {
         meshnow::wifi::setShouldConnect(false);
     }
+
+    ESP_RETURN_ON_ERROR(meshnow::wifi::init(), TAG, "Initializing Wi-Fi failed");
 
     // init networking
     ESP_RETURN_ON_ERROR(networking.init(), TAG, "Initializing networking failed");

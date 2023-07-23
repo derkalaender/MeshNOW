@@ -21,18 +21,18 @@ static esp_event_handler_instance_t ip_event_handler_instance_ = nullptr;
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT) {
         if (event_id == WIFI_EVENT_STA_START) {
-            ESP_LOGI(TAG, "Connecting to Wi-Fi...");
+            ESP_LOGI(TAG, "Connecting to configured AP...");
             ESP_ERROR_CHECK(esp_wifi_connect());
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
             auto event = static_cast<wifi_event_sta_disconnected_t *>(event_data);
-            ESP_LOGW(TAG, "Wi-Fi disconnected for reason %d", event->reason);
+            ESP_LOGW(TAG, "Disconnected from configured AP for reason %d", event->reason);
             ESP_LOGW(TAG, "Reconnecting...");
             ESP_ERROR_CHECK(esp_wifi_connect());
         }
     } else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_STA_GOT_IP) {
             auto event = static_cast<ip_event_got_ip_t *>(event_data);
-            ESP_LOGI(TAG, "ESP32's IP=" IPSTR, IP2STR(&event->ip_info.ip));
+            ESP_LOGI(TAG, "IP assigned from configured AP: " IPSTR, IP2STR(&event->ip_info.ip));
         }
     }
 }
@@ -58,10 +58,12 @@ esp_err_t init() {
     if (esp_netif_get_handle_from_ifkey((ESP_NETIF_BASE_DEFAULT_WIFI_STA)->if_key) == nullptr) {
         // Wi-Fi station netif has not been created yet, create it
         esp_netif_create_default_wifi_sta();
+        ESP_LOGI(TAG, "Created default STA interface");
     }
 
     // root may connect to a router
     if (state::isRoot() && should_connect_) {
+        ESP_LOGI(TAG, "Setting up Wi-Fi for root...");
         // set router config
         wifi_config_t wifi_config = {.sta = sta_config_};
         esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
