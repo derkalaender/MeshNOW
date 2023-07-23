@@ -38,6 +38,9 @@ class ConnectJob : public Job {
      */
     class SearchPhase {
        public:
+        explicit SearchPhase(const ChannelConfig& channel_config)
+            : current_channel_(readChannelFromNVS(channel_config)) {}
+
         TickType_t nextActionAt() const noexcept;
         void performAction(ConnectJob& job);
 
@@ -48,6 +51,10 @@ class ConnectJob : public Job {
          * Sends a beacon to search for nearby parents willing to accept this node as a child.
          */
         static void sendSearchProbe();
+
+        static uint8_t readChannelFromNVS(const ChannelConfig& channel_config);
+
+        static void writeChannelToNVS(uint8_t channel);
 
         /**
          * If this phase just been started.
@@ -72,7 +79,7 @@ class ConnectJob : public Job {
         /**
          * The current channel we are searching on.
          */
-        uint8_t current_channel_{0};
+        uint8_t current_channel_;
     };
 
     /**
@@ -140,7 +147,7 @@ class ConnectJob : public Job {
     const ChannelConfig channel_config_;
     std::vector<ParentInfo> parent_infos_;
     // starts per default with SearchPhase
-    Phase phase_{SearchPhase{}};
+    Phase phase_{SearchPhase{channel_config_}};
 };
 
 }  // namespace meshnow::job

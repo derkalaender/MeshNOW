@@ -18,6 +18,19 @@ static bool started = false;
 
 static meshnow::Networking networking;
 
+static bool checkNVS() {
+    // check if NVS is initialized
+    // do dummy operation
+    nvs_stats_t stats;
+    if (nvs_get_stats(nullptr, &stats) == ESP_ERR_NVS_NOT_INITIALIZED) {
+        ESP_LOGE(TAG, "NVS is not initialized!");
+        return false;
+    } else {
+        ESP_LOGI(TAG, "NVS OK!");
+    }
+    return true;
+}
+
 static bool checkWiFi() {
     // check if WiFi is initialized
     // do dummy operation
@@ -31,20 +44,6 @@ static bool checkWiFi() {
     return true;
 }
 
-// static bool checkEspNow() {
-//     // check if ESP-NOW is initialized
-//     // do dummy operation
-//     esp_now_peer_info_t peer;
-//     if (esp_now_fetch_peer(true, &peer) == ESP_ERR_ESPNOW_NOT_INIT) {
-//         ESP_LOGE(TAG, "ESP-NOW is not initialized!");
-//         return false;
-//     } else {
-//         ESP_LOGI(TAG, "ESP-NOW OK!");
-//         ESP_LOGI(TAG, "You may register the MeshNow callbacks now...");
-//     }
-//     return true;
-// }
-
 static bool checkNetif() {
     ESP_LOGW(TAG,
              "Cannot check if Netif is initialized due to technical limitations.\n"
@@ -54,7 +53,7 @@ static bool checkNetif() {
     return true;
 }
 
-esp_err_t meshnow_init(meshnow_config_t *config) {
+extern "C" esp_err_t meshnow_init(meshnow_config_t *config) {
     if (initialized) {
         ESP_LOGE(TAG, "MeshNOW is already initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -72,13 +71,22 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
 
     ESP_LOGI(TAG, "Initializing MeshNOW");
 
-    ESP_LOGI(TAG, "Checking ESP-IDF network stack is properly initialized...");
-    if (checkWiFi() && checkNetif()) {
+    ESP_LOGI(TAG, "Checking required ESP-IDF components (NVS, Wi-Fi, Netif) are properly initialized...");
+    if (checkNVS() && checkWiFi() && checkNetif()) {
         ESP_LOGI(TAG, "Check OK!");
     } else {
         ESP_LOGE(TAG, "Check failed!");
         return ESP_ERR_INVALID_STATE;
     }
+
+    // create meshnow namespace
+    {
+        nvs_handle_t nvs_handle;
+        ESP_RETURN_ON_ERROR(nvs_open("meshnow", NVS_READWRITE, &nvs_handle), TAG, "Creating NVS namespace failed");
+        nvs_close(nvs_handle);
+    }
+
+    ESP_RETURN_ON_ERROR(meshnow::wifi::init(), TAG, "Initializing Wi-Fi failed");
 
     // init internal event loop
     ESP_RETURN_ON_ERROR(meshnow::event::Internal::init(), TAG, "Initializing internal event loop failed");
@@ -111,7 +119,7 @@ esp_err_t meshnow_init(meshnow_config_t *config) {
     return ESP_OK;
 }
 
-esp_err_t meshnow_deinit() {
+extern "C" esp_err_t meshnow_deinit() {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -127,13 +135,15 @@ esp_err_t meshnow_deinit() {
     networking.deinit();
     meshnow::event::Internal::deinit();
 
+    ESP_RETURN_ON_ERROR(meshnow::wifi::deinit(), TAG, "Deinitializing Wi-Fi failed");
+
     initialized = false;
 
     ESP_LOGI(TAG, "MeshNOW deinitialized. Goodbye 👋");
     return ESP_OK;
 }
 
-esp_err_t meshnow_start() {
+extern "C" esp_err_t meshnow_start() {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -158,7 +168,7 @@ esp_err_t meshnow_start() {
     return ESP_OK;
 }
 
-esp_err_t meshnow_stop() {
+extern "C" esp_err_t meshnow_stop() {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;

@@ -2,6 +2,7 @@
 
 #include <esp_log.h>
 #include <esp_wifi.h>
+#include <nvs_flash.h>
 
 #include "layout.hpp"
 #include "mtx.hpp"
@@ -29,8 +30,6 @@ constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
 constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(1000);
 
 }  // namespace
-
-// TODO save last channel to NVS
 
 namespace meshnow::job {
 
@@ -129,9 +128,10 @@ void ConnectJob::SearchPhase::event_handler(ConnectJob &job, event::InternalEven
 
     auto &parent_infos = job.parent_infos_;
 
-    // if we have found the first parent, remember the time
+    // if we have found the first parent, remember the time and save the channel
     if (parent_infos.empty()) {
         first_parent_found_time_ = xTaskGetTickCount();
+        writeChannelToNVS(current_channel_);
     }
 
     // check if we already know this parent
@@ -172,6 +172,41 @@ void ConnectJob::SearchPhase::sendSearchProbe() {
     ESP_LOGV(TAG, "Broadcasting search probe");
     send::enqueuePayload(packets::SearchProbe{}, send::DirectOnce{util::MacAddr::broadcast()}, true);
 }
+uint8_t ConnectJob::SearchPhase::readChannelFromNVS(const ChannelConfig &channel_config) {
+    nvs_handle_t nvs_handle;
+    ESP_ERROR_CHECK(nvs_open("meshnow", NVS_READONLY, &nvs_handle));
+
+    uint8_t channel;
+    esp_err_t ret = nvs_get_u8(nvs_handle, "last_channel", &channel);
+
+    nvs_close(nvs_handle);
+
+    switch (ret) {
+        case ESP_OK:
+            if (channel >= channel_config.min_channel && channel <= channel_config.max_channel) {
+                break;
+            }
+            [[fallthrough]];
+        case ESP_ERR_NVS_NOT_FOUND:
+            channel = channel_config.min_channel;
+            break;
+        default:
+            ESP_ERROR_CHECK(ret);
+    }
+
+    return channel;
+}
+
+void ConnectJob::SearchPhase::writeChannelToNVS(uint8_t channel) {
+    nvs_handle_t nvs_handle;
+    ESP_ERROR_CHECK(nvs_open("meshnow", NVS_READWRITE, &nvs_handle));
+
+    ESP_ERROR_CHECK(nvs_set_u8(nvs_handle, "last_channel", channel));
+
+    ESP_ERROR_CHECK(nvs_commit(nvs_handle));
+
+    nvs_close(nvs_handle);
+}
 
 // CONNECT PHASE //
 
@@ -203,7 +238,7 @@ void ConnectJob::ConnectPhase::performAction(ConnectJob &job) {
                                [](const ParentInfo &a, const ParentInfo &b) { return a.rssi < b.rssi; });
     if (it == job.parent_infos_.end()) {
         ESP_LOGI(TAG, "All parents exhausted");
-        job.phase_ = SearchPhase{};
+        job.phase_ = SearchPhase{job.channel_config_};
         return;
     }
 
@@ -277,7 +312,7 @@ void ConnectJob::DonePhase::event_handler(meshnow::job::ConnectJob &job, event::
     ESP_LOGI(TAG, "new State: %d", static_cast<uint8_t>(state_change.new_state));
 
     if (state_change.new_state == state::State::DISCONNECTED_FROM_PARENT) {
-        job.phase_ = SearchPhase{};
+        job.phase_ = SearchPhase{job.channel_config_};
     }
 }
 

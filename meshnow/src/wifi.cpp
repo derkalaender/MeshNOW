@@ -54,14 +54,14 @@ esp_err_t init() {
     // no powersave mode or else ESP-NOW may not receive messages
     ESP_RETURN_ON_ERROR(esp_wifi_set_ps(WIFI_PS_NONE), TAG, "Could not set Wi-Fi powersave mode");
 
+    // create default STA netif if not already created (needed for both root and node)
+    if (esp_netif_get_handle_from_ifkey((ESP_NETIF_BASE_DEFAULT_WIFI_STA)->if_key) == nullptr) {
+        // Wi-Fi station netif has not been created yet, create it
+        esp_netif_create_default_wifi_sta();
+    }
+
     // root may connect to a router
     if (state::isRoot() && should_connect_) {
-        // create default STA netif if not already created
-        if (esp_netif_get_handle_from_ifkey((ESP_NETIF_BASE_DEFAULT_WIFI_STA)->if_key) == nullptr) {
-            // Wi-Fi station netif has not been created yet, create it
-            esp_netif_create_default_wifi_sta();
-        }
-
         // set router config
         wifi_config_t wifi_config = {.sta = sta_config_};
         esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
@@ -76,6 +76,27 @@ esp_err_t init() {
     }
 
     ESP_LOGI(TAG, "Wi-Fi initialized!");
+    return ESP_OK;
+}
+
+esp_err_t deinit() {
+    ESP_LOGI(TAG, "Deinitializing Wi-Fi...");
+
+    // unregister event handlers
+    if (wifi_event_handler_instance_ != nullptr) {
+        ESP_RETURN_ON_ERROR(
+            esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler_instance_), TAG,
+            "Could not unregister Wi-Fi event handler");
+        wifi_event_handler_instance_ = nullptr;
+    }
+    if (ip_event_handler_instance_ != nullptr) {
+        ESP_RETURN_ON_ERROR(
+            esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, ip_event_handler_instance_), TAG,
+            "Could not unregister IP event handler");
+        ip_event_handler_instance_ = nullptr;
+    }
+
+    ESP_LOGI(TAG, "Wi-Fi deinitialized!");
     return ESP_OK;
 }
 

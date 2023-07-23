@@ -16,9 +16,14 @@ void setConfig(wifi_sta_config_t* sta_config);
 void setShouldConnect(bool should_connect);
 
 /**
- * Initializes Wi-Fi by creating the default STA network interface (for root) and setting everything up.
+ * Initializes Wi-Fi by creating the default STA network interface and setting everything up.
  */
 esp_err_t init();
+
+/**
+ * Deinitializes Wi-Fi.
+ */
+esp_err_t deinit();
 
 /**
  * Starts Wi-Fi and sets up netif.
