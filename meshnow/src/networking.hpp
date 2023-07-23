@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "netif.hpp"
 #include "receive/receiver.hpp"
 #include "util/task.hpp"
 #include "util/waitbits.hpp"
@@ -41,7 +42,7 @@ class Networking {
     util::Task job_runner_task_;
     util::Task send_worker_task_;
 
-    //    std::unique_ptr<lwip::netif::Netif> netif_;
+    NowNetif netif_;
 };
 
 }  // namespace meshnow

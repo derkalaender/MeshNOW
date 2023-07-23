@@ -7,6 +7,7 @@
 
 #include "fragments.hpp"
 #include "job/runner.hpp"
+#include "netif.hpp"
 #include "receive/queue.hpp"
 #include "send/queue.hpp"
 #include "send/worker.hpp"
@@ -27,17 +28,11 @@ esp_err_t Networking::init() {
     ESP_RETURN_ON_ERROR(receive::init(), TAG, "Failed to initialize receive queue");
     ESP_RETURN_ON_ERROR(task_waitbits_.init(), TAG, "Failed to initialize task waitbits");
     ESP_RETURN_ON_ERROR(fragments::init(), TAG, "Failed to initialize fragment reassembly");
+    ESP_RETURN_ON_ERROR(netif_.init(), TAG, "Failed to initialize custom netif");
 
     // init receiver
     receiver_ = std::make_shared<receive::Receiver>();
     espnow_multi::EspnowMulti::getInstance()->addReceiver(receiver_);
-
-    //    // create netif
-    //    if (state_->isRoot()) {
-    //        netif_ = std::make_shared<meshnow::lwip::netif::RootNetif>(send_worker_, layout_);
-    //    } else {
-    //        netif_ = std::make_shared<meshnow::lwip::netif::NodeNetif>(send_worker_, layout_);
-    //    }
 
     return ESP_OK;
 }
@@ -46,6 +41,7 @@ void Networking::deinit() {
     ESP_LOGI(TAG, "Deinitializing");
 
     // reverse order of init
+    netif_.deinit();
     fragments::deinit();
     receive::deinit();
     send::deinit();
@@ -71,8 +67,7 @@ esp_err_t Networking::start() {
 
     // start send worker
     {
-        // the send worker has a higher priority so that it can always send
-        auto settings = util::TaskSettings{"send_worker", 5000, priority + 1, cpu};
+        auto settings = util::TaskSettings{"send_worker", 5000, priority, cpu};
         ESP_RETURN_ON_ERROR(send_worker_task_.init(settings, &send::worker_task, std::ref(stop_tasks_),
                                                    std::ref(task_waitbits_), SEND_WORKER_FINISHED_BIT),
                             TAG, "Failed to create send worker task");
@@ -90,11 +85,17 @@ esp_err_t Networking::start() {
     //        netif_->start();
     //    }
 
+    // TODO turn into event
+    netif_.start();
+
     return ESP_OK;
 }
 
 void Networking::stop() {
     ESP_LOGI(TAG, "Stopping");
+
+    // TODO turn into event
+    netif_.stop();
 
     stop_tasks_ = true;
 

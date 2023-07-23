@@ -54,16 +54,17 @@ esp_err_t init() {
     // no powersave mode or else ESP-NOW may not receive messages
     ESP_RETURN_ON_ERROR(esp_wifi_set_ps(WIFI_PS_NONE), TAG, "Could not set Wi-Fi powersave mode");
 
-    // create default STA netif if not already created (needed for both root and node)
-    if (esp_netif_get_handle_from_ifkey((ESP_NETIF_BASE_DEFAULT_WIFI_STA)->if_key) == nullptr) {
-        // Wi-Fi station netif has not been created yet, create it
-        esp_netif_create_default_wifi_sta();
-        ESP_LOGI(TAG, "Created default STA interface");
-    }
-
     // root may connect to a router
     if (state::isRoot() && should_connect_) {
         ESP_LOGI(TAG, "Setting up Wi-Fi for root...");
+
+        // create default STA netif if not already created (needed for root to connect to router)
+        if (esp_netif_get_handle_from_ifkey((ESP_NETIF_BASE_DEFAULT_WIFI_STA)->if_key) == nullptr) {
+            // Wi-Fi station netif has not been created yet, create it
+            esp_netif_create_default_wifi_sta();
+            ESP_LOGI(TAG, "Created default STA interface");
+        }
+
         // set router config
         wifi_config_t wifi_config = {.sta = sta_config_};
         esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
