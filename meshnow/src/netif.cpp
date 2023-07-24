@@ -10,6 +10,7 @@
 
 #include <memory>
 
+#include "event.hpp"
 #include "fragments.hpp"
 #include "packets.hpp"
 #include "send/queue.hpp"
@@ -130,19 +131,36 @@ esp_err_t NowNetif::initRootSpecific() {
     return ESP_OK;
 }
 
-// TODO maybe register these just as event handlers
+static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    assert(event_base == event::MESHNOW_INTERNAL && "Invalid event base");
+    assert(event_id == static_cast<int32_t>(event::InternalEvent::STATE_CHANGED) && "Invalid event id");
+
+    auto& netif = *static_cast<NowNetif*>(event_handler_arg);
+    auto data = *static_cast<event::StateChangedEvent*>(event_data);
+
+    if (data.old_state == state::State::DISCONNECTED_FROM_PARENT) {
+        // connected to parent
+        esp_netif_action_connected(netif.netif_.get(), nullptr, 0, nullptr);
+    } else if (data.new_state == state::State::DISCONNECTED_FROM_PARENT) {
+        // disconnected from parent
+        esp_netif_action_disconnected(netif.netif_.get(), nullptr, 0, nullptr);
+    }
+}
 
 void NowNetif::start() {
     ESP_LOGI(TAG, "Starting network interface");
     ESP_ERROR_CHECK(io_receive_task_handle.init(util::TaskSettings("io_receive", 2048, 4, util::CPU::PRO_CPU),
                                                 [&] { io_receive_task(); }));
     esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
+    event_handler_instance_.emplace(event::Internal::handle, event::MESHNOW_INTERNAL,
+                                    static_cast<uint32_t>(event::InternalEvent::STATE_CHANGED), &event_handler, this);
     ESP_LOGI(TAG, "Started network interface");
 }
 
 void NowNetif::stop() {
     ESP_LOGI(TAG, "Stopping network interface");
     io_receive_task_handle = util::Task();
+    event_handler_instance_.reset();
     esp_netif_action_stop(netif_.get(), nullptr, 0, nullptr);
     if (!state::isRoot()) {
         esp_netif_action_disconnected(netif_.get(), nullptr, 0, nullptr);

@@ -2,10 +2,11 @@
 
 #include <esp_task.h>
 
+#include "meshnow.h"
+
 namespace meshnow::event {
 
 ESP_EVENT_DEFINE_BASE(MESHNOW_INTERNAL);
-ESP_EVENT_DEFINE_BASE(MESHNOW_EVENT);
 
 esp_err_t Internal::init() {
     // TODO all these values should be config values

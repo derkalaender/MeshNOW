@@ -11,8 +11,8 @@ void Receiver::receiveCallback(const esp_now_recv_info_t *esp_now_info, const ui
     // convert raw data pointer into buffer (vector) for deserialization TODO avoid this
     std::vector<uint8_t> buffer(data, data + data_len);
 
-    ESP_LOGI("TEST", "RECEIVED DATA");
-    ESP_LOG_BUFFER_HEXDUMP("TEST", buffer.data(), buffer.size(), ESP_LOG_INFO);
+    //    ESP_LOGI("TEST", "RECEIVED DATA");
+    //    ESP_LOG_BUFFER_HEXDUMP("TEST", buffer.data(), buffer.size(), ESP_LOG_INFO);
 
     // deserialize
     auto packet = packets::deserialize(buffer);

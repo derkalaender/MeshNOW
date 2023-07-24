@@ -13,6 +13,8 @@
 
 static constexpr auto *TAG = CREATE_TAG("🦌");
 
+ESP_EVENT_DEFINE_BASE(MESHNOW_EVENT);
+
 static bool initialized = false;
 static bool started = false;
 
