@@ -3,6 +3,7 @@
 #include <esp_log.h>
 
 #include "layout.hpp"
+#include "meshnow.h"
 #include "send/queue.hpp"
 #include "state.hpp"
 #include "util/util.hpp"
@@ -72,6 +73,15 @@ void UnreachableTimeoutJob::performAction() {
         // if we haven't lost the parent by now because of a Keep Alive timeout, remove it
         auto& layout = layout::Layout::get();
         if (layout.hasParent()) {
+            // fire disconnect event
+            {
+                meshnow_event_parent_disconnected_t parent_disconnected_event;
+                util::MacAddr& parent_mac = layout::Layout::get().getParent().mac;
+                std::copy(parent_mac.addr.begin(), parent_mac.addr.end(), parent_disconnected_event.parent_mac);
+                esp_event_post(MESHNOW_EVENT, meshnow_event_t::MESHNOW_EVENT_PARENT_DISCONNECTED,
+                               &parent_disconnected_event, sizeof(parent_disconnected_event), portMAX_DELAY);
+            }
+
             layout.removeParent();
             state::setState(state::State::DISCONNECTED_FROM_PARENT);  // set state to disconnected
         }
@@ -152,6 +162,16 @@ void NeighborCheckJob::performAction() {
         auto& parent = layout.getParent();
         if (now - parent.last_seen > KEEP_ALIVE_TIMEOUT) {
             ESP_LOGW(TAG, "Parent " MACSTR " timed out", MAC2STR(parent.mac));
+
+            // fire disconnect event
+            {
+                meshnow_event_parent_disconnected_t parent_disconnected_event;
+                util::MacAddr& parent_mac = layout::Layout::get().getParent().mac;
+                std::copy(parent_mac.addr.begin(), parent_mac.addr.end(), parent_disconnected_event.parent_mac);
+                esp_event_post(MESHNOW_EVENT, meshnow_event_t::MESHNOW_EVENT_PARENT_DISCONNECTED,
+                               &parent_disconnected_event, sizeof(parent_disconnected_event), portMAX_DELAY);
+            }
+
             layout.removeParent();
             state::setState(state::State::DISCONNECTED_FROM_PARENT);
         }

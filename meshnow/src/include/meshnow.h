@@ -8,6 +8,43 @@ extern "C" {
 #endif
 
 /**
+ * Event base for MeshNOW events.
+ */
+ESP_EVENT_DECLARE_BASE(MESHNOW_EVENT);
+
+/**
+ * MeshNOW event types.
+ */
+typedef enum {
+    // maybe add start & stop back in?
+    // MESH_EVENT_STARTED,
+    // MESH_EVENT_STOPPED,
+    MESHNOW_EVENT_CHILD_CONNECTED,
+    MESHNOW_EVENT_CHILD_DISCONNECTED,
+    MESHNOW_EVENT_PARENT_CONNECTED,
+    MESHNOW_EVENT_PARENT_DISCONNECTED,
+    // TODO routing table
+} meshnow_event_t;
+
+// MeshNOW event data structs
+
+typedef struct {
+    uint8_t child_mac[6];
+} meshnow_event_child_connected_t;
+
+typedef struct {
+    uint8_t child_mac[6];
+} meshnow_event_child_disconnected_t;
+
+typedef struct {
+    uint8_t parent_mac[6];
+} meshnow_event_parent_connected_t;
+
+typedef struct {
+    uint8_t parent_mac[6];
+} meshnow_event_parent_disconnected_t;
+
+/**
  * MeshNOW configuration struct.
  */
 typedef struct {
@@ -68,6 +105,8 @@ esp_err_t meshnow_start();
  * @note Make sure to have actually started the mesh before calling this function.
  */
 esp_err_t meshnow_stop();
+
+// TODO custom data
 
 #ifdef __cplusplus
 };

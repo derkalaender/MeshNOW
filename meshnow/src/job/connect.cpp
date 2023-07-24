@@ -5,6 +5,7 @@
 #include <nvs_flash.h>
 
 #include "layout.hpp"
+#include "meshnow.h"
 #include "mtx.hpp"
 #include "packets.hpp"
 #include "send/queue.hpp"
@@ -274,6 +275,14 @@ void ConnectJob::ConnectPhase::event_handler(ConnectJob &job, event::InternalEve
     // update the state
     // we can assume to immediately reach the root since the parent also has to reach the root
     state::setState(state::State::REACHES_ROOT);
+
+    // fire connect event
+    {
+        meshnow_event_parent_connected_t parent_connected_event;
+        std::copy(parent_mac.addr.begin(), parent_mac.addr.end(), parent_connected_event.parent_mac);
+        esp_event_post(MESHNOW_EVENT, meshnow_event_t::MESHNOW_EVENT_PARENT_CONNECTED, &parent_connected_event,
+                       sizeof(parent_connected_event), portMAX_DELAY);
+    }
 
     // we now want to perform the reset
     job.phase_ = DonePhase{};

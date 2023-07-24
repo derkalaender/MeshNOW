@@ -21,8 +21,10 @@ static esp_event_handler_instance_t ip_event_handler_instance_ = nullptr;
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT) {
         if (event_id == WIFI_EVENT_STA_START) {
-            ESP_LOGI(TAG, "Connecting to configured AP...");
+            ESP_LOGI(TAG, "Connecting to configured AP... Nodes may not connect due to channel-scan.");
             ESP_ERROR_CHECK(esp_wifi_connect());
+        } else if (event_id == WIFI_EVENT_STA_CONNECTED) {
+            ESP_LOGI(TAG, "Connected to configured AP... Nodes may connect again.");
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
             auto event = static_cast<wifi_event_sta_disconnected_t *>(event_data);
             ESP_LOGW(TAG, "Disconnected from configured AP for reason %d", event->reason);

@@ -127,7 +127,7 @@ void PacketHandler::handle(const MetaData& meta, const packets::SearchProbe& p) 
     if (!canAcceptNewChild()) return;
 
     // send reply
-    ESP_LOGV(TAG, "Sending I Am Here");
+    ESP_LOGI(TAG, "Sending I Am Here");
     send::enqueuePayload(packets::SearchReply{}, send::DirectOnce{meta.from}, true);
 }
 
@@ -186,6 +186,8 @@ void PacketHandler::handle(const MetaData& meta, const packets::RootUnreachable&
     ESP_LOGI(TAG, "Got Root Unreachable packet from parent");
 
     state::setState(state::State::CONNECTED_TO_PARENT);
+
+    // TODO forward
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::RootReachable& p) {
@@ -195,6 +197,8 @@ void PacketHandler::handle(const MetaData& meta, const packets::RootReachable& p
     ESP_LOGI(TAG, "Got Root Reachable packet from parent");
 
     state::setState(state::State::REACHES_ROOT);
+
+    // todo forward
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::DataFragment& p) {
