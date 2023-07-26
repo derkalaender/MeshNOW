@@ -54,7 +54,7 @@ Done! You can now use MeshNOW in your project.
 
 
 What's Next?
-----------
+------------
 Explore the rest of the documentation!
 
 See the :doc:`examples/index` for some inspiration on how to use MeshNOW.

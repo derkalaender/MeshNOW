@@ -32,8 +32,9 @@ Macros
 .. doxygendefine:: MESHNOW_MAX_CUSTOM_MESSAGE_SIZE
 .. doxygendefine:: MESHNOW_ADDRESS_LENGTH
 
-Constants
+Variables
 ^^^^^^^^^
+.. doxygenvariable:: MESHNOW_EVENT
 .. doxygenvariable:: MESHNOW_BROADCAST_ADDRESS
 .. doxygenvariable:: MESHNOW_ROOT_ADDRESS
 
