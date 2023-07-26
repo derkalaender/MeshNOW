@@ -26,9 +26,24 @@ ESP_EVENT_DECLARE_BASE(MESHNOW_EVENT);
  * MeshNOW event types.
  */
 typedef enum {
+    /**
+     * A child has connected to this node.
+     */
     MESHNOW_EVENT_CHILD_CONNECTED,
+
+    /**
+     * A child has disconnected from this node.
+     */
     MESHNOW_EVENT_CHILD_DISCONNECTED,
+
+    /**
+     * This node has connected to a parent.
+     */
     MESHNOW_EVENT_PARENT_CONNECTED,
+
+    /**
+     * This node has disconnected from a parent.
+     */
     MESHNOW_EVENT_PARENT_DISCONNECTED,
 } meshnow_event_t;
 
@@ -73,6 +88,21 @@ typedef struct {
 } meshnow_event_parent_disconnected_t;
 
 /**
+ * Configuration options for the root when connecting to a router.
+ */
+typedef struct {
+    /**
+     * If true, the root node will try to connect to a router.
+     */
+    bool should_connect;
+
+    /**
+     * ESP Wi-Fi station configuration.
+     */
+    wifi_sta_config_t* sta_config;
+} meshnow_router_config_t;
+
+/**
  * MeshNOW configuration.
  */
 typedef struct {
@@ -82,19 +112,9 @@ typedef struct {
     bool root;
 
     /**
-     * Configuration options for the root when connecting to a router.
+     * Router configuration for when `root` is true.
      */
-    struct {
-        /**
-         * If true, the root node will try to connect to a router.
-         */
-        bool should_connect;
-
-        /**
-         * ESP Wi-Fi station configuration.
-         */
-        wifi_sta_config_t* sta_config;
-    } router_config;
+    meshnow_router_config_t router_config;
 } meshnow_config_t;
 
 /**
