@@ -42,11 +42,11 @@ void setState(State new_state) {
     // send to all children downstream
     if (new_state == State::REACHES_ROOT) {
         auto payload = packets::RootReachable{.root = getRootMac()};
-        send::enqueuePayload(payload, send::DownstreamRetry(), true);
+        send::enqueuePayload(payload, send::DownstreamRetry());
     } else {
         assert(!isRoot());
         auto payload = packets::RootUnreachable{};
-        send::enqueuePayload(payload, send::DownstreamRetry(), true);
+        send::enqueuePayload(payload, send::DownstreamRetry());
     }
 }
 

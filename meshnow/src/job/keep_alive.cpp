@@ -51,7 +51,7 @@ void StatusSendJob::sendStatus() {
         .root = state == state::State::REACHES_ROOT ? std::make_optional(state::getRootMac()) : std::nullopt,
     };
 
-    send::enqueuePayload(payload, send::NeighborsOnce{}, true);
+    send::enqueuePayload(payload, send::NeighborsOnce{});
 }
 
 // UnreachableTimeoutJob //
@@ -186,7 +186,7 @@ void NeighborCheckJob::sendChildDisconnected(const util::MacAddr& mac) {
 
     // send to parent
     auto payload = packets::RoutingTableRemove{mac};
-    send::enqueuePayload(payload, send::UpstreamRetry{}, true);
+    send::enqueuePayload(payload, send::UpstreamRetry{});
 }
 
 }  // namespace meshnow::job

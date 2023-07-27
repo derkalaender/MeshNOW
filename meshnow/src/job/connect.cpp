@@ -70,6 +70,7 @@ void ConnectJob::event_handler(void *event_handler_arg, esp_event_base_t event_b
 
     auto &job = *static_cast<ConnectJob *>(event_handler_arg);
     // forward to current phase
+    Lock lock;
     std::visit([&](auto &phase) { phase.event_handler(job, static_cast<event::InternalEvent>(event_id), event_data); },
                job.phase_);
 }
@@ -170,7 +171,7 @@ void ConnectJob::SearchPhase::event_handler(ConnectJob &job, event::InternalEven
 
 void ConnectJob::SearchPhase::sendSearchProbe() {
     ESP_LOGV(TAG, "Broadcasting search probe");
-    send::enqueuePayload(packets::SearchProbe{}, send::DirectOnce{util::MacAddr::broadcast()}, true);
+    send::enqueuePayload(packets::SearchProbe{}, send::DirectOnce{util::MacAddr::broadcast()});
 }
 uint8_t ConnectJob::SearchPhase::readChannelFromNVS(const ChannelConfig &channel_config) {
     nvs_handle_t nvs_handle;
@@ -289,7 +290,7 @@ void ConnectJob::ConnectPhase::event_handler(ConnectJob &job, event::InternalEve
 
 void ConnectJob::ConnectPhase::sendConnectRequest(const util::MacAddr &to_mac) {
     ESP_LOGI(TAG, "Sending connect request to " MACSTR, MAC2STR(to_mac));
-    send::enqueuePayload(packets::ConnectRequest{}, send::DirectOnce(to_mac), true);
+    send::enqueuePayload(packets::ConnectRequest{}, send::DirectOnce(to_mac));
 }
 
 // DonePhase //

@@ -131,7 +131,7 @@ void PacketHandler::handle(const MetaData& meta, const packets::SearchProbe& p) 
 
     // send reply
     ESP_LOGI(TAG, "Sending I Am Here");
-    send::enqueuePayload(packets::SearchReply{}, send::DirectOnce{meta.from}, true);
+    send::enqueuePayload(packets::SearchReply{}, send::DirectOnce{meta.from}, );
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::SearchReply&) {
@@ -158,7 +158,7 @@ void PacketHandler::handle(const MetaData& meta, const packets::ConnectRequest& 
 
     // send reply
     ESP_LOGI(TAG, "Sending Connect Response");
-    send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::DirectOnce(meta.from), true);
+    send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::DirectOnce(meta.from));
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::ConnectOk& p) {
