@@ -12,6 +12,7 @@
 
 #include "event.hpp"
 #include "fragments.hpp"
+#include "lock.hpp"
 #include "packets.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
@@ -187,12 +188,16 @@ void NowNetif::deinitRootSpecific() { ip_napt_enable(subnet_ip.ip.addr, 0); }
 [[noreturn]] void NowNetif::io_receive_task() {
     ESP_LOGI(TAG, "IO receive task started");
 
+    auto last_wake_time = xTaskGetTickCount();
+
     while (true) {
         auto data = fragments::popReassembledData(portMAX_DELAY);
         if (!data) continue;
 
         esp_netif_receive(netif_.get(), data->data(), data->size(), nullptr);
-        vTaskDelay(1000);
+
+        // cycle should take at least one tick as to not trigger the watchdog
+        xTaskDelayUntil(&last_wake_time, 1);
     }
 }
 
@@ -207,7 +212,7 @@ void NowNetif::deinitRootSpecific() { ip_napt_enable(subnet_ip.ip.addr, 0); }
  */
 static meshnow::packets::DataFragment fragment(uint32_t frag_id, uint8_t*& buffer, size_t& size_remaining,
                                                uint8_t& frag_num, uint16_t total_size) {
-    static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 8 - 19};
+    static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 20 - 6};
 
     util::Buffer data;
 

@@ -21,7 +21,7 @@ using InputAdapter = bitsery::InputBufferAdapter<meshnow::util::Buffer>;
 
 // CONSTANTS //
 constexpr std::array<uint8_t, 3> MAGIC{0x55, 0x77, 0x55};
-constexpr auto HEADER_SIZE{30};
+constexpr auto HEADER_SIZE{20};
 constexpr auto MAX_FRAG_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE - 6};
 constexpr auto MAX_CUSTOM_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE};
 
@@ -51,7 +51,8 @@ class DataFragmentExtension {
         assert(data.size() <= MAX_FRAG_PAYLOAD_SIZE && "Data too large");
         assert(frag_num <= 6 && "Fragment number too large");
         assert(total_size <= 1500 && "Total size too large");
-        assert((frag_num + 1) * MAX_FRAG_PAYLOAD_SIZE <= total_size && "Fragment number and total size mismatch");
+        assert(frag_num < (total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE &&
+               "Fragment number and total size mismatch");
     }
 
     template <typename Des, typename Func>

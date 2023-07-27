@@ -1,5 +1,6 @@
 #include "fragments.hpp"
 
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/portmacro.h>
 #include <freertos/task.h>
@@ -9,6 +10,8 @@
 #include "util/queue.hpp"
 
 namespace meshnow::fragments {
+
+static constexpr auto TAG = CREATE_TAG("Fragments");
 
 static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 8 - 19};
 static constexpr auto QUEUE_SIZE{10};
@@ -25,6 +28,7 @@ class ReassemblyData {
           // rounds up to the next integer
           num_fragments((total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE) {
         // reserve buffer beforehand
+        ESP_LOGI(TAG, "Reserving %d bytes for reassembly", total_size);
         data_.reserve(total_size);
     }
 
@@ -73,6 +77,9 @@ void deinit() {
 
 void addFragment(const util::MacAddr& src_mac, uint16_t fragment_id, uint16_t fragment_number, uint16_t total_size,
                  util::Buffer data) {
+    ESP_LOGI(TAG, "Received fragment %d from message %d with size %d/%d", fragment_number, fragment_id, data.size(),
+             total_size);
+
     // short-circuit logic if it is the first and only fragment
     if (fragment_number == 0 && total_size == data.size()) {
         finished_queue.push_back(std::move(data), portMAX_DELAY);
@@ -88,10 +95,11 @@ void addFragment(const util::MacAddr& src_mac, uint16_t fragment_id, uint16_t fr
         auto entry = ReassemblyData{total_size};
         entry.insert(fragment_number, data);
         reassembly_map.emplace(key, std::move(entry));
-    } else {
-        // entry already exists, add the fragment
-        it->second.insert(fragment_number, data);
+        return;
     }
+
+    // entry already exists, add the fragment
+    it->second.insert(fragment_number, data);
 
     // check if the data is complete
     if (it->second.isComplete()) {
