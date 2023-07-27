@@ -26,9 +26,7 @@ static util::WaitBits send_waitbits;
 class Sender : public espnow_multi::EspnowSender {
    public:
     void sendCallback(const uint8_t* peer_addr, esp_now_send_status_t status) override {
-        ESP_LOGD(TAG, "Send callback called with status %d", status);
-
-        send_waitbits.set(SEND_CALLBACK_BIT);
+        // NOP
     }
 };
 
@@ -65,11 +63,10 @@ class SendSinkImpl : public SendSink {
 
 void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_worker_finished_bit) {
     ESP_LOGI(TAG, "Starting!");
-
-    ESP_ERROR_CHECK(send_waitbits.init());
-
     // create sender
     auto sender = std::make_shared<Sender>();
+
+    auto last_wake_time = xTaskGetTickCount();
 
     while (!should_stop) {
         auto item = popItem(MIN_TIMEOUT);
@@ -78,15 +75,17 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
             continue;
         }
 
+        SendSinkImpl sink{sender, item->behavior, item->payload, item->id};
         {
-            SendSinkImpl sink{sender, item->behavior, item->payload, item->id};
             // delegate sending to send behavior
             Lock lock;
             std::visit([&](auto& behavior) { behavior.send(sink); }, item->behavior);
         }
 
-        // wait until we can send again using the waitbits
-        send_waitbits.wait(SEND_CALLBACK_BIT, true, true, portMAX_DELAY);
+        // a cycle should at least take 1 tick so not to starve other tasks and trigger the watchdog
+        // this usually does not cause any delays since the popping from queue and sending is blocking
+        // it could still occur if the queue is filled faster than this worker empties it
+        xTaskDelayUntil(&last_wake_time, 1);
     }
 
     ESP_LOGI(TAG, "Stopping!");

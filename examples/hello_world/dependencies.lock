@@ -7,12 +7,12 @@ dependencies:
       type: git
     version: 2b4336352905aaedfcafb0e0fcc3787923b6b1f0
   espnow_multi:
-    component_hash: 60d4d497159819d2ba5207b62d862d405eb26c426144bbdf5ddb233e80a0a3ff
+    component_hash: b66a7a147131ebc68b2a40d3b5c83a6e9762293ad0613851cb1d62dd88efe2fe
     source:
       git: https://github.com/derkalaender/espnow-multi.git
       path: .
       type: git
-    version: 19793ec9949d6fdc09942949e150e1d06fd206f4
+    version: c8afd981f2ce461d8082195612763daf97ba5579
   idf:
     component_hash: null
     source:
