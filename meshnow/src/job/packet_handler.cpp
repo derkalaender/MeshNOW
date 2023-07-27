@@ -2,6 +2,8 @@
 
 #include <esp_log.h>
 
+#include <lock.hpp>
+
 #include "event.hpp"
 #include "fragments.hpp"
 #include "layout.hpp"
@@ -27,6 +29,7 @@ void PacketHandler::handlePacket(const util::MacAddr& from, int rssi, const pack
     };
 
     // simply visit the corresponding overload
+    Lock lock;
     std::visit([&](const auto& p) { handle(meta, p); }, payload);
 }
 

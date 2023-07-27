@@ -5,8 +5,8 @@
 #include <nvs_flash.h>
 
 #include "layout.hpp"
+#include "lock.hpp"
 #include "meshnow.h"
-#include "mtx.hpp"
 #include "packets.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
@@ -64,7 +64,6 @@ void ConnectJob::performAction() {
 void ConnectJob::event_handler(void *event_handler_arg, esp_event_base_t event_base, int32_t event_id,
                                void *event_data) {
     assert(event_base == event::MESHNOW_INTERNAL);
-    auto _ = lock();
 
     // root never performs any connecting process
     if (state::isRoot()) return;

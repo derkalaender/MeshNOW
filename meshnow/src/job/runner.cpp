@@ -7,7 +7,7 @@
 #include "freertos/portmacro.h"
 #include "job.hpp"
 #include "keep_alive.hpp"
-#include "mtx.hpp"
+#include "lock.hpp"
 #include "packet_handler.hpp"
 #include "receive/queue.hpp"
 #include "util/util.hpp"
@@ -27,7 +27,11 @@ static TickType_t calculateTimeout(JobList jobs) {
     auto now = xTaskGetTickCount();
     // go through every task and check if it has a sooner timeout
     for (auto job : jobs) {
-        auto next_action = job.get().nextActionAt();
+        TickType_t next_action;
+        {
+            Lock lock;
+            next_action = job.get().nextActionAt();
+        }
         TickType_t this_timeout;
         if (next_action == portMAX_DELAY) {
             // in case of the maximum delay, we don't want to subtract now, as it is assumed the task never wants to run
@@ -68,10 +72,7 @@ void runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runne
 
     while (!should_stop) {
         // calculate timeout
-        auto timeout = [&] {
-            auto _ = lock();
-            return calculateTimeout(jobs);
-        }();
+        auto timeout = calculateTimeout(jobs);
 
         ESP_LOGV(TAG, "Next action in at most %lu ticks", timeout);
 
@@ -84,9 +85,9 @@ void runner_task(bool& should_stop, util::WaitBits& task_waitbits, int job_runne
 
         // perform tasks
         for (auto now = xTaskGetTickCount(); auto job : jobs) {
-            auto _ = lock();
             // only perform the action if it is due
             if (job.get().nextActionAt() <= now) {
+                Lock lock;
                 job.get().performAction();
             }
         }

@@ -9,7 +9,7 @@
 
 #include "def.hpp"
 #include "layout.hpp"
-#include "mtx.hpp"
+#include "lock.hpp"
 #include "queue.hpp"
 #include "util/util.hpp"
 #include "util/waitbits.hpp"
@@ -79,9 +79,9 @@ void worker_task(bool& should_stop, util::WaitBits& task_waitbits, int send_work
         }
 
         {
-            auto _ = lock();
             SendSinkImpl sink{sender, item->behavior, item->payload, item->id};
             // delegate sending to send behavior
+            Lock lock;
             std::visit([&](auto& behavior) { behavior.send(sink); }, item->behavior);
         }
 
