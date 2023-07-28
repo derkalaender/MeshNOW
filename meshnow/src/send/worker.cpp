@@ -19,10 +19,6 @@ namespace meshnow::send {
 static constexpr auto TAG = CREATE_TAG("SendWorker");
 static constexpr auto MIN_TIMEOUT = pdMS_TO_TICKS(500);
 
-static constexpr auto SEND_CALLBACK_BIT = BIT0;
-
-static util::WaitBits send_waitbits;
-
 class Sender : public espnow_multi::EspnowSender {
    public:
     void sendCallback(const uint8_t* peer_addr, esp_now_send_status_t status) override {
@@ -41,7 +37,7 @@ class SendSinkImpl : public SendSink {
         uint8_t primary;
         wifi_second_chan_t second;
         esp_wifi_get_channel(&primary, &second);
-        ESP_LOGI(TAG, "Sending packet with id %lu on channel %d", id_, primary);
+        ESP_LOGD(TAG, "Sending packet with id %lu on channel %d", id_, primary);
         if (espnow_multi::EspnowMulti::getInstance()->send(sender_, next_hop.addr.data(), buffer.data(),
                                                            buffer.size()) != ESP_OK) {
             ESP_LOGW(TAG, "Failed to send packet!");

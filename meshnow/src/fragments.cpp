@@ -13,7 +13,7 @@ namespace meshnow::fragments {
 
 static constexpr auto TAG = CREATE_TAG("Fragments");
 
-static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 8 - 19};
+static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 20 - 6};
 static constexpr auto QUEUE_SIZE{10};
 
 static util::Queue<util::Buffer> finished_queue;
@@ -28,11 +28,12 @@ class ReassemblyData {
           // rounds up to the next integer
           num_fragments((total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE) {
         // reserve buffer beforehand
-        ESP_LOGI(TAG, "Reserving %d bytes for reassembly", total_size);
+        ESP_LOGV(TAG, "Reserving %d bytes for reassembly", total_size);
         data_.reserve(total_size);
     }
 
     void insert(uint8_t frag_num, const util::Buffer& data) {
+        ESP_LOG_BUFFER_HEXDUMP(TAG, data.data(), data.size(), ESP_LOG_VERBOSE);
         // set bit to indicate this fragment was received
         fragment_mask |= 1 << frag_num;
         // copy to the correct position
@@ -77,7 +78,7 @@ void deinit() {
 
 void addFragment(const util::MacAddr& src_mac, uint16_t fragment_id, uint16_t fragment_number, uint16_t total_size,
                  util::Buffer data) {
-    ESP_LOGI(TAG, "Received fragment %d from message %d with size %d/%d", fragment_number, fragment_id, data.size(),
+    ESP_LOGV(TAG, "Received fragment %d from message %d with size %d/%d", fragment_number, fragment_id, data.size(),
              total_size);
 
     // short-circuit logic if it is the first and only fragment

@@ -45,9 +45,7 @@ class NowNetif {
 
     static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
-    util::EventHandlerInstance event_handler_instance_{event::Internal::handle, event::MESHNOW_INTERNAL,
-                                                       static_cast<int32_t>(event::InternalEvent::STATE_CHANGED),
-                                                       &event_handler, this};
+    std::unique_ptr<util::EventHandlerInstance> event_handler_instance_;
 
     bool started_{false};
 };

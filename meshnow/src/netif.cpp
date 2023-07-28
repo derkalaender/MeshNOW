@@ -73,6 +73,10 @@ esp_err_t NowNetif::init() {
         }
     }
 
+    event_handler_instance_ = std::make_unique<util::EventHandlerInstance>(
+        event::Internal::handle, event::MESHNOW_INTERNAL, static_cast<int32_t>(event::InternalEvent::STATE_CHANGED),
+        &event_handler, this);
+
     return ret;
 }
 
@@ -101,8 +105,12 @@ NowNetif::netif_ptr NowNetif::createInterface() {
 
 esp_err_t NowNetif::setMac() {
     ESP_LOGI(TAG, "Setting MAC address");
-    ESP_RETURN_ON_ERROR(esp_netif_set_mac(netif_.get(), state::getThisMac().addr.data()), TAG,
-                        "Failed to set MAC address");
+    util::MacAddr mac;
+    auto interface = state::isRoot() ? WIFI_IF_AP : WIFI_IF_STA;
+
+    ESP_RETURN_ON_ERROR(esp_wifi_get_mac(interface, mac.addr.data()), TAG, "Failed to get MAC address");
+
+    ESP_RETURN_ON_ERROR(esp_netif_set_mac(netif_.get(), mac.addr.data()), TAG, "Failed to set MAC address");
     ESP_LOGI(TAG, "MAC address set");
     return ESP_OK;
 }
@@ -116,12 +124,15 @@ esp_err_t NowNetif::initRootSpecific() {
 
         ESP_LOGI(TAG, "Setting DHCP DNS to: %s", ip4addr_ntoa(reinterpret_cast<ip4_addr_t*>(&dns.ip.u_addr.ip4)));
 
+        // stop dhcp server
+        esp_netif_dhcps_stop(netif_.get());
         ESP_RETURN_ON_ERROR(esp_netif_set_dns_info(netif_.get(), ESP_NETIF_DNS_MAIN, &dns), TAG,
                             "Could not set DNS info");
         dhcps_offer_t dhcps_offer_dns = OFFER_DNS;
         ESP_RETURN_ON_ERROR(esp_netif_dhcps_option(netif_.get(), ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER,
                                                    &dhcps_offer_dns, sizeof(dhcps_offer_dns)),
                             TAG, "Could not update DHCP server");
+        esp_netif_dhcps_start(netif_.get());
 
         ESP_LOGI(TAG, "DHCP DNS set");
     }
@@ -132,27 +143,12 @@ esp_err_t NowNetif::initRootSpecific() {
     return ESP_OK;
 }
 
-static void event_handler(void* event_handler_arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    assert(event_base == event::MESHNOW_INTERNAL && "Invalid event base");
-    assert(event_id == static_cast<int32_t>(event::InternalEvent::STATE_CHANGED) && "Invalid event id");
-
-    auto& netif = *static_cast<NowNetif*>(event_handler_arg);
-    auto data = *static_cast<event::StateChangedEvent*>(event_data);
-
-    if (data.old_state == state::State::DISCONNECTED_FROM_PARENT) {
-        // connected to parent
-        esp_netif_action_connected(netif.netif_.get(), nullptr, 0, nullptr);
-    } else if (data.new_state == state::State::DISCONNECTED_FROM_PARENT) {
-        // disconnected from parent
-        esp_netif_action_disconnected(netif.netif_.get(), nullptr, 0, nullptr);
-    }
-}
-
 void NowNetif::start() {
     ESP_LOGI(TAG, "Starting network interface");
+    esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
     ESP_ERROR_CHECK(io_receive_task_handle.init(util::TaskSettings("io_receive", 2048, 4, util::CPU::PRO_CPU),
                                                 [&] { io_receive_task(); }));
-    esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
+
     started_ = true;
     ESP_LOGI(TAG, "Started network interface");
 }
@@ -169,6 +165,8 @@ void NowNetif::stop() {
 }
 
 void NowNetif::deinit() {
+    event_handler_instance_.reset();
+
     if (state::isRoot()) {
         deinitRootSpecific();
     }
@@ -194,8 +192,10 @@ void NowNetif::event_handler(void* arg, esp_event_base_t event_base, int32_t eve
     // this way no TCP data is transmitted if it could not even get to the root
     if (data.new_state == state::State::REACHES_ROOT) {
         esp_netif_action_connected(netif.netif_.get(), nullptr, 0, nullptr);
+        ESP_LOGI(TAG, "Triggered connected event");
     } else if (data.old_state == state::State::REACHES_ROOT) {
         esp_netif_action_disconnected(netif.netif_.get(), nullptr, 0, nullptr);
+        ESP_LOGI(TAG, "Triggered disconnected event");
     }
 }
 
@@ -210,7 +210,10 @@ void NowNetif::event_handler(void* arg, esp_event_base_t event_base, int32_t eve
         auto data = fragments::popReassembledData(portMAX_DELAY);
         if (!data) continue;
 
-        esp_netif_receive(netif_.get(), data->data(), data->size(), nullptr);
+        ESP_LOGV(TAG, "Got data!");
+        ESP_LOG_BUFFER_HEXDUMP(TAG, data->data(), data->size(), ESP_LOG_VERBOSE);
+
+        ESP_ERROR_CHECK(esp_netif_receive(netif_.get(), data->data(), data->size(), nullptr));
 
         // cycle should take at least one tick as to not trigger the watchdog
         xTaskDelayUntil(&last_wake_time, 1);
@@ -266,6 +269,9 @@ static esp_err_t transmit(esp_netif_iodriver_handle driver_handle, void* buffer,
     auto* buffer8 = static_cast<uint8_t*>(buffer);
     size_t size_remaining = len;
     uint8_t frag_num = 0;
+
+    ESP_LOGV(TAG, "Transmitting buffer of size %d", len);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, buffer, len, ESP_LOG_VERBOSE);
 
     while (size_remaining > 0) {
         auto frag = fragment(frag_id, buffer8, size_remaining, frag_num, len);
