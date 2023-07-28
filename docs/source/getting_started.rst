@@ -21,34 +21,46 @@ Installing MeshNOW
 MeshNOW exposes itself as a single ESP-IDF component that can easily be added to your project!
 The most convenient way is to use the `ESP-IDF Component Manager <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/tools/idf-component-manager.html>`_.
 
-1. Install, enable, and configure the required tooling:
+#. Install, enable, and configure the required tooling:
 
-    * ESP-IDF: If you don't have the correct version installed, follow the `ESP-IDF Getting Started Guide <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html>`_.
-    * ESP-IDF Component Manager: If you're using a recent version ESP-IDF, it is enabled by default. Otherwise, follow the their `getting started guide <https://docs.espressif.com/projects/idf-component-manager/en/latest/getting_started/index.html>`_.
+   * ESP-IDF: If you don't have the correct version installed, follow the `ESP-IDF Getting Started Guide <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html>`_.
+   * ESP-IDF Component Manager: If you're using a recent version ESP-IDF, it is enabled by default. Otherwise, follow the their `getting started guide <https://docs.espressif.com/projects/idf-component-manager/en/latest/getting_started/index.html>`_.
 
-2. Prepare a project:
+#. Prepare a project:
 
-    #. Create a new ESP-IDF project as usual or use an existing one.
-    #. Open a terminal and navigate to your project directory.
+   #. Create a new ESP-IDF project as usual or use an existing one.
+   #. Open a terminal and navigate to your project directory.
 
-3. Add MeshNOW as a dependency to a component of your choosing, e.g., the ``main`` component:
+#. Add MeshNOW as a dependency to a component of your choosing, e.g., the ``main`` component:
 
-    #. Create the ``idf_component.yml`` manifest file in the component's directory if you haven't already. You can do so by running ``idf.py create-manifest --component=<my_component>`` where ``<my_component>`` is the name of your component, e.g., ``main``.
-    #. Add a new ``dependencies`` entry named ``meshnow`` to the manifest file and set its ``git`` url field to ``https://github.com/derkalaender/MeshNOW.git``
+   #. Create the ``idf_component.yml`` manifest file in the component's directory if you haven't already. You can do so by running ``idf.py create-manifest --component=<my_component>`` where ``<my_component>`` is the name of your component, e.g., ``main``.
+   #. Add a new ``dependencies`` entry named ``meshnow`` to the manifest file and set its ``git`` url field to ``https://github.com/derkalaender/MeshNOW.git``
 
-.. note::
-    Your ``idf_component.yml`` manifest should look something like this:
+   .. note::
+       Your ``idf_component.yml`` manifest should look something like this:
 
-    .. code-block:: yaml
+       .. code-block:: yaml
 
-        dependencies:
-            idf:
-                version: ">=5.0.1"
-        meshnow:
-            git: "https://github.com/derkalaender/MeshNOW.git"
+           dependencies:
+             idf:
+               version: ">=5.0.1"
+             meshnow:
+               git: "https://github.com/derkalaender/MeshNOW.git"
+#. Run ``idf.py reconfigure`` to reconfigure the project and let the component manager discover and download MeshNOW and its dependencies.
+#. Add ``meshnow`` to your ``PRIV_REQUIRES`` (or ``REQUIRES`` if you're exposing MeshNOW in your public include files) in the component's ``CMakeLists.txt`` file.
+#. MeshNOW needs a few configuration options to be enabled by the user. You can do this by invoking ``idf.py menuconfig`` and enabling the following options:
 
-4. Run ``idf.py reconfigure`` to reconfigure the project and let the component manager discover and download MeshNOW and its dependencies.
-5. Add ``meshnow`` to your ``PRIV_REQUIRES`` (or ``REQUIRES`` if you're exposing MeshNOW in your public include files) in the component's ``CMakeLists.txt`` file.
+   * Component config -> LWIP -> Enable copy between Layer2 and Layer packets
+   * Component config -> LWIP -> Enable IP forwarding
+   * Component config -> LWIP -> Enable NAT (new/experimental)
+
+   Alternatively, you can also add the options to your ``sdkconfig`` file in the project's root directory directly:
+
+   .. code-block:: ini
+
+       CONFIG_LWIP_L2_TO_L3_COPY=y
+       CONFIG_LWIP_IP_FORWARD=y
+       CONFIG_LWIP_NAT=y
 
 Done! You can now use MeshNOW in your project.
 
