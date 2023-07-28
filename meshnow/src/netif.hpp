@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 
+#include "event.hpp"
 #include "send/worker.hpp"
 #include "util/event.hpp"
 
@@ -42,8 +43,13 @@ class NowNetif {
 
     std::unique_ptr<esp_netif_driver_base_t> io_driver_;
 
-    // event, we only want this when started
-    std::optional<util::EventHandlerInstance> event_handler_instance_;
+    static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+    util::EventHandlerInstance event_handler_instance_{event::Internal::handle, event::MESHNOW_INTERNAL,
+                                                       static_cast<int32_t>(event::InternalEvent::STATE_CHANGED),
+                                                       &event_handler, this};
+
+    bool started_{false};
 };
 
 }  // namespace meshnow

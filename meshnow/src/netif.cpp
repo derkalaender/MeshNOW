@@ -153,16 +153,15 @@ void NowNetif::start() {
     ESP_ERROR_CHECK(io_receive_task_handle.init(util::TaskSettings("io_receive", 2048, 4, util::CPU::PRO_CPU),
                                                 [&] { io_receive_task(); }));
     esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
-    event_handler_instance_.emplace(event::Internal::handle, event::MESHNOW_INTERNAL,
-                                    static_cast<uint32_t>(event::InternalEvent::STATE_CHANGED), &event_handler, this);
+    started_ = true;
     ESP_LOGI(TAG, "Started network interface");
 }
 
 void NowNetif::stop() {
     ESP_LOGI(TAG, "Stopping network interface");
     io_receive_task_handle = util::Task();
-    event_handler_instance_.reset();
     esp_netif_action_stop(netif_.get(), nullptr, 0, nullptr);
+    started_ = false;
     if (!state::isRoot()) {
         esp_netif_action_disconnected(netif_.get(), nullptr, 0, nullptr);
     }
@@ -180,8 +179,25 @@ void NowNetif::deinit() {
 
 void NowNetif::deinitRootSpecific() { ip_napt_enable(subnet_ip.ip.addr, 0); }
 
-//// TODO connect and disconnect
-//
+// Handler to trigger connected/disconnected netif events
+void NowNetif::event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    assert(event_base == event::MESHNOW_INTERNAL);
+    assert(event_id == static_cast<int32_t>(event::InternalEvent::STATE_CHANGED));
+
+    auto& netif = *static_cast<NowNetif*>(arg);
+    auto data = *static_cast<event::StateChangedEvent*>(event_data);
+
+    // only trigger if netif is started
+    if (!netif.started_) return;
+
+    // connect when reaches root and disconnect again if not reaches root
+    // this way no TCP data is transmitted if it could not even get to the root
+    if (data.new_state == state::State::REACHES_ROOT) {
+        esp_netif_action_connected(netif.netif_.get(), nullptr, 0, nullptr);
+    } else if (data.old_state == state::State::REACHES_ROOT) {
+        esp_netif_action_disconnected(netif.netif_.get(), nullptr, 0, nullptr);
+    }
+}
 
 // IO DRIVER
 
