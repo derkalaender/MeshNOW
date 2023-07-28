@@ -137,9 +137,6 @@ esp_err_t NowNetif::initRootSpecific() {
         ESP_LOGI(TAG, "DHCP DNS set");
     }
 
-    // enable network address port translation
-    ip_napt_enable(subnet_ip.ip.addr, 1);
-
     return ESP_OK;
 }
 
@@ -148,6 +145,11 @@ void NowNetif::start() {
     esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
     ESP_ERROR_CHECK(io_receive_task_handle.init(util::TaskSettings("io_receive", 2048, 4, util::CPU::PRO_CPU),
                                                 [&] { io_receive_task(); }));
+
+    if (state::isRoot()) {
+        // enable network address port translation AFTER starting the netif
+        ip_napt_enable(subnet_ip.ip.addr, 1);
+    }
 
     started_ = true;
     ESP_LOGI(TAG, "Started network interface");
