@@ -8,6 +8,9 @@
 #include <freertos/event_groups.h>
 #include <freertos/task.h>
 #include <iperf.h>
+#include <lwip/ip4_addr.h>
+#include <lwip/lwip_napt.h>
+#include <lwip/prot/ip.h>
 #include <meshnow.h>
 #include <mqtt_client.h>
 #include <nvs_flash.h>
@@ -15,6 +18,8 @@
 // The Wi-Fi credentials are configured via sdkconfig
 #define ROUTER_SSID CONFIG_EXAMPLE_ROUTER_SSID
 #define ROUTER_PASS CONFIG_EXAMPLE_ROUTER_PASSWORD
+
+#define IPERF_SERVER_IP
 
 // Waitbits
 #define GOT_IP_BIT BIT0
@@ -53,22 +58,42 @@ static uint32_t get_ip() {
     return ip_info.ip.addr;
 }
 
+static void open_port() {
+    ip4_addr_t my_ip = {.addr = get_ip()};
+    ip4_addr_t target_ip;
+    IP4_ADDR(&target_ip, 10, 0, 0, 2);
+    ESP_LOGI(TAG, "Adding port mapping " IPSTR ":%d -> " IPSTR ":%d", IP2STR(&my_ip), IPERF_DEFAULT_PORT,
+             IP2STR(&target_ip), IPERF_DEFAULT_PORT);
+    ip_portmap_add(IP_PROTO_TCP, my_ip.addr, IPERF_DEFAULT_PORT, target_ip.addr, IPERF_DEFAULT_PORT);
+}
+
 static void perform_iperf() {
-    ESP_LOGI(TAG, "Starting iperf");
+    ESP_LOGI(TAG, "Starting iperf server");
 
     iperf_cfg_t cfg;
-    // client and TCP since we want a measurement for MQTT, HTTP, etc.
-    IPERF_FLAG_SET(cfg.flag, IPERF_FLAG_CLIENT);
-    IPERF_FLAG_SET(cfg.flag, IPERF_FLAG_TCP);
+    cfg.flag = IPERF_FLAG_SERVER;
+    // TCP since we want a measurement for MQTT, HTTP, etc.
+    cfg.flag |= IPERF_FLAG_TCP;
+    // only IPv4 is supported
+    cfg.type = IPERF_IP_TYPE_IPV4;
     // set IP addresses
-    //    cfg.destination_ip4;  // TODO
+    //    if (!is_root) {
+    //        ip4_addr_t dest;
+    //        IP4_ADDR(&dest, 192, 168, 178, 43);
+    //        cfg.destination_ip4 = ip4_addr_get_u32(&dest);
+    //    }
+    //    if (!is_root) {
+    //        ip4_addr_t src;
+    //        IP4_ADDR(&src, 192, 168, 137, 3);
+    //        cfg.source_ip4 = ip4_addr_get_u32(&src);
+    //    }
     cfg.source_ip4 = get_ip();
     // default port
     cfg.dport = cfg.sport = IPERF_DEFAULT_PORT;
 
     // default measure settings
-    cfg.interval = IPERF_DEFAULT_INTERVAL;
-    cfg.time = IPERF_DEFAULT_TIME;
+    cfg.interval = 1;
+    cfg.time = 10;
     cfg.len_send_buf = 0;
     cfg.bw_lim = IPERF_DEFAULT_NO_BW_LIMIT;
 
@@ -137,6 +162,10 @@ void app_main(void) {
     assert((bits & GOT_IP_BIT) != 0);
 
     if (is_root) {
+        open_port();
+    }
+
+    if (!is_root) {
         perform_iperf();
     }
 }

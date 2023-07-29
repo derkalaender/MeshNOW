@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "constants.hpp"
 #include "fragments.hpp"
 #include "job/runner.hpp"
 #include "netif.hpp"
@@ -52,7 +53,7 @@ esp_err_t Networking::start() {
 
     stop_tasks_ = false;
 
-    constexpr auto priority = 4;
+    constexpr auto priority = TASK_PRIORITY;
     constexpr auto cpu = util::CPU::PRO_CPU;
 
     // TODO adapt stack size, right now it is ridiculously high but works

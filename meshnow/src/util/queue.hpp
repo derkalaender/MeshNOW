@@ -62,6 +62,10 @@ class Queue {
 
     void clear() const { xQueueReset(queue_handle_.get()); }
 
+    size_t spaces_available() const { return uxQueueSpacesAvailable(queue_handle_.get()); }
+
+    size_t items_waiting() const { return uxQueueMessagesWaiting(queue_handle_.get()); }
+
    private:
     struct Deleter {
         void operator()(QueueHandle_t queue_handle) { vQueueDelete(queue_handle); }

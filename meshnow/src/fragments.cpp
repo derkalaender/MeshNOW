@@ -7,14 +7,15 @@
 
 #include <map>
 
+#include "constants.hpp"
 #include "util/queue.hpp"
 
 namespace meshnow::fragments {
 
 static constexpr auto TAG = CREATE_TAG("Fragments");
 
-static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 20 - 6};
-static constexpr auto QUEUE_SIZE{10};
+static constexpr auto QUEUE_SIZE{32};
+// TODO QUEUE_SIZE has to be higher so not to get deadlocks! FIND A REAL SOLUTION!
 
 static util::Queue<util::Buffer> finished_queue;
 

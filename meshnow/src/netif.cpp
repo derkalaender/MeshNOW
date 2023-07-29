@@ -10,6 +10,7 @@
 
 #include <memory>
 
+#include "constants.hpp"
 #include "event.hpp"
 #include "fragments.hpp"
 #include "lock.hpp"
@@ -143,8 +144,8 @@ esp_err_t NowNetif::initRootSpecific() {
 void NowNetif::start() {
     ESP_LOGI(TAG, "Starting network interface");
     esp_netif_action_start(netif_.get(), nullptr, 0, nullptr);
-    ESP_ERROR_CHECK(io_receive_task_handle.init(util::TaskSettings("io_receive", 2048, 4, util::CPU::PRO_CPU),
-                                                [&] { io_receive_task(); }));
+    ESP_ERROR_CHECK(io_receive_task_handle.init(
+        util::TaskSettings("io_receive", 2048, TASK_PRIORITY, util::CPU::PRO_CPU), [&] { io_receive_task(); }));
 
     if (state::isRoot()) {
         // enable network address port translation AFTER starting the netif
@@ -233,8 +234,6 @@ void NowNetif::event_handler(void* arg, esp_event_base_t event_base, int32_t eve
  */
 static meshnow::packets::DataFragment fragment(uint32_t frag_id, uint8_t*& buffer, size_t& size_remaining,
                                                uint8_t& frag_num, uint16_t total_size) {
-    static constexpr auto MAX_FRAG_PAYLOAD_SIZE{250 - 20 - 6};
-
     util::Buffer data;
 
     if (size_remaining > MAX_FRAG_PAYLOAD_SIZE) {

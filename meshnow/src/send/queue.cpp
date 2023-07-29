@@ -6,7 +6,8 @@
 
 #include "util/queue.hpp"
 
-static constexpr auto QUEUE_SIZE{10};
+static constexpr auto QUEUE_SIZE{32};
+// TODO QUEUE_SIZE has to be higher so not to get deadlocks! FIND A REAL SOLUTION!
 
 namespace meshnow::send {
 

@@ -14,16 +14,12 @@
 #include <variant>
 #include <vector>
 
+#include "constants.hpp"
+
 namespace {
 
 using OutputAdapter = bitsery::OutputBufferAdapter<meshnow::util::Buffer>;
 using InputAdapter = bitsery::InputBufferAdapter<meshnow::util::Buffer>;
-
-// CONSTANTS //
-constexpr std::array<uint8_t, 3> MAGIC{0x55, 0x77, 0x55};
-constexpr auto HEADER_SIZE{20};
-constexpr auto MAX_FRAG_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE - 6};
-constexpr auto MAX_CUSTOM_PAYLOAD_SIZE{ESP_NOW_MAX_DATA_LEN - HEADER_SIZE};
 
 }  // namespace
 
@@ -48,10 +44,10 @@ class DataFragmentExtension {
     }
 
     inline void validateWrite(const meshnow::util::Buffer& data) const {
-        assert(data.size() <= MAX_FRAG_PAYLOAD_SIZE && "Data too large");
+        assert(data.size() <= meshnow::MAX_FRAG_PAYLOAD_SIZE && "Data too large");
         assert(frag_num <= 6 && "Fragment number too large");
         assert(total_size <= 1500 && "Total size too large");
-        assert(frag_num < (total_size + MAX_FRAG_PAYLOAD_SIZE - 1) / MAX_FRAG_PAYLOAD_SIZE &&
+        assert(frag_num < (total_size + meshnow::MAX_FRAG_PAYLOAD_SIZE - 1) / meshnow::MAX_FRAG_PAYLOAD_SIZE &&
                "Fragment number and total size mismatch");
     }
 
@@ -60,9 +56,9 @@ class DataFragmentExtension {
         validateRead(des.adapter());
 
         // if last fragment, only read the remaining size, otherwise read MAX_FRAG_PAYLOAD_SIZE
-        uint16_t to_read = total_size - (frag_num * MAX_FRAG_PAYLOAD_SIZE);
-        if (to_read > MAX_FRAG_PAYLOAD_SIZE) {
-            to_read = MAX_FRAG_PAYLOAD_SIZE;
+        uint16_t to_read = total_size - (frag_num * meshnow::MAX_FRAG_PAYLOAD_SIZE);
+        if (to_read > meshnow::MAX_FRAG_PAYLOAD_SIZE) {
+            to_read = meshnow::MAX_FRAG_PAYLOAD_SIZE;
         }
 
         data.resize(to_read);
@@ -75,7 +71,7 @@ class DataFragmentExtension {
     inline void validateRead(Reader& r) const {
         if (frag_num <= 6) return;
         if (total_size <= 1500) return;
-        if ((frag_num + 1) * MAX_FRAG_PAYLOAD_SIZE <= total_size) return;
+        if ((frag_num + 1) * meshnow::MAX_FRAG_PAYLOAD_SIZE <= total_size) return;
 
         r.error(bitsery::ReaderError::InvalidData);
     }
