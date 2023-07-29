@@ -261,7 +261,7 @@ void ConnectJob::ConnectPhase::event_handler(ConnectJob &job, event::InternalEve
     if (parent_mac != current_parent_mac_) return;
 
     // got a correct connection response
-    ESP_LOGI(TAG, "Got accepted by" MACSTR, MAC2STR(parent_mac));
+    ESP_LOGI(TAG, "Got accepted by " MACSTR, MAC2STR(parent_mac));
     awaiting_connect_response_ = false;
 
     // we are now connected to the parent

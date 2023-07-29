@@ -130,7 +130,7 @@ void PacketHandler::handle(const MetaData& meta, const packets::SearchProbe& p) 
     if (!canAcceptNewChild()) return;
 
     // send reply
-    ESP_LOGI(TAG, "Sending I Am Here");
+    ESP_LOGV(TAG, "Sending I Am Here");
     send::enqueuePayload(packets::SearchReply{}, send::DirectOnce{meta.from});
 }
 
@@ -156,8 +156,10 @@ void PacketHandler::handle(const MetaData& meta, const packets::ConnectRequest& 
     // add to layout
     layout().addChild(meta.from);
 
+    ESP_LOGI(TAG, "Child " MACSTR " connected", MAC2STR(meta.from));
+
     // send reply
-    ESP_LOGI(TAG, "Sending Connect Response");
+    ESP_LOGV(TAG, "Sending Connect Response");
     send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::DirectOnce(meta.from));
 }
 
