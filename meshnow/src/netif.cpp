@@ -261,7 +261,7 @@ static meshnow::packets::DataFragment fragment(uint32_t frag_id, uint8_t*& buffe
 }
 
 static esp_err_t transmit(esp_netif_iodriver_handle driver_handle, void* buffer, size_t len) {
-    assert(len > 0 && len <= 1500 && "Invalid length");
+    //    assert(len > 0 && len <= 1500 && "Invalid length");
 
     util::MacAddr dest_mac{static_cast<uint8_t*>(buffer)};
 

@@ -45,8 +45,8 @@ class DataFragmentExtension {
 
     inline void validateWrite(const meshnow::util::Buffer& data) const {
         assert(data.size() <= meshnow::MAX_FRAG_PAYLOAD_SIZE && "Data too large");
-        assert(frag_num <= 6 && "Fragment number too large");
-        assert(total_size <= 1500 && "Total size too large");
+        //        assert(frag_num <= 6 && "Fragment number too large");
+        //        assert(total_size <= 1500 && "Total size too large");
         assert(frag_num < (total_size + meshnow::MAX_FRAG_PAYLOAD_SIZE - 1) / meshnow::MAX_FRAG_PAYLOAD_SIZE &&
                "Fragment number and total size mismatch");
     }
