@@ -71,7 +71,7 @@ static void perform_iperf() {
 
     // default measure settings
     cfg.interval = 3;
-    cfg.time = 60;
+    cfg.time = 30;
     cfg.len_send_buf = 0;
     cfg.bw_lim = IPERF_DEFAULT_NO_BW_LIMIT;
 
@@ -94,16 +94,27 @@ void app_main(void) {
     ESP_LOGE(TAG, "RUNNING %s WITH LR=%s", config.impl == MESHNOW ? "meshnow" : "esp-wifi-mesh",
              config.long_range ? "true" : "false");
 
-    if (config.long_range) {
-        esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCOL_LR);
-        esp_wifi_set_protocol(ESP_IF_WIFI_AP, WIFI_PROTOCOL_LR);
-    }
+    //    if (config.long_range) {
+    //        ESP_ERROR_CHECK(esp_wifi_set_protocol(
+    //            ESP_IF_WIFI_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR));
+    //        ESP_ERROR_CHECK(esp_wifi_set_protocol(
+    //            ESP_IF_WIFI_AP, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR));
+    //    }
 
     // run meshnow/esp-wifi-mesh
     if (config.impl == MESHNOW) {
         run_meshnow();
     } else {
         run_espmesh();
+    }
+
+    if (config.long_range) {
+        ESP_ERROR_CHECK(esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCOL_LR));
+        wifi_mode_t mode;
+        ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
+        if (mode == WIFI_MODE_APSTA || mode == WIFI_MODE_AP) {
+            ESP_ERROR_CHECK(esp_wifi_set_protocol(ESP_IF_WIFI_AP, WIFI_PROTOCOL_LR));
+        }
     }
 
     if (!is_root()) {

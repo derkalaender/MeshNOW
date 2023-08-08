@@ -73,14 +73,14 @@ static void iperf_report_task(void *arg) {
     printf("\n%16s %s\n", "Interval", "Bandwidth");
     while (!s_iperf_ctrl.finish) {
         vTaskDelay(delay_interval);
-        actual_bandwidth = (s_iperf_ctrl.actual_len / 1e3 * 8) / interval;
-        printf("%4d-%4d sec       %.2f Kbits/sec\n", cur, cur + interval, actual_bandwidth);
+        actual_bandwidth = (double)s_iperf_ctrl.actual_len / (double)interval;
+        printf("%4d-%4d sec       %.2f Bytes/sec\n", cur, cur + interval, actual_bandwidth);
         cur += interval;
         average = ((average * (k - 1) / k) + (actual_bandwidth / k));
         k++;
         s_iperf_ctrl.actual_len = 0;
         if (cur >= time) {
-            printf("%4d-%4d sec       %.2f Kbits/sec\n", 0, time, average);
+            printf("%4d-%4d sec       %.2f Bytes/sec\n", 0, time, average);
             break;
         }
     }
