@@ -90,6 +90,12 @@ void PacketHandler::handle(const MetaData& meta, const packets::Status& p) {
 
     auto& layout = layout::Layout::get();
 
+    // is child?
+    if (layout.hasChild(meta.from)) {
+        auto& child = layout.getChild(meta.from);
+        child.last_seen = xTaskGetTickCount();
+    }
+
     // is parent?
     if (layout.hasParent()) {
         auto& parent = layout.getParent();
@@ -114,12 +120,6 @@ void PacketHandler::handle(const MetaData& meta, const packets::Status& p) {
         //            }
         //        }
         return;
-    }
-
-    // is child?
-    if (layout.hasChild(meta.from)) {
-        auto& child = layout.getChild(meta.from);
-        child.last_seen = xTaskGetTickCount();
     }
 }
 
