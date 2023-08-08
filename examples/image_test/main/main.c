@@ -1,3 +1,4 @@
+#include <driver/gpio.h>
 #include <esp_err.h>
 #include <esp_event.h>
 #include <esp_log.h>
@@ -51,6 +52,24 @@ static void assigned_ip_handler(void *arg, esp_event_base_t event_base, int32_t 
     xEventGroupSetBits(my_event_group, ASSIGNED_IP_BIT);
 }
 
+static void meshnow_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_Data) {
+    assert(event_base == MESHNOW_EVENT);
+
+    switch (event_id) {
+        case MESHNOW_EVENT_PARENT_CONNECTED:
+            ESP_LOGI(TAG, "Parent connected");
+            gpio_set_level(LIGHT_GPIO, 1);
+            break;
+        case MESHNOW_EVENT_PARENT_DISCONNECTED:
+            ESP_LOGI(TAG, "Parent disconnected");
+            gpio_set_level(LIGHT_GPIO, 0);
+            break;
+        default:
+            ESP_LOGW(TAG, "Unknown event: %ld", event_id);
+            break;
+    }
+}
+
 void app_main(void) {
     prepare();
 
@@ -62,6 +81,12 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &got_ip_handler, NULL, NULL));
     ESP_ERROR_CHECK(
         esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &assigned_ip_handler, NULL, NULL));
+
+    // register MeshNOW handler to blink light when connected
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(MESHNOW_EVENT, MESHNOW_EVENT_PARENT_CONNECTED,
+                                                        &meshnow_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(MESHNOW_EVENT, MESHNOW_EVENT_PARENT_DISCONNECTED,
+                                                        &meshnow_event_handler, NULL, NULL));
 
     // create config for connecting to the router
     wifi_sta_config_t sta_config = {
@@ -104,7 +129,9 @@ void app_main(void) {
         ESP_LOGI(TAG, "Got my IP, continuing");
 
         // the node should now try to send the image
-        start_mqtt();
+        if (is_target()) {
+            start_mqtt();
+        }
     } else {
         ESP_LOGI(TAG, "Waiting for node to connect");
         // wait for the node to connect
@@ -112,7 +139,5 @@ void app_main(void) {
         assert((bits & ASSIGNED_IP_BIT) != 0);
 
         ESP_LOGI(TAG, "Node connected, continuing");
-
-        // TODO
     }
 }

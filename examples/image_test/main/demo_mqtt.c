@@ -135,13 +135,13 @@ void start_mqtt(void) {
 
     ESP_LOGI(TAG, "Sending image...");
     // measure time it takes in milliseconds
-    int64_t start = get_timestamp();
+    TickType_t start = xTaskGetTickCount();
     char* timestamped_filename;
     asprintf(&timestamped_filename, "%s-%lld.%s", filename, get_timestamp(), fileending);
     send_filedescriptor(timestamped_filename);
     send_data(timestamped_filename);
     free(timestamped_filename);
-    int64_t end = get_timestamp();
+    TickType_t end = xTaskGetTickCount();
     ESP_LOGI(TAG, "Image sent successfully");
-    ESP_LOGI(TAG, "Time taken: %lldms", end - start);
+    ESP_LOGI(TAG, "Time taken: %lums", pdTICKS_TO_MS(end - start));
 }
