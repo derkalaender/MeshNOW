@@ -15,12 +15,26 @@ namespace meshnow::job {
 
 static constexpr auto TAG = CREATE_TAG("PacketHandler");
 
+static bool isForMe(const packets::Packet& packet) {
+    if (packet.to == state::getThisMac()) return true;
+    if (packet.to == util::MacAddr::broadcast()) return true;
+    if (packet.to == util::MacAddr::root() && state::isRoot()) return true;
+    return false;
+}
+
 void PacketHandler::handlePacket(const util::MacAddr& from, int rssi, const packets::Packet& packet) {
     // TODO handle duplicate packets
     // TODO update routing table
     // TODO detect and handle cycles
 
-    auto payload = packet.payload;
+    auto& payload = packet.payload;
+
+    // forward if not designated to this node
+    if (!isForMe(packet)) {
+        ESP_LOGI(TAG, "Forwarding packet. From " MACSTR " to " MACSTR, MAC2STR(from), MAC2STR(packet.to));
+        send::enqueuePayload(packet.payload, send::FullyResolve(packet.from, packet.to, from), packet.id);
+        return;
+    }
 
     MetaData meta{
         .last_hop = from,
@@ -161,6 +175,9 @@ void PacketHandler::handle(const MetaData& meta, const packets::ConnectRequest& 
     // send reply
     ESP_LOGV(TAG, "Sending Connect Response");
     send::enqueuePayload(packets::ConnectOk{state::getRootMac()}, send::DirectOnce(meta.from));
+
+    // send routing table add packet upstream
+    send::enqueuePayload(packets::RoutingTableAdd{meta.from}, send::UpstreamRetry{});
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::ConnectOk& p) {
@@ -177,7 +194,12 @@ void PacketHandler::handle(const MetaData& meta, const packets::ConnectOk& p) {
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::RoutingTableAdd& p) {
-    // TODO
+    // TODO safety checks
+    if (!layout().hasChild(meta.last_hop)) return;
+
+    // get child matching last hop
+    auto& child = layout().getChild(meta.last_hop);
+    child.routing_table.emplace_back(p.entry);
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::RoutingTableRemove& p) {
