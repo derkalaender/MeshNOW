@@ -31,9 +31,13 @@ void PacketHandler::handlePacket(const util::MacAddr& from, int rssi, const pack
 
     // forward if not designated to this node
     if (!isForMe(packet)) {
-        ESP_LOGI(TAG, "Forwarding packet. From " MACSTR " to " MACSTR, MAC2STR(from), MAC2STR(packet.to));
         send::enqueuePayload(packet.payload, send::FullyResolve(packet.from, packet.to, from), packet.id);
         return;
+    }
+
+    // if broadcast, send to every node
+    if (packet.to == util::MacAddr::broadcast()) {
+        send::enqueuePayload(packet.payload, send::FullyResolve(packet.from, packet.to, from), packet.id);
     }
 
     MetaData meta{

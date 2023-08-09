@@ -19,7 +19,10 @@ void Receiver::receiveCallback(const esp_now_recv_info_t *esp_now_info, const ui
 
     // if deserialization failed, ignore
     // could happen because of interference with connecting to a router
-    if (!packet) return;
+    if (!packet) {
+        ESP_LOGW("TAG", "Failed to deserialize packet!");
+        return;
+    }
 
     // create item
     Item item{
