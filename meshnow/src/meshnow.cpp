@@ -5,13 +5,16 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
+#include "custom.hpp"
 #include "event.hpp"
 #include "networking.hpp"
+#include "send/queue.hpp"
 #include "state.hpp"
+#include "util/mac.hpp"
 #include "util/util.hpp"
 #include "wifi.hpp"
 
-static constexpr auto *TAG = CREATE_TAG("🦌");
+static constexpr auto* TAG = CREATE_TAG("🦌");
 
 ESP_EVENT_DEFINE_BASE(MESHNOW_EVENT);
 
@@ -55,7 +58,7 @@ static bool checkNetif() {
     return true;
 }
 
-extern "C" esp_err_t meshnow_init(meshnow_config_t *config) {
+extern "C" esp_err_t meshnow_init(meshnow_config_t* config) {
     if (initialized) {
         ESP_LOGE(TAG, "MeshNOW is already initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -111,6 +114,9 @@ extern "C" esp_err_t meshnow_init(meshnow_config_t *config) {
 
     ESP_RETURN_ON_ERROR(meshnow::wifi::init(), TAG, "Initializing Wi-Fi failed");
 
+    // init custom cb collection
+    meshnow::custom::init();
+
     // init networking
     ESP_RETURN_ON_ERROR(networking.init(), TAG, "Initializing networking failed");
 
@@ -136,6 +142,7 @@ extern "C" esp_err_t meshnow_deinit() {
 
     networking.deinit();
     meshnow::event::Internal::deinit();
+    meshnow::custom::deinit();
 
     ESP_RETURN_ON_ERROR(meshnow::wifi::deinit(), TAG, "Deinitializing Wi-Fi failed");
 
@@ -193,4 +200,42 @@ extern "C" esp_err_t meshnow_stop() {
 
     ESP_LOGI(TAG, "MeshNOW stopped! 🛑");
     return ESP_OK;
+}
+
+extern "C" esp_err_t meshnow_send(uint8_t* dest, uint8_t* buffer, size_t len) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (len > MESHNOW_MAX_CUSTOM_MESSAGE_SIZE) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // TODO only send when have upstream connection...
+
+    auto cxxBuffer = std::vector<uint8_t>(buffer, buffer + len);
+    auto packet = meshnow::packets::CustomData{std::move(cxxBuffer)};
+    auto resolve = meshnow::send::FullyResolve{
+        meshnow::state::getThisMac(),
+        meshnow::util::MacAddr{dest},
+        meshnow::state::getThisMac(),
+    };
+    meshnow::send::enqueuePayload(std::move(packet), std::move(resolve));
+}
+
+extern "C" esp_err_t meshnow_register_data_cb(meshnow_data_cb_t cb, meshnow_data_cb_handle_t* handle) {
+    // TODO error checking
+    auto internal_handle = meshnow::custom::createCBHandle(cb);
+    *handle = internal_handle;
+}
+
+extern "C" esp_err_t meshnow_unregister_data_cb(meshnow_data_cb_handle_t handle) {
+    // TODO error checking
+    meshnow::custom::destroyCBHandle(static_cast<meshnow::custom::ActualCBHandle*>(handle));
 }

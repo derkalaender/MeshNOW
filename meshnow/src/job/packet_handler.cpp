@@ -4,6 +4,7 @@
 
 #include <lock.hpp>
 
+#include "custom.hpp"
 #include "event.hpp"
 #include "fragments.hpp"
 #include "layout.hpp"
@@ -248,7 +249,15 @@ void PacketHandler::handle(const MetaData& meta, const packets::DataFragment& p)
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::CustomData& p) {
-    // TODO
+    // TODO safety checks
+
+    // simply call all registered callbacks
+    auto handle = custom::getFirstCBHandle();
+
+    while (handle != nullptr) {
+        // TODO const casts should not be required but i'm afraid to fix the header file
+        handle->cb(const_cast<uint8_t*>(meta.from.addr.data()), const_cast<uint8_t*>(p.data.data()), p.data.size());
+    }
 }
 
 }  // namespace meshnow::job
