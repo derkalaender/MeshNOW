@@ -13,13 +13,13 @@ namespace meshnow::job {
 static constexpr auto TAG = CREATE_TAG("KeepAlive");
 
 // send a keep alive status every 1s
-static constexpr auto STATUS_SEND_INTERVAL = pdMS_TO_TICKS(500);
+static constexpr auto STATUS_SEND_INTERVAL = pdMS_TO_TICKS(CONFIG_STATUS_SEND_INTERVAL);
 
 // consider a neighbor dead if no beacon was received for 3s
-static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(3000);
+static constexpr auto KEEP_ALIVE_TIMEOUT = pdMS_TO_TICKS(CONFIG_KEEP_ALIVE_TIMEOUT);
 
 // disconnect from parent if the root was unreachable for 10s
-static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(10000);
+static constexpr auto ROOT_UNREACHABLE_TIMEOUT = pdMS_TO_TICKS(CONFIG_ROOT_UNREACHABLE_TIMEOUT);
 
 // StatusSendJob //
 

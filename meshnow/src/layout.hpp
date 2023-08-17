@@ -2,6 +2,7 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include <sdkconfig.h>
 
 #include <optional>
 #include <span>
@@ -13,7 +14,7 @@
 namespace meshnow::layout {
 
 // TODO
-constexpr auto MAX_CHILDREN = 5;
+constexpr auto MAX_CHILDREN = CONFIG_MAX_CHILDREN;
 
 struct Node {
     Node() = default;

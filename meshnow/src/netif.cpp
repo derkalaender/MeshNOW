@@ -26,7 +26,7 @@ namespace meshnow {
 static const char* TAG = CREATE_TAG("Netif");
 
 // use cloudflare 1.1.1.1 as DNS server
-static constexpr auto DNS_IP_ADDR = ESP_IP4TOADDR(1, 1, 1, 1);
+static constexpr auto DNS_IP_ADDR = esp_netif_htonl(CONFIG_STATIC_DNS_ADDR);
 
 static const esp_netif_ip_info_t subnet_ip = {
     .ip = {.addr = ESP_IP4TOADDR(10, 0, 0, 1)},

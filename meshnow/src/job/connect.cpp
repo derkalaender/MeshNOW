@@ -3,6 +3,7 @@
 #include <esp_log.h>
 #include <esp_wifi.h>
 #include <nvs_flash.h>
+#include <sdkconfig.h>
 
 #include "layout.hpp"
 #include "lock.hpp"
@@ -17,18 +18,18 @@ namespace {
 constexpr auto TAG = CREATE_TAG("Connect");
 
 // How long to wait before sending a new search probe
-constexpr auto SEARCH_PROBE_INTERVAL = pdMS_TO_TICKS(50);
+constexpr auto SEARCH_PROBE_INTERVAL = pdMS_TO_TICKS(CONFIG_SEARCH_PROBE_INTERVAL);
 
 // How many probes to send per channel before switching
-constexpr auto PROBES_PER_CHANNEL = 3;
+constexpr auto PROBES_PER_CHANNEL = CONFIG_PROBES_PER_CHANNEL;
 
 // Min time to wait for potential other parents after the first parent was found
-constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(3000);
+constexpr auto FIRST_PARENT_WAIT = pdMS_TO_TICKS(CONFIG_FIRST_PARENT_WAIT);
 
-constexpr auto MAX_PARENTS_TO_CONSIDER = 5;
+constexpr auto MAX_PARENTS_TO_CONSIDER = CONFIG_MAX_PARENTS_TO_CONSIDER;
 
 // Time to wait for a connection reply
-constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(1000);
+constexpr auto CONNECT_TIMEOUT = pdMS_TO_TICKS(CONFIG_CONNECT_TIMEOUT);
 
 }  // namespace
 
