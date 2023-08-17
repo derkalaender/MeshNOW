@@ -50,6 +50,9 @@ static void init_wifi() {
     // wifi
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    // set county
+    ESP_ERROR_CHECK(esp_wifi_set_country_code("DE", true));
 }
 
 void prepare() {

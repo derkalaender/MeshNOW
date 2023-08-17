@@ -3,6 +3,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_sntp.h>
+#include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/event_groups.h>
 #include <mqtt_client.h>
@@ -118,6 +119,8 @@ void start_mqtt(void) {
     ESP_LOGI(TAG, "Starting MQTT client...");
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = CONFIG_MQTT_BROKER_URI,
+        .network.reconnect_timeout_ms = 3 * 1000,
+        .network.timeout_ms = 60 * 1000,
         .credentials =
             {
                 .username = CONFIG_MQTT_USERNAME,
@@ -135,13 +138,13 @@ void start_mqtt(void) {
 
     ESP_LOGI(TAG, "Sending image...");
     // measure time it takes in milliseconds
-    TickType_t start = xTaskGetTickCount();
+    int64_t start = esp_timer_get_time();
     char* timestamped_filename;
     asprintf(&timestamped_filename, "%s-%lld.%s", filename, get_timestamp(), fileending);
     send_filedescriptor(timestamped_filename);
     send_data(timestamped_filename);
     free(timestamped_filename);
-    TickType_t end = xTaskGetTickCount();
+    int64_t end = esp_timer_get_time();
     ESP_LOGI(TAG, "Image sent successfully");
-    ESP_LOGI(TAG, "Time taken: %lums", pdTICKS_TO_MS(end - start));
+    ESP_LOGI(TAG, "Time taken: %lldus", end - start);
 }
