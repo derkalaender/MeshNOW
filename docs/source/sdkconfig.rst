@@ -63,7 +63,7 @@ CONFIG_STATUS_SEND_INTERVAL
 """"""""""""""""""""
 A node sends a special status beacon to each of its neighbors at regular intervals.
 This value determines the time in milliseconds between two status beacons.
-The value should best be smaller than `KEEP_ALIVE_TIMEOUT`_ to prevent false disconnects.
+The value should best be smaller than `CONFIG_KEEP_ALIVE_TIMEOUT`_ to prevent false disconnects.
 
 **Default value:** ``500``
 
@@ -71,7 +71,7 @@ CONFIG_KEEP_ALIVE_TIMEOUT
 """"""""""""""""""
 A node considers a neighbor to be disconnected if it has not received a status beacon from it for a certain time.
 This value determines the time in milliseconds after which a neighbor is considered to be disconnected.
-The value should best be larger than `STATUS_SEND_INTERVAL`_ to prevent false disconnects.
+The value should best be larger than `CONFIG_STATUS_SEND_INTERVAL`_ to prevent false disconnects.
 
 **Default value:** ``3000``
 

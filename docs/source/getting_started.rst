@@ -6,7 +6,7 @@ Knowledge of Espressif Systems `ESP-IDF <https://docs.espressif.com/projects/esp
 
 Supported ESP-IDF Versions
 --------------------------
-MeshNOW targets ESP-IDF **v5.0.1** and makes use of the available C++20 features. Newer ESP-IDF versions should be compatible, but are not tested.
+MeshNOW targets ESP-IDF **v5.0.1** and makes use of the available C++20 features. Newer ESP-IDF versions should be compatible but are not tested.
 If you're required to use an older version of ESP-IDF, the following steps will not work for you.
 However, you can still use MeshNOW by manually copying the files from the Git repository into your project.
 Be sure to also include the dependencies.
