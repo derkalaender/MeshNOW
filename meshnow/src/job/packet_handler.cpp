@@ -120,23 +120,23 @@ void PacketHandler::handle(const MetaData& meta, const packets::Status& p) {
         if (parent.mac != meta.from) return;
 
         parent.last_seen = xTaskGetTickCount();
-        //        switch (p.state) {
-        //            case state::State::DISCONNECTED_FROM_PARENT:
-        //            case state::State::CONNECTED_TO_PARENT: {
-        //                state::setState(state::State::CONNECTED_TO_PARENT);
-        //                break;
-        //            }
-        //            case state::State::REACHES_ROOT: {
-        //                // this should never be the case, but we never know with malicious packets
-        //                if (!p.root.has_value()) return;
-        //
-        //                // set root mac
-        //                state::setRootMac(p.root.value());
-        //                // set state
-        //                state::setState(state::State::REACHES_ROOT);
-        //                break;
-        //            }
-        //        }
+        switch (p.state) {
+            case state::State::DISCONNECTED_FROM_PARENT:
+            case state::State::CONNECTED_TO_PARENT: {
+                state::setState(state::State::CONNECTED_TO_PARENT);
+                break;
+            }
+            case state::State::REACHES_ROOT: {
+                // this should never be the case, but we never know with malicious packets
+                if (!p.root.has_value()) return;
+
+                // set root mac
+                state::setRootMac(p.root.value());
+                // set state
+                state::setState(state::State::REACHES_ROOT);
+                break;
+            }
+        }
         return;
     }
 }
@@ -207,7 +207,13 @@ void PacketHandler::handle(const MetaData& meta, const packets::RoutingTableAdd&
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::RoutingTableRemove& p) {
-    // TODO
+    // TODO safety checks
+    if (!layout().hasChild(meta.last_hop)) return;
+
+    // this removes the entry from the routing table of the node the packet directly came from
+    auto& child = layout().getChild(meta.last_hop);
+    std::remove_if(child.routing_table.begin(), child.routing_table.end(),
+                   [&](const auto& item) { return item.mac == p.entry; });
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::RootUnreachable& p) {
@@ -218,7 +224,8 @@ void PacketHandler::handle(const MetaData& meta, const packets::RootUnreachable&
 
     state::setState(state::State::CONNECTED_TO_PARENT);
 
-    // TODO forward
+    // forward to all children
+    send::enqueuePayload(packets::RootUnreachable{}, send::DownstreamRetry{});
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::RootReachable& p) {
@@ -229,7 +236,8 @@ void PacketHandler::handle(const MetaData& meta, const packets::RootReachable& p
 
     state::setState(state::State::REACHES_ROOT);
 
-    // todo forward
+    // forward to all children
+    send::enqueuePayload(packets::RootUnreachable{}, send::DownstreamRetry{});
 }
 
 void PacketHandler::handle(const MetaData& meta, const packets::DataFragment& p) {
