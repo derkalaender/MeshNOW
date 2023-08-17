@@ -1,5 +1,0 @@
-dependencies:
-  idf:
-    version: ">=5.0.1"
-  bitsery:
-    git: "https://github.com/derkalaender/bitsery-esp.git"
