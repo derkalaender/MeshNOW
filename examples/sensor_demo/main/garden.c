@@ -30,6 +30,8 @@ static const char* TOPIC = "bzasgdjksajbdhjagsdzat6dgauzdjbasdbasdh";
 
 static EventGroupHandle_t wait_bits;
 
+static esp_mqtt_client_handle_t client_handle;
+
 static QueueHandle_t measure_queue;
 
 static i2c_dev_t* bh1750_dev;
@@ -116,7 +118,7 @@ _Noreturn static void publish_task(void* pvParameters) {
             int size = asprintf(&text, "{\"temperature\":%.1f,\"humidity\":%.1f,\"lux\":%d}", data.temperature,
                                 data.humidity, data.lux);
             ESP_LOGI(TAG, "Publishing: %s", text);
-            esp_mqtt_client_publish(pvParameters, TOPIC, text, size, 1, 0);
+            esp_mqtt_client_publish(client_handle, TOPIC, text, size, 1, 0);
             free(text);
         }
     }
@@ -137,7 +139,7 @@ static void init() {
         .broker.address.uri = CONFIG_EXAMPLE_MQTT_BROKER_URI,
     };
 
-    esp_mqtt_client_handle_t client_handle = esp_mqtt_client_init(&mqtt_cfg);
+    client_handle = esp_mqtt_client_init(&mqtt_cfg);
     assert(client_handle != NULL);
     // create event bits
     wait_bits = xEventGroupCreate();
