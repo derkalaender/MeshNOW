@@ -23,7 +23,7 @@ State state{State::DISCONNECTED_FROM_PARENT};
 }  // namespace
 
 void setState(State new_state) {
-    ESP_LOGI(TAG, "Requested state change from %d to %d", static_cast<uint8_t>(state), static_cast<uint8_t>(new_state));
+    ESP_LOGD(TAG, "Requested state change from %d to %d", static_cast<uint8_t>(state), static_cast<uint8_t>(new_state));
     if (new_state == state) return;
 
     event::StateChangedEvent data{
