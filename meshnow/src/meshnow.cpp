@@ -227,15 +227,21 @@ extern "C" esp_err_t meshnow_send(uint8_t* dest, uint8_t* buffer, size_t len) {
         meshnow::state::getThisMac(),
     };
     meshnow::send::enqueuePayload(std::move(packet), std::move(resolve));
+
+    return ESP_OK;
 }
 
 extern "C" esp_err_t meshnow_register_data_cb(meshnow_data_cb_t cb, meshnow_data_cb_handle_t* handle) {
     // TODO error checking
     auto internal_handle = meshnow::custom::createCBHandle(cb);
     *handle = internal_handle;
+
+    return ESP_OK;
 }
 
 extern "C" esp_err_t meshnow_unregister_data_cb(meshnow_data_cb_handle_t handle) {
     // TODO error checking
     meshnow::custom::destroyCBHandle(static_cast<meshnow::custom::ActualCBHandle*>(handle));
+
+    return ESP_OK;
 }
