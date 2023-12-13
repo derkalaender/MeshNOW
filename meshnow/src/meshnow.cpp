@@ -203,7 +203,7 @@ extern "C" esp_err_t meshnow_stop() {
     return ESP_OK;
 }
 
-extern "C" esp_err_t meshnow_send(uint8_t* dest, uint8_t* buffer, size_t len) {
+extern "C" esp_err_t meshnow_send(meshnow_addr_t dest, uint8_t* buffer, size_t len) {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -268,7 +268,7 @@ extern "C" esp_err_t meshnow_get_children_num(size_t* num) {
     return ESP_OK;
 }
 
-extern "C" esp_err_t meshnow_get_children(uint8_t** children, size_t* num) {
+extern "C" esp_err_t meshnow_get_children(meshnow_addr_t* children, size_t* num) {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -293,9 +293,11 @@ extern "C" esp_err_t meshnow_get_children(uint8_t** children, size_t* num) {
 
     // update size
     *num = size;
+
+    return ESP_OK;
 }
 
-extern "C" esp_err_t meshnow_get_child_children_num(uint8_t* child, size_t* num) {
+extern "C" esp_err_t meshnow_get_child_children_num(meshnow_addr_t child, size_t* num) {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -322,7 +324,7 @@ extern "C" esp_err_t meshnow_get_child_children_num(uint8_t* child, size_t* num)
     return ESP_OK;
 }
 
-extern "C" esp_err_t meshnow_get_child_children(uint8_t* child, uint8_t** children, size_t* num) {
+extern "C" esp_err_t meshnow_get_child_children(meshnow_addr_t child, meshnow_addr_t* children, size_t* num) {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;
@@ -358,7 +360,7 @@ extern "C" esp_err_t meshnow_get_child_children(uint8_t* child, uint8_t** childr
     return ESP_OK;
 }
 
-extern "C" esp_err_t meshnow_get_parent(uint8_t* parent_mac, bool* has_parent) {
+extern "C" esp_err_t meshnow_get_parent(meshnow_addr_t parent_mac, bool* has_parent) {
     if (!initialized) {
         ESP_LOGE(TAG, "MeshNOW is not initialized!");
         return ESP_ERR_INVALID_STATE;

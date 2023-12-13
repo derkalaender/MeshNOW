@@ -22,6 +22,8 @@ extern "C" {
  */
 ESP_EVENT_DECLARE_BASE(MESHNOW_EVENT);
 
+typedef uint8_t meshnow_addr_t[MESHNOW_ADDRESS_LENGTH];
+
 /**
  * MeshNOW event types.
  */
@@ -54,7 +56,7 @@ typedef struct {
     /**
      * MAC address of the connected child.
      */
-    uint8_t child_mac[MESHNOW_ADDRESS_LENGTH];
+    meshnow_addr_t child_mac;
 } meshnow_event_child_connected_t;
 
 /**
@@ -64,7 +66,7 @@ typedef struct {
     /**
      * MAC address of the disconnected child.
      */
-    uint8_t child_mac[MESHNOW_ADDRESS_LENGTH];
+    meshnow_addr_t child_mac;
 } meshnow_event_child_disconnected_t;
 
 /**
@@ -74,7 +76,7 @@ typedef struct {
     /**
      * MAC address of the parent to which this node connected.
      */
-    uint8_t parent_mac[MESHNOW_ADDRESS_LENGTH];
+    meshnow_addr_t parent_mac;
 } meshnow_event_parent_connected_t;
 
 /**
@@ -84,7 +86,7 @@ typedef struct {
     /**
      * MAC address of the parent from which this node disconnected.
      */
-    uint8_t parent_mac[MESHNOW_ADDRESS_LENGTH];
+    meshnow_addr_t parent_mac;
 } meshnow_event_parent_disconnected_t;
 
 /**
@@ -128,7 +130,7 @@ typedef struct {
  *
  * @attention Do not perform any long-running or blocking operations in this callback, as it would halt the mesh.
  */
-typedef void (*meshnow_data_cb_t)(uint8_t* src, uint8_t* buffer, size_t len);
+typedef void (*meshnow_data_cb_t)(meshnow_addr_t src, uint8_t* buffer, size_t len);
 
 /**
  * Handle for a registered data callback.
@@ -138,12 +140,12 @@ typedef void* meshnow_data_cb_handle_t;
 /**
  * Broadcast address.
  */
-const uint8_t MESHNOW_BROADCAST_ADDRESS[MESHNOW_ADDRESS_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+const meshnow_addr_t MESHNOW_BROADCAST_ADDRESS = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 /**
  * Root address.
  */
-const uint8_t MESHNOW_ROOT_ADDRESS[MESHNOW_ADDRESS_LENGTH] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+const meshnow_addr_t MESHNOW_ROOT_ADDRESS = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 /**
  * Initialize MeshNOW.
@@ -229,7 +231,7 @@ esp_err_t meshnow_stop();
  * - ESP_ERR_NO_MEM: Out of memory
  * - Others: Fail
  */
-esp_err_t meshnow_send(uint8_t* dest, uint8_t* buffer, size_t len);
+esp_err_t meshnow_send(meshnow_addr_t dest, uint8_t* buffer, size_t len);
 
 /**
  * Register a callback for custom data packets.
@@ -285,7 +287,7 @@ esp_err_t meshnow_visible_mesh_size(size_t* size);
  * - ESP_ERR_INVALID_ARG: Invalid argument
  * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized
  */
-esp_err_t meshnow_get_parent(uint8_t* parent_mac, bool* has_parent);
+esp_err_t meshnow_get_parent(meshnow_addr_t parent_mac, bool* has_parent);
 
 /**
  * Get the number of direct children connected to this node.
@@ -317,7 +319,7 @@ esp_err_t meshnow_get_children_num(size_t* num);
  * - ESP_ERR_INVALID_ARG: Invalid argument
  * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
  */
-esp_err_t meshnow_get_children(uint8_t** children, size_t* num);
+esp_err_t meshnow_get_children(meshnow_addr_t* children, size_t* num);
 
 /**
  * Get the number of (direct and indirect) children connected to this direct child.
@@ -333,7 +335,7 @@ esp_err_t meshnow_get_children(uint8_t** children, size_t* num);
  * - ESP_ERR_INVALID_ARG: Invalid argument
  * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
  */
-esp_err_t meshnow_get_child_children_num(uint8_t* child, size_t* num);
+esp_err_t meshnow_get_child_children_num(meshnow_addr_t child, size_t* num);
 
 /**
  * Get the MAC addresses of the (direct and indirect) children connected to this direct child.
@@ -353,7 +355,7 @@ esp_err_t meshnow_get_child_children_num(uint8_t* child, size_t* num);
  * - ESP_ERR_INVALID_ARG: Invalid argument
  * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
  */
-esp_err_t meshnow_get_child_children(uint8_t* child, uint8_t** children, size_t* num);
+esp_err_t meshnow_get_child_children(meshnow_addr_t child, meshnow_addr_t* children, size_t* num);
 
 #ifdef __cplusplus
 };
