@@ -8,6 +8,7 @@
 #include "custom.hpp"
 #include "event.hpp"
 #include "layout.hpp"
+#include "lock.hpp"
 #include "networking.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
@@ -263,6 +264,8 @@ extern "C" esp_err_t meshnow_get_children_num(size_t* num) {
         return ESP_ERR_INVALID_ARG;
     }
 
+    meshnow::Lock lock;
+
     *num = meshnow::layout::Layout::get().getChildren().size();
 
     return ESP_OK;
@@ -282,6 +285,8 @@ extern "C" esp_err_t meshnow_get_children(meshnow_addr_t* children, size_t* num)
     if (children == nullptr || num == nullptr) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    meshnow::Lock lock;
 
     auto span = meshnow::layout::Layout::get().getChildren();
     size_t size = span.size() > *num ? *num : span.size();
@@ -312,6 +317,8 @@ extern "C" esp_err_t meshnow_get_child_children_num(meshnow_addr_t child, size_t
         return ESP_ERR_INVALID_ARG;
     }
 
+    meshnow::Lock lock;
+
     auto& layout = meshnow::layout::Layout::get();
 
     if (!layout.hasChild(meshnow::util::MacAddr{child})) {
@@ -338,6 +345,8 @@ extern "C" esp_err_t meshnow_get_child_children(meshnow_addr_t child, meshnow_ad
     if (child == nullptr || children == nullptr || num == nullptr) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    meshnow::Lock lock;
 
     auto& layout = meshnow::layout::Layout::get();
 
@@ -375,6 +384,8 @@ extern "C" esp_err_t meshnow_get_parent(meshnow_addr_t parent_mac, bool* has_par
         return ESP_ERR_INVALID_ARG;
     }
 
+    meshnow::Lock lock;
+
     auto& layout = meshnow::layout::Layout::get();
 
     if (!layout.hasParent()) {
@@ -402,6 +413,8 @@ extern "C" esp_err_t meshnow_visible_mesh_size(size_t* size) {
     if (size == nullptr) {
         return ESP_ERR_INVALID_ARG;
     }
+
+    meshnow::Lock lock;
 
     auto& layout = meshnow::layout::Layout::get();
 
