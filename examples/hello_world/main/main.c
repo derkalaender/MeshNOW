@@ -24,7 +24,7 @@
 static const char *TAG = "hello-world";
 
 // Fixed MAC address of the root node
-static const uint8_t root_mac[MESHNOW_ADDRESS_LENGTH] = {0x24, 0x6f, 0x28, 0x4a, 0x63, 0x3c};
+static const uint8_t root_mac[MESHNOW_ADDRESS_LENGTH] = {0xb8, 0xd6, 0x1a, 0x5a, 0x27, 0xec};
 
 // MAC address of the current node
 static uint8_t node_mac[MESHNOW_ADDRESS_LENGTH];
@@ -55,6 +55,61 @@ static void mqtt_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     xEventGroupSetBits(my_event_group, MQTT_CONNECTED_BIT);
 }
 
+static void send_info(esp_mqtt_client_handle_t client) {
+    char *msg;
+
+    size_t visible_mesh_size = 0;
+    meshnow_visible_mesh_size(&visible_mesh_size);
+    meshnow_addr_t parent_mac = {};
+    bool has_parent = false;
+    meshnow_get_parent(parent_mac, &has_parent);
+
+    asprintf(&msg,
+             "Info of: " MACSTR
+             " (%s)\n"
+             "Visible mesh size: %d\n"
+             "Has parent: %d\n | Parent MAC: " MACSTR
+             "\n"
+             "Connected Nodes:",
+             MAC2STR(node_mac), is_root ? "root" : "node", visible_mesh_size, has_parent, MAC2STR(parent_mac));
+
+    size_t child_num = 0;
+    meshnow_get_children_num(&child_num);
+    meshnow_addr_t *child_macs = malloc(child_num * sizeof(meshnow_addr_t));
+    meshnow_get_children(child_macs, &child_num);
+
+    for (size_t i = 0; i < child_num; i++) {
+        // get children of child
+        size_t child_children_num = 0;
+        meshnow_get_child_children_num(child_macs[i], &child_children_num);
+        meshnow_addr_t *child_children_macs = malloc(child_children_num * sizeof(meshnow_addr_t));
+        meshnow_get_child_children(child_macs[i], child_children_macs, &child_children_num);
+
+        // add child along with its children to the message
+        char *child_msg;
+        asprintf(&child_msg, " " MACSTR, MAC2STR(child_macs[i]));
+        for (size_t j = 0; j < child_children_num; j++) {
+            // add one of the child's children
+            char *child_child_msg;
+            asprintf(&child_child_msg, " " MACSTR, MAC2STR(child_children_macs[j]));
+            child_msg = realloc(child_msg, strlen(child_msg) + strlen(child_child_msg) + 1);
+            strcat(child_msg, child_child_msg);
+            free(child_child_msg);
+        }
+
+        msg = realloc(msg, strlen(msg) + strlen(child_msg) + 1);
+        strcat(msg, child_msg);
+        free(child_msg);
+
+        free(child_children_macs);
+    }
+
+    ESP_ERROR_CHECK(esp_mqtt_client_publish(client, "/info", msg, strlen(msg), 0, 0));
+
+    free(child_macs);
+    free(msg);
+}
+
 // Sends messages via MQTT
 static void perform_mqtt() {
     // initialize
@@ -81,6 +136,7 @@ static void perform_mqtt() {
 
     while (true) {
         ESP_ERROR_CHECK(esp_mqtt_client_publish(client, "/helloworld", msg, len, 0, 0));
+        send_info(client);
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
