@@ -257,6 +257,104 @@ esp_err_t meshnow_register_data_cb(meshnow_data_cb_t cb, meshnow_data_cb_handle_
  */
 esp_err_t meshnow_unregister_data_cb(meshnow_data_cb_handle_t handle);
 
+/// LAYOUT QUERY ///
+
+/**
+ * Returns the number of nodes in the mesh, including self, parent and (indirect) children.
+ *
+ * Call this from the root node to obtain the total number of nodes in the mesh.
+ *
+ * If called from any other node, this will return the number of nodes in the subtree rooted at that node.
+ *
+ * @param[out] size number of visible nodes in the mesh
+ * @return
+ * - ESP_OK: Success
+ * - ESP_ERR_INVALID_ARG: Invalid argument
+ * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized
+ */
+esp_err_t meshnow_visible_mesh_size(size_t* size);
+
+/**
+ * Get the MAC address of the parent node.
+ *
+ * @param[out] parent_mac MAC address of the parent node
+ * @param[out] has_parent whether this node has a parent
+ *
+ * @return
+ * - ESP_OK: Success
+ * - ESP_ERR_INVALID_ARG: Invalid argument
+ * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized
+ */
+esp_err_t meshnow_get_parent(uint8_t* parent_mac, bool* has_parent);
+
+/**
+ * Get the number of direct children connected to this node.
+ *
+ * @param[out] num number of children
+ *
+ * @return
+ * - ESP_OK: Success
+ * - ESP_ERR_INVALID_ARG: Invalid argument
+ * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
+ */
+esp_err_t meshnow_get_children_num(size_t* num);
+
+/**
+ * Get the MAC addresses of the direct children connected to this node.
+ *
+ * @attention
+ * This call should be preceded by a call to meshnow_get_children_num to get the number of children.
+ * You can then allocate an array of num elements to store the children's MAC addresses.
+ * This function will populate the array with at-most num MAC addresses.
+ * If, in the meantime, the number of children has decreased, num will be updated accordingly.
+ * Note that an increase in children will not be reflected in num, as to not cause IOOB errors.
+ *
+ * @param[out] children array of MAC addresses of the children
+ * @param[in,out] num number of children
+ *
+ * @return
+ * - ESP_OK: Success
+ * - ESP_ERR_INVALID_ARG: Invalid argument
+ * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
+ */
+esp_err_t meshnow_get_children(uint8_t** children, size_t* num);
+
+/**
+ * Get the number of (direct and indirect) children connected to this direct child.
+ *
+ * @param[in] child MAC address of the child to query for
+ * @param[out] num number of children
+ *
+ * @note
+ * Returns ESP_ERR_INVALID_ARG if the child is not a direct child of this node.
+ *
+ * @return
+ * - ESP_OK: Success
+ * - ESP_ERR_INVALID_ARG: Invalid argument
+ * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
+ */
+esp_err_t meshnow_get_child_children_num(uint8_t* child, size_t* num);
+
+/**
+ * Get the MAC addresses of the (direct and indirect) children connected to this direct child.
+ *
+ * @param[in] child MAC address of the child to query for
+ * @param[out] children array of MAC addresses of the children
+ * @param[in,out] num number of children
+ *
+ * @attention
+ * See meshnow_get_children for more information.
+ *
+ * @note
+ * Returns ESP_ERR_INVALID_ARG if the child is not a direct child of this node.
+ *
+ * @return
+ * - ESP_OK: Success
+ * - ESP_ERR_INVALID_ARG: Invalid argument
+ * - ESP_ERR_INVALID_STATE: MeshNOW is not initialized/started
+ */
+esp_err_t meshnow_get_child_children(uint8_t* child, uint8_t** children, size_t* num);
+
 #ifdef __cplusplus
 };
 #endif

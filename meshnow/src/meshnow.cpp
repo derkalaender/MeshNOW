@@ -7,6 +7,7 @@
 
 #include "custom.hpp"
 #include "event.hpp"
+#include "layout.hpp"
 #include "networking.hpp"
 #include "send/queue.hpp"
 #include "state.hpp"
@@ -242,6 +243,167 @@ extern "C" esp_err_t meshnow_register_data_cb(meshnow_data_cb_t cb, meshnow_data
 extern "C" esp_err_t meshnow_unregister_data_cb(meshnow_data_cb_handle_t handle) {
     // TODO error checking
     meshnow::custom::destroyCBHandle(static_cast<meshnow::custom::ActualCBHandle*>(handle));
+
+    return ESP_OK;
+}
+
+/// LAYOUT QUERY ///
+extern "C" esp_err_t meshnow_get_children_num(size_t* num) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (num == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *num = meshnow::layout::Layout::get().getChildren().size();
+
+    return ESP_OK;
+}
+
+extern "C" esp_err_t meshnow_get_children(uint8_t** children, size_t* num) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (children == nullptr || num == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto span = meshnow::layout::Layout::get().getChildren();
+    size_t size = span.size() > *num ? *num : span.size();
+
+    // copy mac addresses
+    for (size_t i = 0; i < size; ++i) {
+        std::copy(span[i].mac.addr.begin(), span[i].mac.addr.end(), children[i]);
+    }
+
+    // update size
+    *num = size;
+}
+
+extern "C" esp_err_t meshnow_get_child_children_num(uint8_t* child, size_t* num) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (child == nullptr || num == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto& layout = meshnow::layout::Layout::get();
+
+    if (!layout.hasChild(meshnow::util::MacAddr{child})) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto& child_layout = layout.getChild(meshnow::util::MacAddr{child});
+    *num = child_layout.routing_table.size();
+
+    return ESP_OK;
+}
+
+extern "C" esp_err_t meshnow_get_child_children(uint8_t* child, uint8_t** children, size_t* num) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (child == nullptr || children == nullptr || num == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto& layout = meshnow::layout::Layout::get();
+
+    if (!layout.hasChild(meshnow::util::MacAddr{child})) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto& child_layout = layout.getChild(meshnow::util::MacAddr{child});
+    size_t size = child_layout.routing_table.size() > *num ? *num : child_layout.routing_table.size();
+
+    // copy mac addresses
+    for (size_t i = 0; i < size; ++i) {
+        std::copy(child_layout.routing_table[i].mac.addr.begin(), child_layout.routing_table[i].mac.addr.end(),
+                  children[i]);
+    }
+
+    // update size
+    *num = size;
+
+    return ESP_OK;
+}
+
+extern "C" esp_err_t meshnow_get_parent(uint8_t* parent_mac, bool* has_parent) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (parent_mac == nullptr || has_parent == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto& layout = meshnow::layout::Layout::get();
+
+    if (!layout.hasParent()) {
+        *has_parent = false;
+    } else {
+        auto& parent = layout.getParent();
+        std::copy(parent.mac.addr.begin(), parent.mac.addr.end(), parent_mac);
+        *has_parent = true;
+    }
+
+    return ESP_OK;
+}
+
+extern "C" esp_err_t meshnow_visible_mesh_size(size_t* size) {
+    if (!initialized) {
+        ESP_LOGE(TAG, "MeshNOW is not initialized!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!started) {
+        ESP_LOGE(TAG, "MeshNOW is not started!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (size == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto& layout = meshnow::layout::Layout::get();
+
+    *size = layout.getChildren().size() + (layout.hasParent() ? 1 : 0);
 
     return ESP_OK;
 }
