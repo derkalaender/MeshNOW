@@ -418,7 +418,17 @@ extern "C" esp_err_t meshnow_visible_mesh_size(size_t* size) {
 
     auto& layout = meshnow::layout::Layout::get();
 
-    *size = layout.getChildren().size() + (layout.hasParent() ? 1 : 0);
+    size_t result = 1;
+    result += layout.getChildren().size();
+    if (layout.hasParent()) {
+        result += 1;
+    }
+
+    for (auto& child : layout.getChildren()) {
+        result += child.routing_table.size();
+    }
+
+    *size = result;
 
     return ESP_OK;
 }
