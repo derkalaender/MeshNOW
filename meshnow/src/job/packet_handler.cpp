@@ -257,6 +257,7 @@ void PacketHandler::handle(const MetaData& meta, const packets::CustomData& p) {
     while (handle != nullptr) {
         // TODO const casts should not be required but i'm afraid to fix the header file
         handle->cb(const_cast<uint8_t*>(meta.from.addr.data()), const_cast<uint8_t*>(p.data.data()), p.data.size());
+        handle = handle->next;
     }
 }
 
